@@ -1206,10 +1206,9 @@ const state = {
 function limpiarCuit(v){ return (v || "").replace(/\D/g, ""); }
 function formatearCuit(v){
   const d = limpiarCuit(v).slice(0,11);
-  let out = d;
-  if (d.length > 2) out = d.slice(0,2) + "-" + d.slice(2);
-  if (d.length > 10) out = out.slice(0, 13-1) + "-" + d.slice(10);
-  return out;
+  if (d.length <= 2) return d;
+  if (d.length <= 10) return d.slice(0,2) + "-" + d.slice(2);
+  return d.slice(0,2) + "-" + d.slice(2,10) + "-" + d.slice(10);
 }
 function mascaraCuitInput(el){
   el.addEventListener("input", () => {
@@ -1312,7 +1311,7 @@ function previsualizarRazonSocial(){
 
   clearTimeout(razonSocialTimeout);
 
-  if (digits.length < 11){
+  if (digits.length !== 11){
     preview.className = "razon-social-preview";
     preview.innerHTML = "";
     return;
@@ -1354,7 +1353,7 @@ function previsualizarRazonSocial(){
 }
 
 function setCuit(valor){
-  document.getElementById("consulta-cuit").value = valor;
+  document.getElementById("consulta-cuit").value = formatearCuit(valor);
   previsualizarRazonSocial();
 }
 
@@ -1378,8 +1377,8 @@ async function consultarCuit(){
   const numeroCheque = document.getElementById("consulta-numero-cheque").value.trim();
   const bancoCheque = document.getElementById("consulta-banco-cheque").value;
   const digits = limpiarCuit(raw);
-  if (digits.length < 10){
-    mostrarToast("Ingresá un CUIT válido");
+  if (digits.length !== 11){
+    mostrarToast(digits.length === 0 ? "Ingresá un CUIT" : `El CUIT debe tener 11 dígitos exactos (tiene ${digits.length})`);
     return;
   }
   if (state.queriesUsed >= state.queriesLimit){
