@@ -510,6 +510,9 @@
   .fuente-badge.fuente-real{background:var(--green-soft); color:var(--green-ink);}
   .fuente-badge.fuente-demo{background:var(--amber-soft); color:var(--amber);}
 
+  .breakdown-row-nd .br-val{color:var(--ink-soft); font-style:italic;}
+  .breakdown-row-nd .br-desc{font-style:italic;}
+
   ::-webkit-scrollbar{width:0;}
 </style>
 </head>
@@ -827,12 +830,21 @@ function explicarAntiguedad(a){
 }
 
 function calcularScore(d){
+  const antiguedadConocida = d.antiguedadCuitAnios !== null && d.antiguedadCuitAnios !== undefined;
+
   const pSituacion = scoreSituacion(d.situacion);
   const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones);
   const pBancos = scoreBancos(d.cantidadBancos);
-  const pAntiguedad = scoreAntiguedad(d.antiguedadCuitAnios);
+  const pAntiguedad = antiguedadConocida ? scoreAntiguedad(d.antiguedadCuitAnios) : null;
 
-  let puntosBase = pSituacion + pEndeudamiento + pBancos + pAntiguedad;
+  // Si no sabemos la antigüedad (todavía no está AFIP/ARCA conectado), no
+  // penalizamos al librador con el peor valor posible: redistribuimos su
+  // peso (20 pts) proporcionalmente entre las 3 variables que sí conocemos
+  // (que suman 80 pts) y reescalamos el resultado a una base de 100.
+  let puntosBase = antiguedadConocida
+    ? pSituacion + pEndeudamiento + pBancos + pAntiguedad
+    : Math.round((pSituacion + pEndeudamiento + pBancos) * (100/80));
+
   let puntosFinales = puntosBase;
   let forzadoC2 = false;
   let motivo = null;
@@ -855,7 +867,10 @@ function calcularScore(d){
     situacion: {puntos:pSituacion, max:40, label:"Situación crediticia BCRA", desc: explicarSituacion(d.situacion)},
     endeudamiento: {puntos:pEndeudamiento, max:25, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:15, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
-    antiguedad: {puntos:pAntiguedad, max:20, label:"Antigüedad del CUIT (AFIP)", desc: explicarAntiguedad(d.antiguedadCuitAnios)}
+    antiguedad: antiguedadConocida
+      ? {puntos:pAntiguedad, max:20, label:"Antigüedad del CUIT (AFIP)", desc: explicarAntiguedad(d.antiguedadCuitAnios)}
+      : {puntos:null, max:20, label:"Antigüedad del CUIT (AFIP)", noDisponible:true,
+         desc: "No disponible todavía — falta conectar AFIP/ARCA. No penalizamos al librador por esto: redistribuimos estos 20 puntos proporcionalmente entre situación, endeudamiento y diversificación bancaria."}
   };
 
   return {
@@ -871,10 +886,11 @@ const NOMBRE_CATEGORIA = {
 };
 
 function construirNarrativa(categoria, puntos, detalle, forzadoC2, motivo){
-  const entradas = Object.values(detalle);
+  const entradas = Object.values(detalle).filter(e => e.puntos !== null);
   const conPct = entradas.map(e => ({...e, pct: e.puntos / e.max}));
   const fortaleza = conPct.reduce((a,b) => b.pct > a.pct ? b : a);
   const debilidad = conPct.reduce((a,b) => b.pct < a.pct ? b : a);
+  const antiguedadExcluida = Object.values(detalle).some(e => e.noDisponible);
 
   if (forzadoC2){
     return `Se asignó <b>C2 (no operable)</b> de forma directa: ${motivo.charAt(0).toLowerCase() + motivo.slice(1)} Este criterio pisa cualquier otro resultado del cálculo base, que sin el rechazo hubiera dado ${puntos_texto(fortaleza, debilidad)}.`;
@@ -882,9 +898,13 @@ function construirNarrativa(categoria, puntos, detalle, forzadoC2, motivo){
 
   let base = `Con <b>${puntos} puntos sobre 100</b>, el librador quedó en la categoría <b>${categoria}</b> (${NOMBRE_CATEGORIA[categoria]}). `;
   if (fortaleza.pct === debilidad.pct){
-    base += `Las cuatro variables analizadas rindieron de forma pareja, sin un factor que se destaque por encima del resto. `;
+    base += `Las variables analizadas rindieron de forma pareja, sin un factor que se destaque por encima del resto. `;
   } else {
     base += `El factor que más sumó fue <b>${fortaleza.label.toLowerCase()}</b> (${fortaleza.puntos}/${fortaleza.max} pts), mientras que <b>${debilidad.label.toLowerCase()}</b> fue el que más restó (${debilidad.puntos}/${debilidad.max} pts). `;
+  }
+
+  if (antiguedadExcluida){
+    base += `La antigüedad del CUIT todavía no está disponible (falta AFIP/ARCA), así que su peso se redistribuyó entre las demás variables en vez de penalizar al librador por un dato que no pudimos consultar. `;
   }
 
   if (motivo){
@@ -1633,11 +1653,11 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
 
   const filas = Object.values(resultado.detalle);
   document.getElementById("res-breakdown").innerHTML = filas.map(v => `
-    <div class="breakdown-row">
+    <div class="breakdown-row${v.noDisponible ? " breakdown-row-nd" : ""}">
       <div class="br-top">
         <div class="br-label">${v.label}</div>
-        <div class="br-bar"><div class="br-bar-fill" style="width:${(v.puntos/v.max*100).toFixed(0)}%"></div></div>
-        <div class="br-val">${v.puntos}/${v.max}</div>
+        <div class="br-bar"><div class="br-bar-fill" style="width:${v.noDisponible ? 0 : (v.puntos/v.max*100).toFixed(0)}%"></div></div>
+        <div class="br-val">${v.noDisponible ? "N/D" : v.puntos + "/" + v.max}</div>
       </div>
       <div class="br-desc">${v.desc}</div>
     </div>
