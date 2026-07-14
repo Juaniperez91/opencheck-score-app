@@ -1341,12 +1341,29 @@ function calcularConcentracionBancaria(entidades){
 }
 
 function calcularTendenciaDeuda(historialDeuda){
-  const inicio = historialDeuda[0];
-  const fin = historialDeuda[historialDeuda.length - 1];
-  if (inicio === 0) return "Estable";
-  const delta = (fin - inicio) / inicio;
-  if (delta > 0.10) return "Subiendo";
-  if (delta < -0.10) return "Bajando";
+  const n = historialDeuda.length;
+  if (n < 2) return "Estable";
+
+  // Pendiente por cuadrados mínimos sobre TODA la serie, en vez de comparar
+  // solo el primer y el último punto — eso último es muy sensible a un
+  // repunte o caída puntual reciente y puede contradecir la tendencia real
+  // del período completo.
+  const promedioX = (n - 1) / 2;
+  const promedioY = historialDeuda.reduce((a,b) => a+b, 0) / n;
+  if (promedioY === 0) return "Estable";
+
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++){
+    num += (i - promedioX) * (historialDeuda[i] - promedioY);
+    den += (i - promedioX) ** 2;
+  }
+  const pendiente = den === 0 ? 0 : num / den; // millones por período
+
+  // Proyecta el cambio total a lo largo de todo el período y lo compara
+  // contra el nivel promedio de deuda, para tener un umbral en %.
+  const cambioTotalRelativo = (pendiente * (n - 1)) / promedioY;
+  if (cambioTotalRelativo > 0.10) return "Subiendo";
+  if (cambioTotalRelativo < -0.10) return "Bajando";
   return "Estable";
 }
 
