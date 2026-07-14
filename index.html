@@ -1251,7 +1251,12 @@ async function construirDatosLibradorReal(cuit){
   try {
     const inflacionPorPeriodo = await obtenerInflacionMensualBCRA();
     deudaVsInflacion = calcularDeudaRealVsInflacion(historial.historialDeuda, historial.historialPeriodos, inflacionPorPeriodo);
-  } catch (e) { /* silencioso: esta variable es un complemento, no un bloqueante */ }
+    if (!deudaVsInflacion.disponible){
+      console.warn("[OpenCheck Score] Inflación OK pero no se pudo alinear con historialPeriodos:", historial.historialPeriodos, "vs mapa:", inflacionPorPeriodo);
+    }
+  } catch (e) {
+    console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", e.message);
+  }
 
   return prepararDatos({
     empresa: deuda.denominacion || ("Librador " + cuit),
@@ -1414,19 +1419,33 @@ async function obtenerInflacionMensualBCRA(){
   if (cacheInflacionMensualBCRA) return cacheInflacionMensualBCRA;
 
   const rVars = await fetch(BCRA_MONETARIAS_URL, { method:"GET", headers:{ "Accept":"application/json" } });
-  if (!rVars.ok) throw new Error("No se pudo listar las variables monetarias del BCRA");
+  if (!rVars.ok){
+    console.warn("[OpenCheck Score] Falló GET", BCRA_MONETARIAS_URL, "status:", rVars.status);
+    throw new Error("No se pudo listar las variables monetarias del BCRA (HTTP " + rVars.status + ")");
+  }
   const dataVars = await rVars.json();
-  const variable = (dataVars.results || []).find(v => /inflaci[oó]n\s+mensual/i.test(v.descripcion || ""));
-  if (!variable) throw new Error("No se encontró la variable 'Inflación mensual' en el listado del BCRA");
+  const listado = dataVars.results || [];
+  const variable = listado.find(v => /inflaci[oó]n\s*mensual/i.test(v.descripcion || ""));
+  if (!variable){
+    console.warn("[OpenCheck Score] No matcheó ninguna variable con /inflaci[oó]n\\s*mensual/i.");
+    console.warn("[OpenCheck Score] Listado completo de descripciones recibidas:", listado.map(v => `#${v.idVariable}: ${v.descripcion}`));
+    throw new Error("No se encontró la variable 'Inflación mensual' en el listado del BCRA");
+  }
+  console.info("[OpenCheck Score] Variable de inflación encontrada:", variable.idVariable, variable.descripcion);
 
   const hoy = new Date();
   const hasta = hoy.toISOString().slice(0,10);
   const desdeDate = new Date(hoy); desdeDate.setMonth(desdeDate.getMonth() - 25);
   const desde = desdeDate.toISOString().slice(0,10);
 
-  const rSerie = await fetch(`${BCRA_MONETARIAS_URL}/${variable.idVariable}?desde=${desde}&hasta=${hasta}&limit=100`, { method:"GET", headers:{ "Accept":"application/json" } });
-  if (!rSerie.ok) throw new Error("No se pudo obtener la serie de inflación mensual del BCRA");
+  const urlSerie = `${BCRA_MONETARIAS_URL}/${variable.idVariable}?desde=${desde}&hasta=${hasta}&limit=100`;
+  const rSerie = await fetch(urlSerie, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (!rSerie.ok){
+    console.warn("[OpenCheck Score] Falló GET", urlSerie, "status:", rSerie.status);
+    throw new Error("No se pudo obtener la serie de inflación mensual del BCRA (HTTP " + rSerie.status + ")");
+  }
   const dataSerie = await rSerie.json();
+  console.info("[OpenCheck Score] Serie de inflación recibida:", (dataSerie.results || []).length, "puntos. Primeros 3:", (dataSerie.results || []).slice(0,3));
 
   const mapa = {};
   for (const punto of (dataSerie.results || [])){
@@ -1434,6 +1453,7 @@ async function obtenerInflacionMensualBCRA(){
     if (periodo) mapa[periodo] = punto.valor; // % mensual
   }
   cacheInflacionMensualBCRA = mapa;
+  console.info("[OpenCheck Score] Mapa de inflación por período construido:", mapa);
   return mapa;
 }
 
