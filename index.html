@@ -766,24 +766,24 @@
    MOTOR DE SCORING — validado con Node contra casos reales
    ======================================================= */
 function scoreSituacion(sit){
-  // 35 pts: situación crediticia VIGENTE (hoy)
-  const tabla = {1:35, 2:28, 3:19, 4:11, 5:5, 6:0};
+  // 30 pts: situación crediticia VIGENTE (hoy)
+  const tabla = {1:30, 2:24, 3:16, 4:9, 5:4, 6:0};
   return tabla[sit] ?? 0;
 }
 function scoreSituacion24m(peorSituacion24m){
-  // 20 pts: peor situación registrada en los últimos 24 meses (tendencia
-  // reciente). Misma escala relativa que la situación vigente, reescalada.
+  // 20 pts: peor situación registrada en los últimos 24 meses (el
+  // comportamiento sostenido pesa tanto como la foto de hoy, no menos).
   const tabla = {1:20, 2:16, 3:11, 4:6, 5:3, 6:0};
   return tabla[peorSituacion24m] ?? 0;
 }
 function scoreEndeudamiento(m){
-  // 15 pts. Más deuda bancaria informada suma, no resta (refleja acceso a
-  // crédito bancario, no riesgo por sí solo).
-  if (m >= 100) return 15;
-  if (m >= 50) return 12;
-  if (m >= 25) return 9;
-  if (m >= 5) return 6;
-  if (m >= 1) return 3;
+  // 10 pts (antes 15). Más deuda bancaria informada suma, no resta (refleja
+  // acceso a crédito bancario, no riesgo por sí solo).
+  if (m >= 100) return 10;
+  if (m >= 50) return 8;
+  if (m >= 25) return 6;
+  if (m >= 5) return 4;
+  if (m >= 1) return 2;
   return 0;
 }
 function scoreBancos(n){
@@ -929,7 +929,13 @@ function calcularScore(d){
   const pBancos = scoreBancos(d.cantidadBancos);
   const pRechazos = scoreRechazos(d);
 
-  let puntosBase = pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos;
+  // ---- Deuda real vs. inflación: 10 pts, redistribuidos si no está disponible ----
+  const inflacionDisponible = d.deudaVsInflacion && d.deudaVsInflacion.disponible;
+  const pDeudaVsInflacion = inflacionDisponible ? scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) : null;
+
+  let puntosBase = inflacionDisponible
+    ? pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos + pDeudaVsInflacion
+    : Math.round((pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos) * (100/90));
 
   // ---- Matriz de atrasos: monto en mora vigente × días de atraso ----
   const entidadesEnMora = (d.entidades || []).filter(e => e.situacion > 1);
@@ -975,11 +981,15 @@ function calcularScore(d){
   const categoria = forzadoC2 ? "C2" : categoriaDesdePuntos(puntosFinales);
 
   const detalle = {
-    situacion: {puntos:pSituacion, max:35, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
+    situacion: {puntos:pSituacion, max:30, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
     situacion24m: {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
     rechazos: {puntos:pRechazos, max:20, label:"Historial de rechazos (24 meses)", desc: explicarRechazos(d)},
-    endeudamiento: {puntos:pEndeudamiento, max:15, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
-    bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)}
+    endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
+    bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
+    deudaVsInflacion: inflacionDisponible
+      ? {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación", desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo)}
+      : {puntos:null, max:10, label:"Deuda real vs. inflación", noDisponible:true,
+         desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
   };
 
   return {
@@ -997,7 +1007,7 @@ const NOMBRE_CATEGORIA = {
 };
 
 function construirNarrativa(categoria, puntos, detalle, forzadoC2, motivo){
-  const entradas = Object.values(detalle);
+  const entradas = Object.values(detalle).filter(e => e.puntos !== null);
   const conPct = entradas.map(e => ({...e, pct: e.puntos / e.max}));
   const fortaleza = conPct.reduce((a,b) => b.pct > a.pct ? b : a);
   const debilidad = conPct.reduce((a,b) => b.pct < a.pct ? b : a);
@@ -1032,6 +1042,12 @@ function puntos_texto(fortaleza, debilidad){
   }
   return `un resultado sostenido por ${fortaleza.label.toLowerCase()} y afectado por ${debilidad.label.toLowerCase()}`;
 }
+
+// Aproximación fija de inflación mensual (4%) usada solo para deflactar
+// los datos de demo/simulados — declarada acá arriba porque prepararDatos()
+// la necesita al construir BCRA_DB al cargar la página, antes de llegar a
+// la sección de "Deuda real vs. inflación" más abajo en el archivo.
+const INFLACION_MENSUAL_DEMO_APROX = 0.04;
 
 /* =======================================================
    DATOS SIMULADOS BCRA (calibrados a los casos de prueba)
@@ -1104,11 +1120,13 @@ const BCRA_DB_RAW = {
 function prepararDatos(raw){
   const situacionVigente = Math.max(...raw.entidades.map(e => e.situacion));
   const endeudamientoMillones = Math.round(raw.entidades.reduce((s,e) => s + e.monto, 0) / 1e6);
+  const deudaVsInflacion = raw.deudaVsInflacion || calcularDeudaVsInflacionDemo(raw.historialDeuda || []);
   return {
     ...raw,
     situacion: situacionVigente,
     endeudamientoMillones,
-    cantidadBancos: raw.entidades.length
+    cantidadBancos: raw.entidades.length,
+    deudaVsInflacion
   };
 }
 
@@ -1147,7 +1165,7 @@ async function consultarDeudorBCRA(cuit){
 // Historial de hasta 24 períodos. Best-effort: si falla, seguimos sin cortar el flujo.
 async function consultarHistorialBCRA(cuit){
   const r = await fetch(BCRA_HISTORICAS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
-  if (r.status === 404) return { ok:true, historialSituacion:[], historialDeuda:[], historialMontoEnMora:[] };
+  if (r.status === 404) return { ok:true, historialSituacion:[], historialDeuda:[], historialMontoEnMora:[], historialPeriodos:[] };
   if (!r.ok) return { ok:false };
   const data = await r.json();
   if (!data || !data.results) return { ok:false };
@@ -1157,7 +1175,8 @@ async function consultarHistorialBCRA(cuit){
   // Monto real en mora por período: viene directo de las entidades con
   // situación>1 de ESE mes — no es una aproximación, es el dato real.
   const historialMontoEnMora = periodos.map(p => Number((p.entidades.filter(e => e.situacion > 1).reduce((s,e) => s + (e.monto||0), 0)/1000).toFixed(1)));
-  return { ok:true, historialSituacion, historialDeuda, historialMontoEnMora };
+  const historialPeriodos = periodos.map(p => p.periodo); // "AAAAMM", para alinear con la inflación
+  return { ok:true, historialSituacion, historialDeuda, historialMontoEnMora, historialPeriodos };
 }
 
 // Cheques rechazados, agrupados por causal/entidad, con bucket de recencia.
@@ -1216,12 +1235,23 @@ async function construirDatosLibradorReal(cuit){
     const situacionVigente = deuda.entidades.length ? Math.max(...deuda.entidades.map(e=>e.situacion)) : 1;
     const deudaVigente = deuda.entidades.reduce((s,e)=>s+e.monto,0)/1e6;
     const moraVigente = deuda.entidades.filter(e=>e.situacion>1).reduce((s,e)=>s+e.monto,0)/1e6;
+    const hoyPeriodo = new Date().toISOString().slice(0,7).replace("-","");
     historial = {
       historialSituacion:[situacionVigente],
       historialDeuda:[Number(deudaVigente.toFixed(1))],
-      historialMontoEnMora:[Number(moraVigente.toFixed(1))]
+      historialMontoEnMora:[Number(moraVigente.toFixed(1))],
+      historialPeriodos:[hoyPeriodo]
     };
   }
+
+  // Deuda real vs. inflación: best-effort con la serie real del BCRA. Si
+  // falla (o falta algún mes), calcularScore lo detecta (disponible:false)
+  // y redistribuye el peso de esta variable en vez de romper la consulta.
+  let deudaVsInflacion = { disponible:false };
+  try {
+    const inflacionPorPeriodo = await obtenerInflacionMensualBCRA();
+    deudaVsInflacion = calcularDeudaRealVsInflacion(historial.historialDeuda, historial.historialPeriodos, inflacionPorPeriodo);
+  } catch (e) { /* silencioso: esta variable es un complemento, no un bloqueante */ }
 
   return prepararDatos({
     empresa: deuda.denominacion || ("Librador " + cuit),
@@ -1232,7 +1262,8 @@ async function construirDatosLibradorReal(cuit){
     entidades: deuda.entidades,
     historialSituacion: historial.historialSituacion,
     historialDeuda: historial.historialDeuda,
-    historialMontoEnMora: historial.historialMontoEnMora
+    historialMontoEnMora: historial.historialMontoEnMora,
+    deudaVsInflacion
   });
 }
 
@@ -1340,31 +1371,121 @@ function calcularConcentracionBancaria(entidades){
   return Math.round((mayor/total) * 100);
 }
 
-function calcularTendenciaDeuda(historialDeuda){
-  const n = historialDeuda.length;
-  if (n < 2) return "Estable";
-
-  // Pendiente por cuadrados mínimos sobre TODA la serie, en vez de comparar
-  // solo el primer y el último punto — eso último es muy sensible a un
-  // repunte o caída puntual reciente y puede contradecir la tendencia real
-  // del período completo.
+// Pendiente por cuadrados mínimos sobre TODA la serie, expresada como
+// cambio total relativo a lo largo del período (no solo primer vs último
+// punto — eso es muy sensible a un repunte o caída puntual reciente).
+// Reutilizada tanto para tendencia nominal como para tendencia real
+// (deflactada por inflación).
+function calcularPendienteRelativa(serie){
+  const n = serie.length;
+  if (n < 2) return 0;
   const promedioX = (n - 1) / 2;
-  const promedioY = historialDeuda.reduce((a,b) => a+b, 0) / n;
-  if (promedioY === 0) return "Estable";
-
+  const promedioY = serie.reduce((a,b) => a+b, 0) / n;
+  if (promedioY === 0) return 0;
   let num = 0, den = 0;
   for (let i = 0; i < n; i++){
-    num += (i - promedioX) * (historialDeuda[i] - promedioY);
+    num += (i - promedioX) * (serie[i] - promedioY);
     den += (i - promedioX) ** 2;
   }
-  const pendiente = den === 0 ? 0 : num / den; // millones por período
+  const pendiente = den === 0 ? 0 : num / den;
+  return (pendiente * (n - 1)) / promedioY;
+}
 
-  // Proyecta el cambio total a lo largo de todo el período y lo compara
-  // contra el nivel promedio de deuda, para tener un umbral en %.
-  const cambioTotalRelativo = (pendiente * (n - 1)) / promedioY;
-  if (cambioTotalRelativo > 0.10) return "Subiendo";
-  if (cambioTotalRelativo < -0.10) return "Bajando";
+function calcularTendenciaDeuda(historialDeuda){
+  const cambio = calcularPendienteRelativa(historialDeuda);
+  if (cambio > 0.10) return "Subiendo";
+  if (cambio < -0.10) return "Bajando";
   return "Estable";
+}
+
+/* =======================================================
+   DEUDA REAL VS. INFLACIÓN
+   Deflacta el historial de deuda con la inflación mensual real publicada
+   por el BCRA (API de Estadísticas Monetarias) y calcula si la deuda EN
+   TÉRMINOS REALES sube, baja o se mantiene — no solo en pesos nominales,
+   que en Argentina casi siempre "suben" aunque la deuda real se achique.
+   ======================================================= */
+const BCRA_MONETARIAS_URL = "https://api.bcra.gob.ar/estadisticas/v4.0/monetarias";
+let cacheInflacionMensualBCRA = null; // { "202406": 4.2, ... } valores en % mensual
+
+// Busca el ID de la variable "Inflación mensual" dinámicamente en vez de
+// hardcodear un número — el BCRA podría reasignar IDs entre versiones.
+async function obtenerInflacionMensualBCRA(){
+  if (cacheInflacionMensualBCRA) return cacheInflacionMensualBCRA;
+
+  const rVars = await fetch(BCRA_MONETARIAS_URL, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (!rVars.ok) throw new Error("No se pudo listar las variables monetarias del BCRA");
+  const dataVars = await rVars.json();
+  const variable = (dataVars.results || []).find(v => /inflaci[oó]n\s+mensual/i.test(v.descripcion || ""));
+  if (!variable) throw new Error("No se encontró la variable 'Inflación mensual' en el listado del BCRA");
+
+  const hoy = new Date();
+  const hasta = hoy.toISOString().slice(0,10);
+  const desdeDate = new Date(hoy); desdeDate.setMonth(desdeDate.getMonth() - 25);
+  const desde = desdeDate.toISOString().slice(0,10);
+
+  const rSerie = await fetch(`${BCRA_MONETARIAS_URL}/${variable.idVariable}?desde=${desde}&hasta=${hasta}&limit=100`, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (!rSerie.ok) throw new Error("No se pudo obtener la serie de inflación mensual del BCRA");
+  const dataSerie = await rSerie.json();
+
+  const mapa = {};
+  for (const punto of (dataSerie.results || [])){
+    const periodo = (punto.fecha || "").slice(0,7).replace("-", ""); // "2026-06-30" -> "202606"
+    if (periodo) mapa[periodo] = punto.valor; // % mensual
+  }
+  cacheInflacionMensualBCRA = mapa;
+  return mapa;
+}
+
+// Deflacta historialDeuda mes a mes usando la inflación real, y devuelve
+// el cambio relativo total de la deuda YA EN TÉRMINOS REALES.
+function calcularDeudaRealVsInflacion(historialDeuda, historialPeriodos, inflacionPorPeriodo){
+  const n = historialDeuda.length;
+  if (!n || !historialPeriodos || historialPeriodos.length !== n) return { disponible:false };
+
+  const indices = new Array(n);
+  indices[n-1] = 1; // el mes más reciente es la base (índice = 1)
+  for (let i = n-2; i >= 0; i--){
+    const infl = inflacionPorPeriodo[historialPeriodos[i+1]];
+    if (infl === undefined) return { disponible:false }; // falta un mes: no deflactamos a medias
+    indices[i] = indices[i+1] * (1 + infl/100);
+  }
+  // indices[i] = cuánto crecieron los precios entre el mes i y hoy.
+  // Para expresar el monto de ese mes "en pesos de hoy" hay que MULTIPLICAR
+  // por ese factor (no dividir) — un monto viejo, ajustado por la inflación
+  // que pasó desde entonces, se ve más grande en pesos de hoy si se mantuvo
+  // parejo con los precios, y más chico si no llegó a acompañarlos.
+  const deudaReal = historialDeuda.map((v,i) => v * indices[i]);
+  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal) };
+}
+
+// Solo para datos de demo/simulados (sin conexión real a la API de
+// inflación): asume una inflación mensual constante aproximada, para que
+// la demo funcione siempre sin depender de la red.
+function calcularDeudaVsInflacionDemo(historialDeuda){
+  const n = historialDeuda.length;
+  if (!n) return { disponible:false };
+  const indices = new Array(n);
+  indices[n-1] = 1;
+  for (let i = n-2; i >= 0; i--) indices[i] = indices[i+1] * (1 + INFLACION_MENSUAL_DEMO_APROX);
+  const deudaReal = historialDeuda.map((v,i) => v * indices[i]);
+  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal) };
+}
+
+function scoreDeudaVsInflacion(cambioRealTotal){
+  // 10 pts: compara el crecimiento de la deuda YA DESCONTADA la inflación.
+  if (cambioRealTotal <= 0) return 10;    // se achicó o quedó igual en términos reales
+  if (cambioRealTotal <= 0.10) return 7;  // creció poco por encima de la inflación
+  if (cambioRealTotal <= 0.30) return 4;  // creció bastante por encima
+  return 0;                                // creció muy por encima de la inflación
+}
+
+function explicarDeudaVsInflacion(cambioRealTotal){
+  const pct = Math.round(cambioRealTotal * 100);
+  if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios.`;
+  if (cambioRealTotal <= 0.10) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: un poco por encima de la inflación, pero dentro de un rango razonable.`;
+  if (cambioRealTotal <= 0.30) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: bastante por encima de la inflación, vale la pena monitorear.`;
+  return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: muy por encima de la inflación, señal de alerta.`;
 }
 
 /* =======================================================
