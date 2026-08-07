@@ -519,8 +519,12 @@
   .dm-arrow{font-size:10px;}
   .detalle-mensual-tabla{
     margin-top:8px; border:1px solid var(--hairline); border-radius:8px;
-    max-height:300px; overflow-y:auto; overflow-x:auto;
+    max-height:300px; overflow-y:scroll; overflow-x:scroll;
+    scrollbar-width:thin; scrollbar-color:var(--hairline) transparent;
   }
+  .detalle-mensual-tabla::-webkit-scrollbar{width:7px; height:7px;}
+  .detalle-mensual-tabla::-webkit-scrollbar-track{background:transparent;}
+  .detalle-mensual-tabla::-webkit-scrollbar-thumb{background:#C7C0AC; border-radius:10px;}
   .dm-nota{
     font-size:10.5px; color:var(--ink-soft); line-height:1.4;
     padding:8px 10px; border-bottom:1px solid var(--hairline); background:var(--paper-2);
@@ -2007,6 +2011,11 @@ function toggleDetalleMensual(id, el){
 }
 
 function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
+  // Guardado para poder auditar el cálculo exacto desde la consola:
+  // copy(JSON.stringify(window.ultimoResultado.detalle.deudaVsInflacion.detalleMensual))
+  window.ultimoResultado = resultado;
+  window.ultimosDatos = datos;
+
   document.getElementById("stamp-holder").innerHTML = construirSello(resultado.categoria);
   document.getElementById("res-empresa").textContent = datos.empresa;
   document.getElementById("res-cuit").textContent = document.getElementById("consulta-cuit").value || "—";
