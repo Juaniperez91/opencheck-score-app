@@ -511,6 +511,29 @@
   .fuente-badge.fuente-demo{background:var(--amber-soft); color:var(--amber);}
 
   .breakdown-row-nd .br-val{color:var(--ink-soft); font-style:italic;}
+
+  .detalle-mensual-toggle{
+    font-size:11.5px; font-weight:600; color:var(--green-ink);
+    margin-top:9px; cursor:pointer; display:flex; align-items:center; gap:4px;
+  }
+  .dm-arrow{font-size:10px;}
+  .detalle-mensual-tabla{
+    margin-top:8px; border:1px solid var(--hairline); border-radius:8px;
+    overflow-x:auto; max-height:280px; overflow-y:auto;
+  }
+  .detalle-mensual-tabla table{
+    width:100%; border-collapse:collapse; font-family:'DM Mono',monospace; font-size:10.5px;
+  }
+  .detalle-mensual-tabla th{
+    position:sticky; top:0; background:var(--paper-2); text-align:left;
+    padding:6px 8px; font-family:'DM Sans',sans-serif; font-weight:600;
+    color:var(--ink-soft); font-size:10px; text-transform:uppercase; letter-spacing:.03em;
+    border-bottom:1px solid var(--hairline); white-space:nowrap;
+  }
+  .detalle-mensual-tabla td{
+    padding:5px 8px; border-bottom:1px solid var(--hairline); white-space:nowrap;
+  }
+  .detalle-mensual-tabla tr:last-child td{border-bottom:none;}
   .breakdown-row-nd .br-desc{font-style:italic;}
 
   ::-webkit-scrollbar{width:0;}
@@ -987,7 +1010,7 @@ function calcularScore(d){
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
     deudaVsInflacion: inflacionDisponible
-      ? {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación", desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo)}
+      ? {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación", desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo), detalleMensual: d.deudaVsInflacion.detalleMensual}
       : {puntos:null, max:10, label:"Deuda real vs. inflación", noDisponible:true,
          desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
   };
@@ -1483,7 +1506,16 @@ function calcularDeudaRealVsInflacion(historialDeuda, historialPeriodos, inflaci
   // que pasó desde entonces, se ve más grande en pesos de hoy si se mantuvo
   // parejo con los precios, y más chico si no llegó a acompañarlos.
   const deudaReal = historialDeuda.map((v,i) => v * indices[i]);
-  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal) };
+
+  const detalleMensual = historialPeriodos.map((periodo, i) => ({
+    periodo,
+    inflacionMensual: inflacionPorPeriodo[periodo] ?? null,
+    indiceAcumulado: Number(indices[i].toFixed(3)),
+    deudaNominal: historialDeuda[i],
+    deudaReal: Number(deudaReal[i].toFixed(2))
+  }));
+
+  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal), detalleMensual };
 }
 
 // Solo para datos de demo/simulados (sin conexión real a la API de
@@ -1496,7 +1528,16 @@ function calcularDeudaVsInflacionDemo(historialDeuda){
   indices[n-1] = 1;
   for (let i = n-2; i >= 0; i--) indices[i] = indices[i+1] * (1 + INFLACION_MENSUAL_DEMO_APROX);
   const deudaReal = historialDeuda.map((v,i) => v * indices[i]);
-  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal) };
+
+  const detalleMensual = historialDeuda.map((v,i) => ({
+    periodo: i === n-1 ? "Este mes" : `Hace ${n-1-i} mes${n-1-i===1?"":"es"}`,
+    inflacionMensual: INFLACION_MENSUAL_DEMO_APROX * 100,
+    indiceAcumulado: Number(indices[i].toFixed(3)),
+    deudaNominal: v,
+    deudaReal: Number(deudaReal[i].toFixed(2))
+  }));
+
+  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal), detalleMensual };
 }
 
 function scoreDeudaVsInflacion(cambioRealTotal){
@@ -1916,6 +1957,40 @@ function construirSparklineDeuda(historial){
 
 const TENDENCIA_ICONO = { Subiendo:"▲", Bajando:"▼", Estable:"→" };
 
+// Tabla desplegable con el detalle mes a mes de la deuda vs inflación,
+// para poder revisar/ajustar el cálculo con criterio propio.
+function construirDetalleMensualToggle(detalleMensual, idx){
+  const id = "detalle-mensual-" + idx;
+  const filas = detalleMensual.map(m => `
+    <tr>
+      <td>${m.periodo}</td>
+      <td>${m.inflacionMensual === null ? "—" : m.inflacionMensual.toFixed(1) + "%"}</td>
+      <td>${m.indiceAcumulado.toFixed(3)}×</td>
+      <td>$${m.deudaNominal.toLocaleString("es-AR")}M</td>
+      <td>$${m.deudaReal.toLocaleString("es-AR")}M</td>
+    </tr>
+  `).join("");
+  return `
+    <div class="detalle-mensual-toggle" onclick="toggleDetalleMensual('${id}', this)">
+      Ver detalle mes a mes <span class="dm-arrow">▸</span>
+    </div>
+    <div class="detalle-mensual-tabla" id="${id}" style="display:none">
+      <table>
+        <thead>
+          <tr><th>Período</th><th>Inflación</th><th>Índice acum.</th><th>Deuda nominal</th><th>Deuda ajustada</th></tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+  `;
+}
+function toggleDetalleMensual(id, el){
+  const tabla = document.getElementById(id);
+  const abierta = tabla.style.display !== "none";
+  tabla.style.display = abierta ? "none" : "block";
+  el.querySelector(".dm-arrow").textContent = abierta ? "▸" : "▾";
+}
+
 function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   document.getElementById("stamp-holder").innerHTML = construirSello(resultado.categoria);
   document.getElementById("res-empresa").textContent = datos.empresa;
@@ -1961,7 +2036,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   `;
 
   const filas = Object.values(resultado.detalle);
-  document.getElementById("res-breakdown").innerHTML = filas.map(v => `
+  document.getElementById("res-breakdown").innerHTML = filas.map((v, idx) => `
     <div class="breakdown-row${v.noDisponible ? " breakdown-row-nd" : ""}">
       <div class="br-top">
         <div class="br-label">${v.label}</div>
@@ -1969,6 +2044,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
         <div class="br-val">${v.noDisponible ? "N/D" : v.puntos + "/" + v.max}</div>
       </div>
       <div class="br-desc">${v.desc}</div>
+      ${v.detalleMensual ? construirDetalleMensualToggle(v.detalleMensual, idx) : ""}
     </div>
   `).join("");
 
