@@ -1439,13 +1439,15 @@ async function obtenerInflacionMensualBCRA(){
   const desde = desdeDate.toISOString().slice(0,10);
 
   const urlSerie = `${BCRA_MONETARIAS_URL}/${variable.idVariable}?desde=${desde}&hasta=${hasta}&limit=100`;
+  console.info("[OpenCheck Score] Pidiendo serie de inflación:", urlSerie);
   const rSerie = await fetch(urlSerie, { method:"GET", headers:{ "Accept":"application/json" } });
   if (!rSerie.ok){
     console.warn("[OpenCheck Score] Falló GET", urlSerie, "status:", rSerie.status);
     throw new Error("No se pudo obtener la serie de inflación mensual del BCRA (HTTP " + rSerie.status + ")");
   }
   const dataSerie = await rSerie.json();
-  console.info("[OpenCheck Score] Serie de inflación recibida:", (dataSerie.results || []).length, "puntos. Primeros 3:", (dataSerie.results || []).slice(0,3));
+  console.info("[OpenCheck Score] Metadata de la respuesta (resultset):", dataSerie.metadata);
+  console.info("[OpenCheck Score] Serie de inflación recibida:", (dataSerie.results || []).length, "puntos. TODOS los puntos:", dataSerie.results);
 
   const mapa = {};
   for (const punto of (dataSerie.results || [])){
