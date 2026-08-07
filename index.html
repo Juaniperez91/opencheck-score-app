@@ -1552,10 +1552,26 @@ function calcularDeudaVsInflacionDemo(historialDeuda){
 
 function scoreDeudaVsInflacion(cambioRealTotal){
   // 10 pts: compara el crecimiento de la deuda YA DESCONTADA la inflación.
-  if (cambioRealTotal <= 0) return 10;    // se achicó o quedó igual en términos reales
-  if (cambioRealTotal <= 0.10) return 7;  // creció poco por encima de la inflación
-  if (cambioRealTotal <= 0.30) return 4;  // creció bastante por encima
-  return 0;                                // creció muy por encima de la inflación
+  // Interpolación lineal entre puntos de referencia, en vez de escalones
+  // bruscos — así no hay un salto injusto entre, por ejemplo, 49% y 51%
+  // de crecimiento real. Cada % adicional resta puntaje gradualmente.
+  const pct = cambioRealTotal * 100;
+  const puntos = [
+    { x: 0,   y: 10 },  // se achicó o quedó igual en términos reales
+    { x: 15,  y: 7 },   // creció poco por encima de la inflación
+    { x: 50,  y: 3 },   // empieza a preocupar
+    { x: 100, y: 0 }    // alerta grave
+  ];
+  if (pct <= puntos[0].x) return puntos[0].y;
+  if (pct >= puntos[puntos.length-1].x) return puntos[puntos.length-1].y;
+  for (let i = 0; i < puntos.length - 1; i++){
+    const a = puntos[i], b = puntos[i+1];
+    if (pct >= a.x && pct <= b.x){
+      const t = (pct - a.x) / (b.x - a.x);
+      return Math.round((a.y + t * (b.y - a.y)) * 10) / 10;
+    }
+  }
+  return 0;
 }
 
 function explicarDeudaVsInflacion(cambioRealTotal){
@@ -1568,8 +1584,8 @@ function explicarDeudaVsInflacion(cambioRealTotal){
   const pct = Math.round(Math.max(pctReal, -100));
   if (cambioRealTotal <= -1) return `La deuda, ya descontada la inflación, se redujo a una fracción mínima en los últimos 24 meses: no está creciendo por encima de los precios.`;
   if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios.`;
-  if (cambioRealTotal <= 0.10) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: un poco por encima de la inflación, pero dentro de un rango razonable.`;
-  if (cambioRealTotal <= 0.30) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: bastante por encima de la inflación, vale la pena monitorear.`;
+  if (cambioRealTotal <= 0.15) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: un poco por encima de la inflación, pero dentro de un rango razonable.`;
+  if (cambioRealTotal <= 0.50) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: bastante por encima de la inflación, vale la pena monitorear.`;
   return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: muy por encima de la inflación, señal de alerta.`;
 }
 
