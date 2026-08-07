@@ -994,6 +994,13 @@ function calcularScore(d){
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
     motivo = `Matriz de atrasos: mora vigente de $${montoEnMoraMillones.toFixed(1)}M con ${diasAtrasoMax} días de atraso. Cuenta no operable.`;
+  } else if (inflacionDisponible && d.deudaVsInflacion.cambioTotalRelativo > 2.0){
+    // Crecimiento real extremo (>200% en 24 meses, muy por encima de
+    // cualquier línea de inversión productiva razonable): mismo criterio
+    // de corte duro que usamos para rechazos y mora vigente.
+    forzadoC2 = true;
+    puntosFinales = Math.min(puntosBase, 20);
+    motivo = `La deuda creció ${Math.round(d.deudaVsInflacion.cambioTotalRelativo*100)}% en términos reales en los últimos 24 meses: crecimiento extremo, muy por encima de cualquier línea de inversión razonable. Cuenta no operable.`;
   } else {
     const factorAtrasos = atrasos.factor || 0;
     const factorTotal = Math.min(factorAtrasos + factorRecurrencia, 1);
@@ -1049,10 +1056,12 @@ function construirNarrativa(categoria, puntos, detalle, forzadoC2, motivo){
     // Sacamos "historial de rechazos" de la comparación acá: en este caso
     // vale 0 por definición (es la causa del C2), así que compararlo como
     // "debilidad" sería tautológico. Mostramos qué hubiera dado el resto.
-    const sinRechazos = conPct.filter(e => e.label !== "Historial de rechazos (24 meses)");
+    const sinRechazos = conPct.filter(e =>
+      e.label !== "Historial de rechazos (24 meses)" && e.label !== "Deuda real vs. inflación"
+    );
     const fortalezaSinR = sinRechazos.reduce((a,b) => b.pct > a.pct ? b : a);
     const debilidadSinR = sinRechazos.reduce((a,b) => b.pct < a.pct ? b : a);
-    return `Se asignó <b>C2 (no operable)</b> de forma directa: ${motivo.charAt(0).toLowerCase() + motivo.slice(1)} Este criterio pisa cualquier otro resultado del cálculo base, que sin el rechazo hubiera dado ${puntos_texto(fortalezaSinR, debilidadSinR)}.`;
+    return `Se asignó <b>C2 (no operable)</b> de forma directa: ${motivo.charAt(0).toLowerCase() + motivo.slice(1)} Este criterio pisa cualquier otro resultado del cálculo base, que sin este motivo hubiera dado ${puntos_texto(fortalezaSinR, debilidadSinR)}.`;
   }
 
   let base = `Con <b>${puntos} puntos sobre 100</b>, el librador quedó en la categoría <b>${categoria}</b> (${NOMBRE_CATEGORIA[categoria]}). `;
