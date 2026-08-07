@@ -1447,10 +1447,15 @@ async function obtenerInflacionMensualBCRA(){
   }
   const dataSerie = await rSerie.json();
   console.info("[OpenCheck Score] Metadata de la respuesta (resultset):", dataSerie.metadata);
-  console.info("[OpenCheck Score] Serie de inflación recibida:", (dataSerie.results || []).length, "puntos. TODOS los puntos:", dataSerie.results);
+
+  // La respuesta viene anidada: results[] son las variables consultadas
+  // (una sola, acá), y CADA UNA tiene un array `detalle` con los puntos
+  // reales {fecha, valor}. No es una lista plana de puntos.
+  const puntos = (dataSerie.results || []).flatMap(v => v.detalle || []);
+  console.info("[OpenCheck Score] Puntos reales de inflación recibidos:", puntos.length, "Primeros 3:", puntos.slice(0,3));
 
   const mapa = {};
-  for (const punto of (dataSerie.results || [])){
+  for (const punto of puntos){
     const periodo = (punto.fecha || "").slice(0,7).replace("-", ""); // "2026-06-30" -> "202606"
     if (periodo) mapa[periodo] = punto.valor; // % mensual
   }
