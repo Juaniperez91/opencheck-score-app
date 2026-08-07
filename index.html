@@ -519,7 +519,7 @@
   .dm-arrow{font-size:10px;}
   .detalle-mensual-tabla{
     margin-top:8px; border:1px solid var(--hairline); border-radius:8px;
-    max-height:300px; overflow-y:auto;
+    max-height:300px; overflow-y:auto; overflow-x:auto;
   }
   .dm-nota{
     font-size:10.5px; color:var(--ink-soft); line-height:1.4;
@@ -527,8 +527,7 @@
     position:sticky; top:0; z-index:1;
   }
   .detalle-mensual-tabla table{
-    width:100%; border-collapse:collapse; font-family:'DM Mono',monospace; font-size:10.5px;
-    table-layout:fixed;
+    width:100%; min-width:380px; border-collapse:collapse; font-family:'DM Mono',monospace; font-size:10.5px;
   }
   .detalle-mensual-tabla th{
     position:sticky; top:34px; background:var(--paper-2); text-align:right;
