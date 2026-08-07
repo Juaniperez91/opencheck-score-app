@@ -994,13 +994,6 @@ function calcularScore(d){
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
     motivo = `Matriz de atrasos: mora vigente de $${montoEnMoraMillones.toFixed(1)}M con ${diasAtrasoMax} días de atraso. Cuenta no operable.`;
-  } else if (inflacionDisponible && d.deudaVsInflacion.cambioTotalRelativo > 2.0){
-    // Crecimiento real extremo (>200% en 24 meses, muy por encima de
-    // cualquier línea de inversión productiva razonable): mismo criterio
-    // de corte duro que usamos para rechazos y mora vigente.
-    forzadoC2 = true;
-    puntosFinales = Math.min(puntosBase, 20);
-    motivo = `La deuda creció ${Math.round(d.deudaVsInflacion.cambioTotalRelativo*100)}% en términos reales en los últimos 24 meses: crecimiento extremo, muy por encima de cualquier línea de inversión razonable. Cuenta no operable.`;
   } else {
     const factorAtrasos = atrasos.factor || 0;
     const factorTotal = Math.min(factorAtrasos + factorRecurrencia, 1);
