@@ -519,19 +519,27 @@
   .dm-arrow{font-size:10px;}
   .detalle-mensual-tabla{
     margin-top:8px; border:1px solid var(--hairline); border-radius:8px;
-    overflow-x:auto; max-height:280px; overflow-y:auto;
+    max-height:300px; overflow-y:auto;
+  }
+  .dm-nota{
+    font-size:10.5px; color:var(--ink-soft); line-height:1.4;
+    padding:8px 10px; border-bottom:1px solid var(--hairline); background:var(--paper-2);
+    position:sticky; top:0; z-index:1;
   }
   .detalle-mensual-tabla table{
     width:100%; border-collapse:collapse; font-family:'DM Mono',monospace; font-size:10.5px;
+    table-layout:fixed;
   }
   .detalle-mensual-tabla th{
-    position:sticky; top:0; background:var(--paper-2); text-align:left;
-    padding:6px 8px; font-family:'DM Sans',sans-serif; font-weight:600;
-    color:var(--ink-soft); font-size:10px; text-transform:uppercase; letter-spacing:.03em;
+    position:sticky; top:34px; background:var(--paper-2); text-align:right;
+    padding:6px 6px; font-family:'DM Sans',sans-serif; font-weight:600;
+    color:var(--ink-soft); font-size:9.5px; text-transform:uppercase; letter-spacing:.02em;
     border-bottom:1px solid var(--hairline); white-space:nowrap;
   }
+  .detalle-mensual-tabla th:first-child, .detalle-mensual-tabla td:first-child{text-align:left;}
   .detalle-mensual-tabla td{
-    padding:5px 8px; border-bottom:1px solid var(--hairline); white-space:nowrap;
+    padding:5px 6px; border-bottom:1px solid var(--hairline); white-space:nowrap;
+    text-align:right; overflow:hidden; text-overflow:ellipsis;
   }
   .detalle-mensual-tabla tr:last-child td{border-bottom:none;}
   .breakdown-row-nd .br-desc{font-style:italic;}
@@ -1959,13 +1967,21 @@ const TENDENCIA_ICONO = { Subiendo:"▲", Bajando:"▼", Estable:"→" };
 
 // Tabla desplegable con el detalle mes a mes de la deuda vs inflación,
 // para poder revisar/ajustar el cálculo con criterio propio.
+function formatearPeriodoLegible(periodo){
+  // "202509" -> "sep '25" | "Hace 23 meses" (demo) se deja tal cual
+  if (!/^\d{6}$/.test(periodo)) return periodo;
+  const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const anio = periodo.slice(2,4);
+  const mes = parseInt(periodo.slice(4,6), 10) - 1;
+  return `${meses[mes]} '${anio}`;
+}
+
 function construirDetalleMensualToggle(detalleMensual, idx){
   const id = "detalle-mensual-" + idx;
   const filas = detalleMensual.map(m => `
     <tr>
-      <td>${m.periodo}</td>
+      <td>${formatearPeriodoLegible(m.periodo)}</td>
       <td>${m.inflacionMensual === null ? "—" : m.inflacionMensual.toFixed(1) + "%"}</td>
-      <td>${m.indiceAcumulado.toFixed(3)}×</td>
       <td>$${m.deudaNominal.toLocaleString("es-AR")}M</td>
       <td>$${m.deudaReal.toLocaleString("es-AR")}M</td>
     </tr>
@@ -1975,9 +1991,10 @@ function construirDetalleMensualToggle(detalleMensual, idx){
       Ver detalle mes a mes <span class="dm-arrow">▸</span>
     </div>
     <div class="detalle-mensual-tabla" id="${id}" style="display:none">
+      <div class="dm-nota">La deuda de cada mes, ajustada a pesos de hoy según la inflación acumulada desde entonces.</div>
       <table>
         <thead>
-          <tr><th>Período</th><th>Inflación</th><th>Índice acum.</th><th>Deuda nominal</th><th>Deuda ajustada</th></tr>
+          <tr><th>Mes</th><th>Inflación</th><th>Nominal</th><th>Ajustada</th></tr>
         </thead>
         <tbody>${filas}</tbody>
       </table>
