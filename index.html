@@ -832,18 +832,13 @@ function scoreBancos(n){
 }
 function scoreRechazos(d){
   // 20 pts: variable propia, no solo ausencia de penalización.
-  // "Sin fondos" es la señal real de insolvencia y pesa fuerte. "Defectos
-  // formales" (firma, datos mal puestos) es mayormente administrativo, no
-  // financiero, así que resta mucho menos. Un "sin fondos" en los últimos
-  // 6 meses fuerza C2 directo aparte (ver calcularScore).
+  // "Sin fondos" es la señal real de insolvencia y es lo único que resta
+  // acá. "Defectos formales" (firma, datos mal puestos) es un error
+  // administrativo, no financiero — no penaliza nada. Un "sin fondos" en
+  // los últimos 6 meses fuerza C2 directo aparte (ver calcularScore).
   if (d.rechazosSinFondos6m > 0) return 0;
   if (d.rechazosSinFondos6a12m > 0) return 4;
   if (d.rechazosSinFondos12a24m > 0) return 12;
-  // Sin "sin fondos" en 24 meses. Si hubo defectos formales, descuenta
-  // apenas — no es una señal de insolvencia.
-  if (d.rechazosDefectosFormales6m > 0) return 17;
-  if (d.rechazosDefectosFormales6a12m > 0) return 18;
-  if (d.rechazosDefectosFormales12a24m > 0) return 19;
   return 20;
 }
 
@@ -956,7 +951,7 @@ function explicarRechazos(d){
   if (d.rechazosSinFondos6a12m > 0) return "Rechazo de cheque por falta de fondos entre 6 y 12 meses: todavía reciente, resta la mayor parte del puntaje de esta variable.";
   if (d.rechazosSinFondos12a24m > 0) return "Rechazo de cheque por falta de fondos entre 12 y 24 meses: ya superado, resta solo una parte menor.";
   if (d.rechazosDefectosFormales6m > 0 || d.rechazosDefectosFormales6a12m > 0 || d.rechazosDefectosFormales12a24m > 0)
-    return "Hubo algún rechazo por defectos formales (firma, datos mal puestos) en los últimos 24 meses, pero no por falta de fondos — es un error administrativo, no una señal de insolvencia, así que resta muy poco.";
+    return "Hubo algún rechazo por defectos formales (firma, datos mal puestos) en los últimos 24 meses, pero no por falta de fondos — es un error administrativo, no una señal de insolvencia, así que no resta nada acá.";
   return "Sin rechazos de cheques informados por BCRA en los últimos 24 meses: puntaje máximo en esta variable.";
 }
 
