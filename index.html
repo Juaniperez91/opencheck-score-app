@@ -1508,7 +1508,14 @@ function scoreDeudaVsInflacion(cambioRealTotal){
 }
 
 function explicarDeudaVsInflacion(cambioRealTotal){
-  const pct = Math.round(cambioRealTotal * 100);
+  // Piso solo visual: la métrica es una proyección de tendencia (regresión),
+  // no un simple "% de cambio punta a punta", así que puede matemáticamente
+  // superar -100% — pero mostrar "-120%" es confuso, así que topeamos el
+  // texto en -100% ("se redujo a una fracción mínima"). El puntaje no cambia:
+  // cualquier valor ≤0% ya da el máximo de 10 pts.
+  const pctReal = cambioRealTotal * 100;
+  const pct = Math.round(Math.max(pctReal, -100));
+  if (cambioRealTotal <= -1) return `La deuda, ya descontada la inflación, se redujo a una fracción mínima en los últimos 24 meses: no está creciendo por encima de los precios.`;
   if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios.`;
   if (cambioRealTotal <= 0.10) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: un poco por encima de la inflación, pero dentro de un rango razonable.`;
   if (cambioRealTotal <= 0.30) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: bastante por encima de la inflación, vale la pena monitorear.`;
