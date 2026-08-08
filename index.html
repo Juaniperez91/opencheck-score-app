@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   :root{
     --green:#0F6E56;
@@ -584,6 +585,10 @@
         <input type="text" class="mono" id="reg-cuit" placeholder="20-12345678-9" maxlength="13">
         <div class="field-hint" id="hint-cuit">Usamos esto para verificar tu identidad como usuario, no para calificarte a vos.</div>
       </div>
+      <div class="field">
+        <label class="field-label">Contraseña</label>
+        <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres">
+      </div>
 
       <div class="checkbox-row">
         <input type="checkbox" id="reg-tc">
@@ -592,6 +597,37 @@
       <div class="tc-meta" id="tc-meta">Documento v1.0 · registrado</div>
 
       <button class="btn btn-primary" id="btn-registrar" disabled>Crear cuenta</button>
+      <div class="link-line" style="justify-content:center; margin-top:14px;" onclick="irA('login')">
+        <span>¿Ya tenés cuenta? <b>Iniciar sesión</b></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== LOGIN ===================== -->
+  <div class="screen" id="screen-login">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Open<span>Check</span> Score</div>
+      </div>
+    </div>
+    <div class="content">
+      <h1 class="page-title">Iniciar sesión</h1>
+      <p class="page-sub">Entrá con tu email y contraseña.</p>
+
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input type="email" id="login-email" placeholder="vos@empresa.com">
+      </div>
+      <div class="field">
+        <label class="field-label">Contraseña</label>
+        <input type="password" id="login-password" placeholder="Tu contraseña">
+      </div>
+
+      <button class="btn btn-primary" id="btn-login" onclick="iniciarSesion()">Entrar</button>
+      <div class="link-line" style="justify-content:center; margin-top:14px;" onclick="irA('registro')">
+        <span>¿No tenés cuenta? <b>Registrate</b></span>
+      </div>
     </div>
   </div>
 
@@ -795,6 +831,76 @@
 </div>
 
 <script>
+/* =======================================================
+   SUPABASE — cliente, autenticación y persistencia
+   ======================================================= */
+const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_MZNmdrBaRx6HwGtgmd0VHQ_uRPQj_Zx";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Trae (o crea si no existe) la fila de public.usuarios asociada al
+// usuario autenticado. Devuelve null si no hay sesión.
+async function obtenerPerfilUsuario(){
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabaseClient
+    .from("usuarios")
+    .select("*")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (error){ console.warn("[OpenCheck Score] Error trayendo perfil:", error.message); return null; }
+  return data;
+}
+
+async function crearPerfilUsuario({ authUserId, nombre, email, cuitDni, tipoPersona }){
+  const { data, error } = await supabaseClient
+    .from("usuarios")
+    .insert({ auth_user_id: authUserId, nombre, email, cuit_dni: cuitDni, tipo_persona: tipoPersona })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function registrarAceptacionTC(usuarioId){
+  const { error } = await supabaseClient
+    .from("aceptaciones_tc")
+    .insert({ usuario_id: usuarioId, version_tc: "v1.0" });
+  if (error) console.warn("[OpenCheck Score] No se pudo registrar aceptación de T&C:", error.message);
+}
+
+async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado }){
+  const { error } = await supabaseClient
+    .from("consultas")
+    .insert({
+      usuario_id: usuarioId,
+      cuit_consultado: cuit,
+      razon_social: razonSocial,
+      categoria,
+      puntos_finales: puntos,
+      fuente,
+      numero_cheque_consultado: numeroCheque || null,
+      banco_cheque_consultado: bancoCheque || null,
+      cheque_denunciado: chequeDenunciado
+    });
+  if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
+}
+
+// Incrementa el contador de consultas del mes, reseteándolo primero si
+// cambió el mes desde la última consulta.
+async function incrementarConsultasUsadas(usuario){
+  const mesActual = new Date().toISOString().slice(0,7);
+  const nuevoContador = usuario.mes_actual === mesActual ? (usuario.consultas_usadas_mes || 0) + 1 : 1;
+  const { data, error } = await supabaseClient
+    .from("usuarios")
+    .update({ consultas_usadas_mes: nuevoContador, mes_actual: mesActual })
+    .eq("id", usuario.id)
+    .select()
+    .single();
+  if (error){ console.warn("[OpenCheck Score] No se pudo actualizar el contador de consultas:", error.message); return usuario; }
+  return data;
+}
+
 /* =======================================================
    MOTOR DE SCORING — validado con Node contra casos reales
    ======================================================= */
@@ -1670,6 +1776,11 @@ function irA(pantalla){
   if (pantalla === "historial") renderHistorial();
   if (pantalla === "cuenta") renderCuenta();
   if (pantalla === "paywall") renderPaywall();
+  if (pantalla === "home" && state.user){
+    const mesActual = new Date().toISOString().slice(0,7);
+    const usadas = state.user.mes_actual === mesActual ? (state.user.consultas_usadas_mes || 0) : 0;
+    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - usadas);
+  }
   window.scrollTo(0,0);
 }
 
@@ -1709,25 +1820,99 @@ tcCheckbox.addEventListener("change", () => {
   }
 });
 
-btnRegistrar.addEventListener("click", () => {
+btnRegistrar.addEventListener("click", async () => {
   const nombre = document.getElementById("reg-nombre").value.trim();
   const email = document.getElementById("reg-email").value.trim();
   const cuit = document.getElementById("reg-cuit").value.trim();
+  const password = document.getElementById("reg-password").value;
   if (!nombre || !email || limpiarCuit(cuit).length < 10){
     mostrarToast("Completá todos los campos para continuar");
     return;
   }
-  state.user = {
-    nombre, email, cuit,
-    tipoPersona,
-    tcVersion: "v1.0",
-    tcTimestamp: new Date().toISOString(),
-    tcIp: ipSimulada()
-  };
-  document.getElementById("user-chip").textContent = nombre.split(" ")[0];
-  mostrarToast("Cuenta creada — bienvenido/a a OpenCheck Score");
-  irA("home");
+  if (!password || password.length < 6){
+    mostrarToast("La contraseña necesita al menos 6 caracteres");
+    return;
+  }
+
+  btnRegistrar.disabled = true;
+  btnRegistrar.textContent = "Creando cuenta…";
+
+  try {
+    const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email, password });
+    if (authError) throw authError;
+
+    if (!authData.session){
+      // El proyecto tiene "Confirm email" activado: no hay sesión todavía,
+      // hay que confirmar por mail antes de poder loguearse.
+      mostrarToast("Te mandamos un email para confirmar la cuenta. Confirmalo y volvé a iniciar sesión.");
+      btnRegistrar.disabled = false;
+      btnRegistrar.textContent = "Crear cuenta";
+      irA("login");
+      return;
+    }
+
+    const perfil = await crearPerfilUsuario({
+      authUserId: authData.user.id, nombre, email, cuitDni: cuit, tipoPersona
+    });
+    await registrarAceptacionTC(perfil.id);
+
+    state.user = perfil;
+    document.getElementById("user-chip").textContent = nombre.split(" ")[0];
+    mostrarToast("Cuenta creada — bienvenido/a a OpenCheck Score");
+    irA("home");
+  } catch (e){
+    mostrarToast("No pudimos crear la cuenta: " + e.message);
+  } finally {
+    btnRegistrar.disabled = false;
+    btnRegistrar.textContent = "Crear cuenta";
+  }
 });
+
+async function iniciarSesion(){
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  if (!email || !password){
+    mostrarToast("Completá email y contraseña");
+    return;
+  }
+  const btn = document.getElementById("btn-login");
+  btn.disabled = true;
+  btn.textContent = "Entrando…";
+  try {
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    const perfil = await obtenerPerfilUsuario();
+    if (!perfil) throw new Error("No encontramos tu perfil. Probá registrarte de nuevo.");
+    state.user = perfil;
+    document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
+    mostrarToast("¡Hola de nuevo, " + perfil.nombre.split(" ")[0] + "!");
+    irA("home");
+  } catch (e){
+    mostrarToast("No pudimos iniciar sesión: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Entrar";
+  }
+}
+
+async function cerrarSesion(){
+  await supabaseClient.auth.signOut();
+  state.user = null;
+  mostrarToast("Sesión cerrada");
+  irA("registro");
+}
+
+// Al cargar la página: si ya hay una sesión activa (Supabase la persiste
+// sola entre visitas), saltamos registro/login directo a Inicio.
+async function cargarSesionExistente(){
+  const perfil = await obtenerPerfilUsuario();
+  if (perfil){
+    state.user = perfil;
+    document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
+    irA("home");
+  }
+}
+cargarSesionExistente();
 
 /* ---- Consulta CUIT ---- */
 let razonSocialTimeout = null;
@@ -1809,7 +1994,9 @@ async function consultarCuit(){
     mostrarToast(digits.length === 0 ? "Ingresá un CUIT" : `El CUIT debe tener 11 dígitos exactos (tiene ${digits.length})`);
     return;
   }
-  if (state.queriesUsed >= state.queriesLimit){
+  const mesActual = new Date().toISOString().slice(0,7);
+  const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
+  if (state.user && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
     irA("paywall");
     return;
   }
@@ -1843,8 +2030,16 @@ async function consultarCuit(){
 
   const resultado = calcularScore(datos);
 
-  state.queriesUsed++;
-  document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - state.queriesUsed);
+  if (state.user){
+    state.user = await incrementarConsultasUsadas(state.user);
+    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    await registrarConsulta({
+      usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
+      categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
+      numeroCheque: numeroCheque || null, bancoCheque: numeroCheque ? bancoCheque : null,
+      chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null
+    });
+  }
 
   const registro = {
     usuario: state.user ? state.user.nombre : "—",
@@ -2202,15 +2397,17 @@ function renderCuenta(){
     <p class="page-sub">Datos de registro y estado de tu plan.</p>
     <div class="plan-row"><span>Nombre</span><b>${u ? u.nombre : "—"}</b></div>
     <div class="plan-row"><span>Email</span><b>${u ? u.email : "—"}</b></div>
-    <div class="plan-row"><span>CUIT / DNI</span><b>${u ? u.cuit : "—"}</b></div>
-    <div class="plan-row"><span>T&C aceptados</span><b>${u ? u.tcVersion : "—"}</b></div>
-    <div class="plan-row"><span>Consultas usadas</span><b>${state.queriesUsed}/${state.queriesLimit}</b></div>
+    <div class="plan-row"><span>CUIT / DNI</span><b>${u ? u.cuit_dni : "—"}</b></div>
+    <div class="plan-row"><span>Tipo</span><b>${u ? (u.tipo_persona === "juridica" ? "Persona jurídica" : "Persona física") : "—"}</b></div>
+    <div class="plan-row"><span>Plan</span><b>${u ? (u.plan === "b2b" ? "B2B" : "Gratis") : "—"}</b></div>
+    <div class="plan-row"><span>Consultas usadas este mes</span><b>${u ? (u.consultas_usadas_mes || 0) : 0}/${state.queriesLimit}</b></div>
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">
       <h2>OpenCheck Score B2B</h2>
       <p>Consultas ilimitadas, historial exportable y acceso multiusuario para contadores, fintechs y fondos.</p>
       <button class="btn btn-primary" onclick="mostrarToast('Te vamos a contactar para activar el plan B2B')">Solicitar acceso</button>
     </div>
+    <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
   `;
 }
 
