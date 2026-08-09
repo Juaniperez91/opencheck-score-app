@@ -649,7 +649,7 @@
           <div class="num"><span id="queries-left">3</span>/3</div>
           <div class="lbl">consultas gratis este mes</div>
         </div>
-        <div class="cta" onclick="irA('paywall')">Ver planes</div>
+        <div class="cta" onclick="irA('cuenta')">Ver planes</div>
       </div>
 
       <button class="ocr-btn" onclick="simularOCR()">
@@ -2026,7 +2026,7 @@ async function consultarCuit(){
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
   if (state.user && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
-    irA("paywall");
+    irA("cuenta");
     return;
   }
 
