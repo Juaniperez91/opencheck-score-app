@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenCheck Score — Panel de Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --green:#0F6E56; --green-ink:#0A3F33; --green-soft:#E4EFEA;
+    --paper:#F6F4EE; --paper-2:#EFEBE0; --ink:#1C2420; --ink-soft:#5B655F;
+    --hairline:#D9D3C4; --amber:#B8862E; --amber-soft:#F4E9D6;
+    --brick:#A63D3D; --brick-soft:#F3E1DF; --white:#FFFFFF;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'DM Sans', sans-serif; background:var(--paper); color:var(--ink);
+    min-height:100vh;
+  }
+  header{
+    display:flex; align-items:center; gap:12px;
+    padding:18px 32px; border-bottom:1px solid var(--hairline); background:var(--white);
+  }
+  .brand-mark{
+    width:32px; height:32px; border-radius:8px; background:var(--green);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    font-family:'DM Mono',monospace; font-weight:500; font-size:14px;
+  }
+  header h1{font-size:17px; margin:0; font-weight:700;}
+  header h1 span{color:var(--green);}
+  header .sub{font-size:12px; color:var(--ink-soft); margin-left:6px;}
+
+  main{max-width:1180px; margin:0 auto; padding:28px 32px 60px;}
+
+  #estado-carga, #estado-no-autorizado{
+    text-align:center; padding:80px 20px; color:var(--ink-soft); font-size:14px;
+  }
+  #estado-no-autorizado a{color:var(--green-ink); font-weight:600;}
+
+  .cards-row{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:14px; margin-bottom:28px;
+  }
+  .card{
+    background:var(--white); border:1px solid var(--hairline); border-radius:12px; padding:18px 20px;
+  }
+  .card .lbl{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin-bottom:8px;}
+  .card .val{font-family:'DM Mono',monospace; font-size:28px; font-weight:500; color:var(--green-ink);}
+  .card .sub{font-size:11.5px; color:var(--ink-soft); margin-top:4px;}
+
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:28px;}
+  @media (max-width:820px){ .grid-2{grid-template-columns:1fr;} }
+
+  .panel{background:var(--white); border:1px solid var(--hairline); border-radius:12px; padding:20px 22px;}
+  .panel h2{font-size:14px; margin:0 0 14px; font-weight:700;}
+
+  .bar-row{display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12.5px;}
+  .bar-row .bar-label{width:70px; font-family:'DM Mono',monospace; flex-shrink:0;}
+  .bar-track{flex:1; height:10px; background:var(--paper-2); border-radius:6px; overflow:hidden;}
+  .bar-fill{height:100%; border-radius:6px;}
+  .bar-row .bar-count{width:36px; text-align:right; font-family:'DM Mono',monospace; color:var(--ink-soft); flex-shrink:0;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{
+    text-align:left; padding:8px 10px; border-bottom:2px solid var(--hairline);
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  td{padding:8px 10px; border-bottom:1px solid var(--hairline); white-space:nowrap;}
+  tr:last-child td{border-bottom:none;}
+  .tabla-scroll{overflow-x:auto;}
+
+  .tag{font-family:'DM Mono',monospace; font-size:10.5px; font-weight:500; padding:3px 8px; border-radius:100px;}
+  .tag.A{background:var(--green-soft); color:var(--green-ink);}
+  .tag.B{background:var(--amber-soft); color:var(--amber);}
+  .tag.C{background:var(--brick-soft); color:var(--brick);}
+  .tag.real{background:var(--green-soft); color:var(--green-ink);}
+  .tag.demo{background:var(--amber-soft); color:var(--amber);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-mark">OC</div>
+  <h1>Open<span>Check</span> Score</h1>
+  <span class="sub">Panel de Admin</span>
+</header>
+
+<main>
+  <div id="estado-carga">Cargando…</div>
+  <div id="estado-no-autorizado" style="display:none">
+    No tenés acceso a este panel.<br><br>
+    <a href="/">Volver a la app</a> e iniciá sesión con una cuenta de administrador.
+  </div>
+  <div id="dashboard" style="display:none"></div>
+</main>
+
+<script>
+const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_MZNmdrBaRx6HwGtgmd0VHQ_uRPQj_Zx";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function formatearFecha(iso){
+  return new Date(iso).toLocaleString("es-AR", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" });
+}
+
+function construirBarras(contenedorId, entradas, colorFn){
+  const max = Math.max(...entradas.map(e => e.cantidad), 1);
+  document.getElementById(contenedorId).innerHTML = entradas.map(e => `
+    <div class="bar-row">
+      <div class="bar-label">${e.etiqueta}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(e.cantidad/max*100).toFixed(0)}%; background:${colorFn(e.etiqueta)}"></div></div>
+      <div class="bar-count">${e.cantidad}</div>
+    </div>
+  `).join("") || `<div style="color:var(--ink-soft); font-size:12.5px;">Sin datos todavía.</div>`;
+}
+
+async function cargarDashboard(){
+  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
+  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
+
+  const [{ data: usuarios }, { data: consultas }] = await Promise.all([
+    supabaseClient.from("usuarios").select("id, creado_en"),
+    supabaseClient.from("consultas").select("id, cuit_consultado, razon_social, categoria, fuente, cheque_denunciado, creado_en, usuario_id").order("creado_en", { ascending:false }).limit(5000)
+  ]);
+
+  const totalUsuarios = (usuarios || []).length;
+  const totalConsultas = (consultas || []).length;
+  const consultasEsteMes = (consultas || []).filter(c => new Date(c.creado_en) >= inicioMes).length;
+  const consultasHoy = (consultas || []).filter(c => new Date(c.creado_en) >= inicioHoy).length;
+  const consultasReales = (consultas || []).filter(c => c.fuente === "real").length;
+  const pctReal = totalConsultas ? Math.round((consultasReales/totalConsultas)*100) : 0;
+  const denunciasEncontradas = (consultas || []).filter(c => c.cheque_denunciado === true).length;
+
+  document.getElementById("dashboard").innerHTML = `
+    <div class="cards-row">
+      <div class="card"><div class="lbl">Usuarios registrados</div><div class="val">${totalUsuarios}</div></div>
+      <div class="card"><div class="lbl">Consultas totales</div><div class="val">${totalConsultas}</div></div>
+      <div class="card"><div class="lbl">Consultas este mes</div><div class="val">${consultasEsteMes}</div></div>
+      <div class="card"><div class="lbl">Consultas hoy</div><div class="val">${consultasHoy}</div></div>
+      <div class="card"><div class="lbl">% con API BCRA real</div><div class="val">${pctReal}%</div><div class="sub">${consultasReales} de ${totalConsultas}</div></div>
+      <div class="card"><div class="lbl">Cheques denunciados encontrados</div><div class="val">${denunciasEncontradas}</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2>Distribución de categorías</h2>
+        <div id="barras-categoria"></div>
+      </div>
+      <div class="panel">
+        <h2>Fuente de datos</h2>
+        <div id="barras-fuente"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:28px;">
+      <h2>CUITs más consultados</h2>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Razón social</th><th>CUIT</th><th>Consultas</th></tr></thead>
+          <tbody id="tabla-top-cuits"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Últimas consultas</h2>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Fecha</th><th>Razón social</th><th>CUIT</th><th>Categoría</th><th>Fuente</th></tr></thead>
+          <tbody id="tabla-ultimas"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Distribución por categoría
+  const categorias = ["A1","A2","B1","B2","C1","C2"];
+  const porCategoria = categorias.map(cat => ({
+    etiqueta: cat,
+    cantidad: (consultas || []).filter(c => c.categoria === cat).length
+  }));
+  construirBarras("barras-categoria", porCategoria, (cat) => cat[0]==="A" ? "#0F6E56" : cat[0]==="B" ? "#B8862E" : "#A63D3D");
+
+  // Fuente real vs demo
+  const porFuente = [
+    { etiqueta:"real", cantidad: consultasReales },
+    { etiqueta:"demo", cantidad: totalConsultas - consultasReales }
+  ];
+  construirBarras("barras-fuente", porFuente, (f) => f==="real" ? "#0F6E56" : "#B8862E");
+
+  // Top CUITs
+  const conteoPorCuit = {};
+  for (const c of (consultas || [])){
+    const key = c.cuit_consultado;
+    if (!conteoPorCuit[key]) conteoPorCuit[key] = { cuit:key, razonSocial:c.razon_social, cantidad:0 };
+    conteoPorCuit[key].cantidad++;
+  }
+  const topCuits = Object.values(conteoPorCuit).sort((a,b) => b.cantidad - a.cantidad).slice(0,10);
+  document.getElementById("tabla-top-cuits").innerHTML = topCuits.map(t => `
+    <tr><td>${t.razonSocial || "—"}</td><td style="font-family:'DM Mono',monospace">${t.cuit}</td><td>${t.cantidad}</td></tr>
+  `).join("") || `<tr><td colspan="3" style="color:var(--ink-soft)">Sin consultas todavía.</td></tr>`;
+
+  // Últimas consultas
+  document.getElementById("tabla-ultimas").innerHTML = (consultas || []).slice(0,30).map(c => {
+    const tier = c.categoria ? c.categoria[0] : "?";
+    return `
+    <tr>
+      <td>${formatearFecha(c.creado_en)}</td>
+      <td>${c.razon_social || "—"}</td>
+      <td style="font-family:'DM Mono',monospace">${c.cuit_consultado}</td>
+      <td><span class="tag ${tier}">${c.categoria || "—"}</span></td>
+      <td><span class="tag ${c.fuente}">${c.fuente === "real" ? "Real" : "Demo"}</span></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" style="color:var(--ink-soft)">Sin consultas todavía.</td></tr>`;
+}
+
+async function iniciar(){
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user){
+    document.getElementById("estado-carga").style.display = "none";
+    document.getElementById("estado-no-autorizado").style.display = "block";
+    return;
+  }
+
+  const { data: perfil, error } = await supabaseClient
+    .from("usuarios")
+    .select("*")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+
+  if (error || !perfil || !perfil.es_admin){
+    document.getElementById("estado-carga").style.display = "none";
+    document.getElementById("estado-no-autorizado").style.display = "block";
+    return;
+  }
+
+  document.getElementById("estado-carga").style.display = "none";
+  document.getElementById("dashboard").style.display = "block";
+  await cargarDashboard();
+}
+
+iniciar();
+</script>
+</body>
+</html>
