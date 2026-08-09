@@ -886,6 +886,19 @@ async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, punt
   if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
 }
 
+// Trae las últimas consultas del usuario actual desde Supabase (no de
+// memoria local) — así el historial persiste entre sesiones/dispositivos.
+async function obtenerHistorialUsuario(usuarioId){
+  const { data, error } = await supabaseClient
+    .from("consultas")
+    .select("*")
+    .eq("usuario_id", usuarioId)
+    .order("creado_en", { ascending: false })
+    .limit(50);
+  if (error){ console.warn("[OpenCheck Score] Error trayendo historial:", error.message); return []; }
+  return data || [];
+}
+
 // Incrementa el contador de consultas del mes, reseteándolo primero si
 // cambió el mes desde la última consulta.
 async function incrementarConsultasUsadas(usuario){
@@ -2057,17 +2070,6 @@ async function consultarCuit(){
     });
   }
 
-  const registro = {
-    usuario: state.user ? state.user.nombre : "—",
-    cuit: formatearCuit(digits),
-    empresa: datos.empresa,
-    fecha: new Date(),
-    resultado: resultado.categoria,
-    denunciado: chequeInfo ? chequeInfo.denunciado : false,
-    numeroCheque: numeroCheque || null
-  };
-  state.history.unshift(registro);
-
   mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente);
   irA("resultado");
 }
@@ -2382,23 +2384,35 @@ async function verificarDenuncia(){
 }
 
 /* ---- Historial ---- */
-function renderHistorial(){
+async function renderHistorial(){
   const cont = document.getElementById("historial-lista");
-  if (state.history.length === 0){
+
+  if (!state.user){
+    cont.innerHTML = `<div class="empty-state"><div class="ico">🔒</div><p>Iniciá sesión para ver tu historial.</p></div>`;
+    return;
+  }
+
+  cont.innerHTML = `<div class="empty-state"><p>Cargando historial…</p></div>`;
+  const historial = await obtenerHistorialUsuario(state.user.id);
+
+  if (historial.length === 0){
     cont.innerHTML = `<div class="empty-state"><div class="ico">📄</div><p>Todavía no hiciste ninguna consulta.<br>Cuando consultes un CUIT, va a quedar registrado acá.</p></div>`;
     return;
   }
-  cont.innerHTML = state.history.map(h => {
-    const tier = h.resultado[0]; // A / B / C
+
+  cont.innerHTML = historial.map(h => {
+    const tier = h.categoria ? h.categoria[0] : "?";
+    const fecha = new Date(h.creado_en);
+    const fuenteLabel = h.fuente === "real" ? "API BCRA real" : "Demo";
     return `
     <div class="hist-row">
       <div class="hist-top">
-        <span>${h.empresa}</span>
-        <span class="tag ${tier}">${h.resultado}</span>
+        <span>${h.razon_social || h.cuit_consultado}</span>
+        <span class="tag ${tier}">${h.categoria || "—"}</span>
       </div>
-      <div class="hist-mid">${h.cuit} · consultado por ${h.usuario}</div>
+      <div class="hist-mid">${h.cuit_consultado} · ${fuenteLabel}</div>
       <div class="hist-bottom">
-        <span class="hist-date">${h.fecha.toLocaleString("es-AR")}</span>
+        <span class="hist-date">${fecha.toLocaleString("es-AR")}</span>
       </div>
     </div>`;
   }).join("");
