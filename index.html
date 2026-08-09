@@ -1838,8 +1838,21 @@ btnRegistrar.addEventListener("click", async () => {
   btnRegistrar.textContent = "Creando cuenta…";
 
   try {
-    const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email, password });
-    if (authError) throw authError;
+    let { data: authData, error: authError } = await supabaseClient.auth.signUp({ email, password });
+
+    if (authError && /already registered|already exists/i.test(authError.message || "")){
+      // Usuario "fantasma": existe en auth pero puede no tener perfil
+      // (por ejemplo, si antes quedó a mitad de camino esperando
+      // confirmación por mail). Probamos loguearlo con la misma
+      // contraseña que acaba de tipear, y si no tiene perfil, se lo
+      // creamos ahora en vez de dejarlo trabado.
+      const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (loginError) throw new Error("Ese email ya está registrado, pero con otra contraseña. Iniciá sesión normalmente o usá otro email.");
+      authData = { user: loginData.user, session: loginData.session };
+      authError = null;
+    } else if (authError){
+      throw authError;
+    }
 
     if (!authData.session){
       // El proyecto tiene "Confirm email" activado: no hay sesión todavía,
@@ -1851,13 +1864,16 @@ btnRegistrar.addEventListener("click", async () => {
       return;
     }
 
-    const perfil = await crearPerfilUsuario({
-      authUserId: authData.user.id, nombre, email, cuitDni: cuit, tipoPersona
-    });
-    await registrarAceptacionTC(perfil.id);
+    let perfil = await obtenerPerfilUsuario();
+    if (!perfil){
+      perfil = await crearPerfilUsuario({
+        authUserId: authData.user.id, nombre, email, cuitDni: cuit, tipoPersona
+      });
+      await registrarAceptacionTC(perfil.id);
+    }
 
     state.user = perfil;
-    document.getElementById("user-chip").textContent = nombre.split(" ")[0];
+    document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
     mostrarToast("Cuenta creada — bienvenido/a a OpenCheck Score");
     irA("home");
   } catch (e){
