@@ -2438,6 +2438,12 @@ function renderCuenta(){
       <button class="btn btn-primary" onclick="mostrarToast('Te vamos a contactar para activar el plan B2B')">Solicitar acceso</button>
     </div>
     <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
+    ${u && u.es_admin ? `
+      <div class="divider-label">Administración</div>
+      <a href="/admin.html" style="text-decoration:none;">
+        <button class="btn btn-primary" style="background:var(--ink);">Panel de Admin</button>
+      </a>
+    ` : ""}
   `;
 }
 
