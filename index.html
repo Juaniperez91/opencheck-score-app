@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   :root{
     --green:#2472B8;
@@ -652,13 +653,14 @@
         <div class="cta" onclick="irA('cuenta')">Ver planes</div>
       </div>
 
-      <button class="ocr-btn" onclick="simularOCR()">
+      <input type="file" accept="image/*" capture="environment" id="ocr-file-input" style="display:none" onchange="procesarFotoCheque(this.files[0])">
+      <button class="ocr-btn" id="ocr-btn" onclick="document.getElementById('ocr-file-input').click()">
         <div class="ocr-icon">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 8V6a2 2 0 012-2h2M20 8V6a2 2 0 00-2-2h-2M4 16v2a2 2 0 002 2h2M20 16v2a2 2 0 01-2 2h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3.3" stroke="currentColor" stroke-width="1.8"/></svg>
         </div>
         <div class="ocr-text">
-          <b>Sacar foto del cheque</b>
-          <span>Reconocemos el CUIT automáticamente (OCR)</span>
+          <b id="ocr-btn-label">Sacar foto del cheque</b>
+          <span>Intentamos leer el CUIT y el número automáticamente</span>
         </div>
       </button>
 
@@ -673,6 +675,11 @@
         <select id="consulta-banco-cheque" class="select-banco"></select>
         <input type="text" class="mono" id="consulta-numero-cheque" placeholder="Ej: 00021458" style="margin-top:8px;">
         <div class="field-hint">Si cargás banco y número, además chequeamos si ese cheque está denunciado en BCRA.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Fecha de vencimiento del cheque (opcional)</label>
+        <input type="date" id="consulta-fecha-vencimiento">
+        <div class="field-hint">Con esto, más adelante te vamos a poder avisar y registrar si el cheque efectivamente se cobró.</div>
       </div>
       <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
 
@@ -860,7 +867,7 @@ async function registrarAceptacionTC(usuarioId){
   if (error) console.warn("[OpenCheck Score] No se pudo registrar aceptación de T&C:", error.message);
 }
 
-async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado }){
+async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento }){
   const { error } = await supabaseClient
     .from("consultas")
     .insert({
@@ -872,7 +879,8 @@ async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, punt
       fuente,
       numero_cheque_consultado: numeroCheque || null,
       banco_cheque_consultado: bancoCheque || null,
-      cheque_denunciado: chequeDenunciado
+      cheque_denunciado: chequeDenunciado,
+      fecha_vencimiento_cheque: fechaVencimiento || null
     });
   if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
 }
@@ -919,9 +927,18 @@ function scoreSituacion24m(peorSituacion24m){
   const tabla = {1:20, 2:16, 3:11, 4:6, 5:3, 6:0};
   return tabla[peorSituacion24m] ?? 0;
 }
-function scoreEndeudamiento(m){
-  // 10 pts (antes 15). Más deuda bancaria informada suma, no resta (refleja
-  // acceso a crédito bancario, no riesgo por sí solo).
+// Los tramos de abajo están calibrados en pesos de este período. Con
+// inflación, un monto nominal futuro hay que "traerlo" a pesos de este
+// mes antes de compararlo contra los tramos — si no, los umbrales quedan
+// desactualizados solos con el tiempo y dejan de discriminar bien.
+const ENDEUDAMIENTO_PERIODO_BASE = "202608";
+
+function scoreEndeudamiento(mNominal, factorAjuste = 1){
+  // 10 pts. Más deuda bancaria informada suma, no resta (refleja acceso a
+  // crédito bancario, no riesgo por sí solo). mNominal se ajusta primero
+  // a pesos "de calibración" dividiendo por factorAjuste (la inflación
+  // acumulada desde ENDEUDAMIENTO_PERIODO_BASE hasta hoy).
+  const m = mNominal / factorAjuste;
   if (m >= 100) return 10;
   if (m >= 50) return 8;
   if (m >= 25) return 6;
@@ -1072,7 +1089,7 @@ function calcularScore(d){
 
   const pSituacion = scoreSituacion(d.situacion);
   const pSituacion24m = scoreSituacion24m(peorSituacion24m);
-  const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones);
+  const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1);
   const pBancos = scoreBancos(d.cantidadBancos);
   const pRechazos = scoreRechazos(d);
 
@@ -1268,16 +1285,34 @@ const BCRA_DB_RAW = {
 
 // Deriva situación / endeudamiento / cantidad de bancos a partir del detalle
 // por entidad, para que el desglose y el puntaje nunca queden desalineados.
+function calcularFactorAjusteEndeudamientoDemo(){
+  const hoy = new Date();
+  const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
+  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
+  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
+  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10);
+  let meses = 0;
+  while (true){
+    const periodoStr = String(anio) + String(mes).padStart(2,"0");
+    if (periodoStr >= periodoHoy) break;
+    meses++;
+    mes++; if (mes > 12){ mes = 1; anio++; }
+  }
+  return Math.pow(1 + INFLACION_MENSUAL_DEMO_APROX, meses);
+}
+
 function prepararDatos(raw){
   const situacionVigente = Math.max(...raw.entidades.map(e => e.situacion));
   const endeudamientoMillones = Math.round(raw.entidades.reduce((s,e) => s + e.monto, 0) / 1e6);
   const deudaVsInflacion = raw.deudaVsInflacion || calcularDeudaVsInflacionDemo(raw.historialDeuda || []);
+  const factorAjusteEndeudamiento = raw.factorAjusteEndeudamiento || calcularFactorAjusteEndeudamientoDemo();
   return {
     ...raw,
     situacion: situacionVigente,
     endeudamientoMillones,
     cantidadBancos: raw.entidades.length,
-    deudaVsInflacion
+    deudaVsInflacion,
+    factorAjusteEndeudamiento
   };
 }
 
@@ -1412,12 +1447,14 @@ async function construirDatosLibradorReal(cuit){
   // falla (o falta algún mes), calcularScore lo detecta (disponible:false)
   // y redistribuye el peso de esta variable en vez de romper la consulta.
   let deudaVsInflacion = { disponible:false };
+  let factorAjusteEndeudamiento = 1;
   try {
     const inflacionPorPeriodo = await obtenerInflacionMensualBCRA();
     deudaVsInflacion = calcularDeudaRealVsInflacion(historial.historialDeuda, historial.historialPeriodos, inflacionPorPeriodo);
     if (!deudaVsInflacion.disponible){
       console.warn("[OpenCheck Score] Inflación OK pero no se pudo alinear con historialPeriodos:", historial.historialPeriodos, "vs mapa:", inflacionPorPeriodo);
     }
+    factorAjusteEndeudamiento = calcularFactorAjusteEndeudamiento(inflacionPorPeriodo);
   } catch (e) {
     console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", e.message);
   }
@@ -1435,7 +1472,8 @@ async function construirDatosLibradorReal(cuit){
     historialSituacion: historial.historialSituacion,
     historialDeuda: historial.historialDeuda,
     historialMontoEnMora: historial.historialMontoEnMora,
-    deudaVsInflacion
+    deudaVsInflacion,
+    factorAjusteEndeudamiento
   });
 }
 
@@ -1639,6 +1677,28 @@ async function obtenerInflacionMensualBCRA(){
 
 // Deflacta historialDeuda mes a mes usando la inflación real, y devuelve
 // el cambio relativo total de la deuda YA EN TÉRMINOS REALES.
+// Cuánto acumuló la inflación desde ENDEUDAMIENTO_PERIODO_BASE hasta hoy,
+// usando la misma serie mensual que ya usamos para "deuda vs. inflación".
+// Reutilizamos ese mapa en vez de pedirlo de nuevo.
+function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
+  const hoy = new Date();
+  const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
+  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
+
+  let factor = 1;
+  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
+  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10); // 1-12
+  while (true){
+    const periodoStr = String(anio) + String(mes).padStart(2,"0");
+    if (periodoStr >= periodoHoy) break;
+    const infl = inflacionPorPeriodo[periodoStr];
+    if (infl !== undefined) factor *= (1 + infl/100);
+    mes++;
+    if (mes > 12){ mes = 1; anio++; }
+  }
+  return factor;
+}
+
 function calcularDeudaRealVsInflacion(historialDeuda, historialPeriodos, inflacionPorPeriodo){
   const n = historialDeuda.length;
   if (!n || !historialPeriodos || historialPeriodos.length !== n) return { disponible:false };
@@ -2057,7 +2117,8 @@ async function consultarCuit(){
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
       categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
       numeroCheque: numeroCheque || null, bancoCheque: numeroCheque ? bancoCheque : null,
-      chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null
+      chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null,
+      fechaVencimiento: document.getElementById("consulta-fecha-vencimiento").value || null
     });
   }
 
@@ -2065,12 +2126,82 @@ async function consultarCuit(){
   irA("resultado");
 }
 
-function simularOCR(){
-  mostrarToast("Leyendo el cheque…");
-  setTimeout(() => {
-    setCuit("30-70893479-4");
-    mostrarToast("CUIT reconocido: 30-70893479-4");
-  }, 900);
+// Algoritmo estándar de validación de CUIT (dígito verificador, módulo 11).
+// Lo usamos para filtrar ruido del OCR: de todos los números de 11 dígitos
+// que aparecen en el texto leído, solo nos quedamos con el que realmente
+// pasa la validación matemática de un CUIT argentino.
+function esCuitValido(cuit11){
+  if (!/^\d{11}$/.test(cuit11)) return false;
+  const digitos = cuit11.split("").map(Number);
+  const multiplicadores = [5,4,3,2,7,6,5,4,3,2];
+  let suma = 0;
+  for (let i=0; i<10; i++) suma += digitos[i]*multiplicadores[i];
+  let verificador = 11 - (suma % 11);
+  if (verificador === 11) verificador = 0;
+  if (verificador === 10) return false; // no existe dígito verificador 10
+  return verificador === digitos[10];
+}
+
+function extraerCuitDeTexto(texto){
+  // Buscamos tokens que YA se ven como un bloque de ~11 dígitos en el
+  // texto original (con guiones/espacios internos opcionales, como los
+  // separadores típicos de un CUIT), en vez de concatenar TODO el texto
+  // en un solo string y deslizar una ventana — eso podía "armar" un CUIT
+  // que pase la validación matemática de pura casualidad, cruzando
+  // dígitos de números que no tienen nada que ver entre sí (sucursal,
+  // cuenta, monto, fecha...).
+  const tokens = (texto || "").match(/\d[\d\-\s]{9,14}\d/g) || [];
+  for (const token of tokens){
+    const digitos = token.replace(/\D/g, "");
+    if (digitos.length === 11 && esCuitValido(digitos)) return digitos;
+  }
+  return null;
+}
+
+// Best-effort: busca un grupo de 6 a 8 dígitos aislado que no sea parte
+// del CUIT ya encontrado. Es mucho menos confiable que el CUIT (no hay
+// forma de validarlo matemáticamente), así que queda como sugerencia.
+function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
+  const candidatos = (texto || "").match(/\b\d{6,8}\b/g) || [];
+  for (const c of candidatos){
+    if (!cuitEncontrado || !cuitEncontrado.includes(c)) return c.padStart(8, "0");
+  }
+  return null;
+}
+
+async function procesarFotoCheque(archivo){
+  if (!archivo) return;
+  const btn = document.getElementById("ocr-btn");
+  const label = document.getElementById("ocr-btn-label");
+  btn.style.opacity = "0.6";
+  btn.style.pointerEvents = "none";
+  label.textContent = "Leyendo el cheque…";
+  mostrarToast("Analizando la foto, puede tardar unos segundos…");
+
+  try {
+    const resultado = await Tesseract.recognize(archivo, "spa", { logger: () => {} });
+    const texto = resultado.data.text || "";
+    console.info("[OpenCheck Score] Texto OCR crudo:", texto);
+
+    const cuitEncontrado = extraerCuitDeTexto(texto);
+    const numeroEncontrado = extraerNumeroChequeDeTexto(texto, cuitEncontrado);
+
+    if (cuitEncontrado) setCuit(formatearCuit(cuitEncontrado));
+    if (numeroEncontrado) document.getElementById("consulta-numero-cheque").value = numeroEncontrado;
+
+    if (cuitEncontrado || numeroEncontrado){
+      mostrarToast("Revisá los datos leídos antes de consultar — el OCR no siempre acierta.");
+    } else {
+      mostrarToast("No pudimos leer datos del cheque automáticamente. Completá los campos a mano.");
+    }
+  } catch (e){
+    console.warn("[OpenCheck Score] Falló el OCR:", e.message);
+    mostrarToast("No pudimos procesar la foto. Completá los datos a mano.");
+  } finally {
+    btn.style.opacity = "1";
+    btn.style.pointerEvents = "auto";
+    label.textContent = "Sacar foto del cheque";
+  }
 }
 
 /* ---- Sello / resultado visual ---- */
