@@ -548,6 +548,49 @@
   .detalle-mensual-tabla tr:last-child td{border-bottom:none;}
   .breakdown-row-nd .br-desc{font-style:italic;}
 
+  .camara-modal{
+    position:fixed; inset:0; z-index:200;
+    background:#000;
+    display:flex; flex-direction:column;
+  }
+  .camara-modal video{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover;
+  }
+  .camara-overlay{
+    position:relative; flex:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    pointer-events:none;
+  }
+  .camara-marco{
+    width:86%; aspect-ratio:2.2/1;
+    border:2.5px dashed rgba(255,255,255,.85);
+    border-radius:10px;
+    box-shadow:0 0 0 2000px rgba(0,0,0,.45);
+  }
+  .camara-instrucciones{
+    color:#fff; font-size:13px; text-align:center;
+    margin-top:16px; padding:0 30px;
+    text-shadow:0 1px 4px rgba(0,0,0,.6);
+  }
+  .camara-controles{
+    position:relative; z-index:1;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:22px 24px calc(22px + env(safe-area-inset-bottom));
+    background:rgba(0,0,0,.55);
+  }
+  .camara-btn-cancelar{
+    background:none; border:none; color:#fff; font-size:14px; font-family:'DM Sans',sans-serif;
+    font-weight:600; cursor:pointer; width:64px; text-align:left;
+  }
+  .camara-btn-capturar{
+    width:64px; height:64px; border-radius:50%;
+    background:#fff; border:4px solid rgba(255,255,255,.4);
+    cursor:pointer; flex-shrink:0;
+  }
+  .camara-btn-capturar:active{background:var(--paper-2);}
+
   ::-webkit-scrollbar{width:0;}
 </style>
 </head>
@@ -654,7 +697,7 @@
       </div>
 
       <input type="file" accept="image/*" capture="environment" id="ocr-file-input" style="display:none" onchange="procesarFotoCheque(this.files[0])">
-      <button class="ocr-btn" id="ocr-btn" onclick="document.getElementById('ocr-file-input').click()">
+      <button class="ocr-btn" id="ocr-btn" onclick="abrirCamaraCheque()">
         <div class="ocr-icon">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 8V6a2 2 0 012-2h2M20 8V6a2 2 0 00-2-2h-2M4 16v2a2 2 0 002 2h2M20 16v2a2 2 0 01-2 2h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3.3" stroke="currentColor" stroke-width="1.8"/></svg>
         </div>
@@ -677,9 +720,9 @@
         <div class="field-hint">Si cargás banco y número, además chequeamos si ese cheque está denunciado en BCRA.</div>
       </div>
       <div class="field">
-        <label class="field-label">Fecha de vencimiento del cheque (opcional)</label>
+        <label class="field-label">Fecha de vencimiento del cheque</label>
         <input type="date" id="consulta-fecha-vencimiento">
-        <div class="field-hint">Con esto, más adelante te vamos a poder avisar y registrar si el cheque efectivamente se cobró.</div>
+        <div class="field-hint">Obligatoria si cargaste número de cheque — con esto podemos verificar más adelante si efectivamente se cobró.</div>
       </div>
       <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
 
@@ -826,6 +869,20 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <div class="camara-modal" id="camara-modal" style="display:none">
+    <video id="camara-video" autoplay playsinline muted></video>
+    <div class="camara-overlay">
+      <div class="camara-marco"></div>
+      <div class="camara-instrucciones">Encuadrá el cheque completo dentro del marco</div>
+    </div>
+    <div class="camara-controles">
+      <button class="camara-btn-cancelar" onclick="cerrarCamaraCheque()">Cancelar</button>
+      <button class="camara-btn-capturar" onclick="capturarFotoCheque()" aria-label="Capturar foto"></button>
+      <div style="width:64px;"></div>
+    </div>
+    <canvas id="camara-canvas" style="display:none"></canvas>
+  </div>
 </div>
 
 <script>
@@ -2069,9 +2126,14 @@ async function consultarCuit(){
   const raw = document.getElementById("consulta-cuit").value;
   const numeroCheque = document.getElementById("consulta-numero-cheque").value.trim();
   const bancoCheque = document.getElementById("consulta-banco-cheque").value;
+  const fechaVencimiento = document.getElementById("consulta-fecha-vencimiento").value;
   const digits = limpiarCuit(raw);
   if (digits.length !== 11){
     mostrarToast(digits.length === 0 ? "Ingresá un CUIT" : `El CUIT debe tener 11 dígitos exactos (tiene ${digits.length})`);
+    return;
+  }
+  if (numeroCheque && !fechaVencimiento){
+    mostrarToast("Si cargás número de cheque, necesitamos también la fecha de vencimiento.");
     return;
   }
   const mesActual = new Date().toISOString().slice(0,7);
@@ -2167,6 +2229,49 @@ function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
     if (!cuitEncontrado || !cuitEncontrado.includes(c)) return c.padStart(8, "0");
   }
   return null;
+}
+
+let camaraStream = null;
+
+async function abrirCamaraCheque(){
+  // Si el navegador no soporta cámara en vivo (o el permiso falla),
+  // caemos al selector de archivo/cámara nativa como respaldo.
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    document.getElementById("ocr-file-input").click();
+    return;
+  }
+  try {
+    camaraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const video = document.getElementById("camara-video");
+    video.srcObject = camaraStream;
+    document.getElementById("camara-modal").style.display = "flex";
+  } catch (e){
+    console.warn("[OpenCheck Score] No se pudo abrir la cámara en vivo:", e.message);
+    document.getElementById("ocr-file-input").click();
+  }
+}
+
+function cerrarCamaraCheque(){
+  if (camaraStream){
+    camaraStream.getTracks().forEach(t => t.stop());
+    camaraStream = null;
+  }
+  document.getElementById("camara-modal").style.display = "none";
+}
+
+function capturarFotoCheque(){
+  const video = document.getElementById("camara-video");
+  const canvas = document.getElementById("camara-canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(async (blob) => {
+    cerrarCamaraCheque();
+    await procesarFotoCheque(blob);
+  }, "image/jpeg", 0.92);
 }
 
 async function procesarFotoCheque(archivo){

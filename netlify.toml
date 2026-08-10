@@ -1,0 +1,8 @@
+[build]
+  functions = "netlify/functions"
+
+# La función verificar-cheques-pendientes.js corre sola todos los días
+# (configurado con export const config = { schedule: "@daily" } dentro
+# del propio archivo). Necesita la variable de entorno
+# SUPABASE_SERVICE_ROLE_KEY configurada en Site settings → Environment
+# variables — sin eso, la función falla al ejecutarse.
