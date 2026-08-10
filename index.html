@@ -676,15 +676,6 @@
       </div>
       <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
 
-      <div class="divider-label">Casos de ejemplo</div>
-      <div class="chip-row">
-        <div class="chip" onclick="setCuit('30-70893479-4')">Cilley SA</div>
-        <div class="chip" onclick="setCuit('30-71581395-1')">Sembrados SS</div>
-        <div class="chip" onclick="setCuit('20-26566657-5')">Robla P.D.</div>
-        <div class="chip" onclick="setCuit('20-24080394-2')">Ricciuto M.O.</div>
-        <div class="chip" onclick="setCuit('30-71847811-8')">EME Autopartes</div>
-      </div>
-
       <div class="divider-label">Otras herramientas</div>
       <div class="link-line" onclick="irA('denuncia')">
         <span>¿Un cheque fue denunciado como extraviado o robado?</span>
@@ -1216,8 +1207,8 @@ const INFLACION_MENSUAL_DEMO_APROX = 0.04;
    la Central de Deudores del BCRA.
    ======================================================= */
 const BCRA_DB_RAW = {
-  "30708934794": {
-    empresa:"Cilley SA", antiguedadCuitAnios:18, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+  "20000000011": {
+    empresa:"Empresa Demo A", antiguedadCuitAnios:18, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
     entidades:[
       {nombre:"Banco de la Nación Argentina", situacion:1, monto:2000000, diasAtraso:0},
       {nombre:"Banco Galicia", situacion:1, monto:1000000, diasAtraso:0}
@@ -1226,8 +1217,8 @@ const BCRA_DB_RAW = {
     historialDeuda:[2.9,3.0,2.9,3.0,3.1,3.0,2.9,3.0,3.1,3.0,2.9,3.0, 2.9,3.0,3.1,3.0,2.9,3.0,3.1,3.0,2.9,3.0,3.0,3.0],
     historialMontoEnMora:[0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0]
   },
-  "30715813951": {
-    empresa:"Sembrados SS", antiguedadCuitAnios:10, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+  "20000000022": {
+    empresa:"Empresa Demo B", antiguedadCuitAnios:10, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
     entidades:[
       {nombre:"Banco de la Nación Argentina", situacion:2, monto:6000000, diasAtraso:15},
       {nombre:"Banco de la Provincia de Buenos Aires", situacion:1, monto:5000000, diasAtraso:0},
@@ -1237,8 +1228,8 @@ const BCRA_DB_RAW = {
     historialDeuda:[3,4,5,5,6,7,7,8,8,9,9,9, 9,10,11,12,13,13,14,14,15,15,15,15],
     historialMontoEnMora:[0,0,0,3.3,4.0,4.7,4.7,5.3,5.3,6.0,6.0,6.0, 6.0,6.7,7.3,8.0,8.7,8.7,9.3,9.3,10.0,10.0,10.0,10.0]
   },
-  "20265666575": {
-    empresa:"Robla P.D.", antiguedadCuitAnios:9, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+  "20000000033": {
+    empresa:"Empresa Demo C", antiguedadCuitAnios:9, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
     entidades:[
       {nombre:"Banco de la Nación Argentina", situacion:3, monto:9000000, diasAtraso:75},
       {nombre:"Banco Santander", situacion:2, monto:6000000, diasAtraso:20}
@@ -1247,8 +1238,8 @@ const BCRA_DB_RAW = {
     historialDeuda:[4,5,5,6,6,7,7,8,8,9,9,10, 10,11,12,12,13,13,14,14,15,15,15,15],
     historialMontoEnMora:[0,0,0,0,0,0,0,0,0,9.0,9.0,10.0, 0,11.0,12.0,12.0,13.0,13.0,14.0,14.0,15.0,15.0,15.0,15.0]
   },
-  "20240803942": {
-    empresa:"Ricciuto M.O.", antiguedadCuitAnios:5, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+  "20000000044": {
+    empresa:"Empresa Demo D", antiguedadCuitAnios:5, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
     entidades:[
       {nombre:"Banco de la Nación Argentina", situacion:4, monto:15000000, diasAtraso:110},
       {nombre:"Banco Galicia", situacion:3, monto:10000000, diasAtraso:45},
@@ -1259,8 +1250,8 @@ const BCRA_DB_RAW = {
     historialDeuda:[10,12,14,16,18,20,21,22,23,24,25,25, 25,27,29,31,33,35,36,37,38,39,40,40],
     historialMontoEnMora:[0,0,0,16.0,18.0,20.0,21.0,22.0,23.0,24.0,25.0,25.0, 25.0,27.0,29.0,31.0,33.0,35.0,36.0,37.0,38.0,39.0,40.0,40.0]
   },
-  "30718478118": {
-    empresa:"EME Autopartes", antiguedadCuitAnios:4, rechazosSinFondos6m:1, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+  "20000000055": {
+    empresa:"Empresa Demo E", antiguedadCuitAnios:4, rechazosSinFondos6m:1, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
     entidades:[
       {nombre:"Banco de la Nación Argentina", situacion:4, monto:20000000, diasAtraso:130},
       {nombre:"Banco Galicia", situacion:4, monto:18000000, diasAtraso:125},
@@ -1809,7 +1800,7 @@ function setTipoPersona(tipo){
   const hintCuit = document.getElementById("hint-cuit");
   if (tipo === "juridica"){
     lblNombre.textContent = "Razón social";
-    inputNombre.placeholder = "Ej: Cilley SA";
+    inputNombre.placeholder = "Ej: Mi Empresa S.A.";
     lblCuit.textContent = "CUIT";
     hintCuit.textContent = "CUIT de la empresa, para verificar tu identidad como usuario registrado.";
   } else {
