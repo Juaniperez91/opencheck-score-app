@@ -1,0 +1,11 @@
+{
+  "appId": "com.opencheckscore.app",
+  "appName": "OpenCheck Score",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

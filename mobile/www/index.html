@@ -1,0 +1,2917 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenCheck Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --green:#2472B8;
+    --green-ink:#123A5C;
+    --green-soft:#E3EFF9;
+    --paper:#F2F7FB;
+    --paper-2:#E6F0F7;
+    --ink:#1C2420;
+    --ink-soft:#5B655F;
+    --hairline:#C9DCEA;
+    --amber:#B8862E;
+    --amber-soft:#F4E9D6;
+    --brick:#A63D3D;
+    --brick-soft:#F3E1DF;
+    --white:#FFFFFF;
+    --radius:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    background:#C7D9E5;
+    font-family:'DM Sans', sans-serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    min-height:100vh;
+  }
+  .device{
+    width:100%;
+    max-width:412px;
+    min-height:100vh;
+    background:var(--paper);
+    position:relative;
+    box-shadow:0 0 60px rgba(0,0,0,0.25);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .statusbar{
+    height:14px;
+    background:var(--paper);
+  }
+  .topbar{
+    padding:18px 20px 14px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border-bottom:1px solid var(--hairline);
+    background:var(--paper);
+  }
+  .topbar .brand{
+    display:flex;
+    align-items:center;
+    gap:9px;
+  }
+  .brand-mark{
+    width:26px; height:26px;
+    border-radius:7px;
+    background:var(--green);
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-family:'DM Mono',monospace;font-weight:500;font-size:13px;
+    flex-shrink:0;
+  }
+  .brand-name{
+    font-weight:700; font-size:15.5px; letter-spacing:-0.01em;
+  }
+  .brand-name span{color:var(--green);}
+  .topbar-sub{
+    margin-left:auto;
+    font-family:'DM Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    background:var(--paper-2);
+    padding:4px 9px;
+    border-radius:100px;
+    border:1px solid var(--hairline);
+  }
+  .screen{
+    display:none;
+    flex-direction:column;
+    flex:1;
+    animation:fadein .25s ease;
+  }
+  .screen.active{display:flex;}
+  @keyframes fadein{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)}}
+
+  .content{
+    padding:22px 20px 100px;
+    flex:1;
+    overflow-y:auto;
+  }
+
+  h1.page-title{
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:-0.015em;
+    margin:2px 0 4px;
+  }
+  .page-sub{
+    font-size:13.5px;
+    color:var(--ink-soft);
+    margin:0 0 22px;
+    line-height:1.5;
+  }
+
+  label.field-label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    margin:0 0 6px;
+  }
+  .field{margin-bottom:16px;}
+  input[type=text], input[type=email]{
+    width:100%;
+    padding:13px 14px;
+    border:1px solid var(--hairline);
+    border-radius:10px;
+    background:var(--white);
+    font-family:'DM Sans', sans-serif;
+    font-size:14.5px;
+    color:var(--ink);
+    outline:none;
+    transition:border-color .15s;
+  }
+  input.mono{font-family:'DM Mono', monospace; letter-spacing:.02em;}
+  input:focus{border-color:var(--green);}
+  .field-hint{font-size:11.5px; color:var(--ink-soft); margin-top:5px;}
+
+  .segmented{
+    display:flex;
+    background:var(--paper-2);
+    border:1px solid var(--hairline);
+    border-radius:10px;
+    padding:3px;
+    margin-bottom:18px;
+  }
+  .segmented .seg-opt{
+    flex:1;
+    text-align:center;
+    padding:9px 6px;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    border-radius:8px;
+    cursor:pointer;
+    transition:background .15s, color .15s;
+  }
+  .segmented .seg-opt.active{
+    background:var(--white);
+    color:var(--green-ink);
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  .checkbox-row{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    background:var(--paper-2);
+    border:1px solid var(--hairline);
+    border-radius:10px;
+    padding:13px 14px;
+    margin:18px 0 10px;
+  }
+  .checkbox-row input{margin-top:2px; accent-color:var(--green); width:16px; height:16px; flex-shrink:0;}
+  .checkbox-row p{font-size:12.5px; line-height:1.5; margin:0; color:var(--ink-soft);}
+  .checkbox-row a{color:var(--green-ink); font-weight:600;}
+  .tc-meta{
+    font-family:'DM Mono', monospace;
+    font-size:10.5px;
+    color:#8A9089;
+    margin:0 0 18px;
+    display:none;
+  }
+
+  .btn{
+    display:block;
+    width:100%;
+    text-align:center;
+    padding:14px 16px;
+    border-radius:10px;
+    border:none;
+    font-family:'DM Sans', sans-serif;
+    font-weight:700;
+    font-size:14.5px;
+    cursor:pointer;
+    transition:transform .08s, opacity .15s;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn-primary{background:var(--green); color:#fff;}
+  .btn-primary:disabled{background:#A9C6DC; cursor:not-allowed;}
+  .btn-ghost{background:transparent; color:var(--green-ink); border:1px solid var(--hairline);}
+  .btn-secondary{background:var(--paper-2); color:var(--ink); border:1px solid var(--hairline);}
+
+  .divider-label{
+    display:flex; align-items:center; gap:10px;
+    margin:22px 0 16px;
+    font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em;
+  }
+  .divider-label::before, .divider-label::after{
+    content:""; flex:1; height:1px; background:var(--hairline);
+  }
+
+  .chip-row{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+  .chip{
+    font-family:'DM Mono', monospace;
+    font-size:11.5px;
+    padding:7px 11px;
+    border:1px solid var(--hairline);
+    background:var(--white);
+    border-radius:100px;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  .chip:active{background:var(--green-soft); border-color:var(--green);}
+
+  .counter-banner{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--green-ink);
+    color:#fff;
+    padding:14px 16px;
+    border-radius:12px;
+    margin-bottom:20px;
+  }
+  .counter-banner .num{font-family:'DM Mono',monospace; font-size:19px; font-weight:500;}
+  .counter-banner .lbl{font-size:11.5px; opacity:.8; margin-top:2px;}
+  .counter-banner .cta{
+    font-size:11.5px; font-weight:700; color:#CDE6F7;
+    border:1px solid rgba(255,255,255,.35);
+    padding:6px 10px; border-radius:8px;
+  }
+
+  .ocr-btn{
+    display:flex; align-items:center; gap:12px;
+    width:100%;
+    padding:14px 16px;
+    background:var(--white);
+    border:1.5px dashed var(--hairline);
+    border-radius:12px;
+    cursor:pointer;
+    margin-bottom:22px;
+    text-align:left;
+  }
+  .ocr-icon{
+    width:38px; height:38px; border-radius:9px;
+    background:var(--green-soft); color:var(--green-ink);
+    display:flex;align-items:center;justify-content:center; flex-shrink:0;
+  }
+  .ocr-text b{display:block; font-size:13.5px;}
+  .ocr-text span{font-size:11.5px; color:var(--ink-soft);}
+
+  .link-line{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 2px;
+    font-size:13px;
+    border-bottom:1px solid var(--hairline);
+    cursor:pointer;
+  }
+  .link-line:last-child{border-bottom:none;}
+  .link-line .arrow{color:var(--ink-soft);}
+
+  /* ---- Bottom nav ---- */
+  .navbar{
+    display:flex;
+    border-top:1px solid var(--hairline);
+    background:var(--paper);
+    position:absolute;
+    bottom:0; left:0; right:0;
+  }
+  .nav-item{
+    flex:1;
+    padding:11px 4px 14px;
+    text-align:center;
+    font-size:10.5px;
+    color:var(--ink-soft);
+    cursor:pointer;
+    font-weight:600;
+    letter-spacing:.01em;
+  }
+  .nav-item .nav-ico{
+    display:block; margin:0 auto 4px; width:20px; height:20px;
+  }
+  .nav-item.active{color:var(--green-ink);}
+
+  /* ---- Resultado / Sello ---- */
+  .stamp-wrap{
+    display:flex; justify-content:center; margin:6px 0 22px;
+  }
+  .stamp-svg text{font-family:'DM Mono', monospace;}
+  .result-meta{
+    text-align:center; margin-bottom:22px;
+  }
+  .result-meta .company{font-weight:700; font-size:16.5px;}
+  .result-meta .cuit{font-family:'DM Mono',monospace; color:var(--ink-soft); font-size:12.5px; margin-top:2px;}
+
+  .alert-block{
+    display:flex; gap:10px; align-items:flex-start;
+    padding:13px 14px;
+    border-radius:10px;
+    margin-bottom:20px;
+    font-size:12.5px;
+    line-height:1.5;
+  }
+  .alert-block.danger{background:var(--brick-soft); color:#7A2C2C;}
+  .alert-block.ok{background:var(--green-soft); color:var(--green-ink);}
+  .alert-block b{display:block; font-size:13px; margin-bottom:2px;}
+
+  .breakdown{
+    border:1px solid var(--hairline);
+    border-radius:12px;
+    overflow:hidden;
+    margin-bottom:20px;
+    background:var(--white);
+  }
+  .breakdown-row{
+    padding:13px 14px;
+    border-bottom:1px solid var(--hairline);
+  }
+  .breakdown-row:last-child{border-bottom:none;}
+  .br-top{
+    display:flex; justify-content:space-between; align-items:center;
+    gap:10px;
+    margin-bottom:6px;
+  }
+  .br-label{font-size:12.5px; font-weight:600; color:var(--ink); flex:1;}
+  .br-bar{
+    width:70px; height:5px; background:var(--paper-2); border-radius:100px; overflow:hidden;
+    flex-shrink:0;
+  }
+  .br-bar-fill{height:100%; background:var(--green);}
+  .br-val{font-family:'DM Mono',monospace; font-size:11.5px; width:36px; text-align:right; flex-shrink:0;}
+  .br-desc{font-size:12px; color:var(--ink-soft); line-height:1.5;}
+
+  .narrativa-box{
+    background:var(--white);
+    border:1px solid var(--hairline);
+    border-radius:12px;
+    padding:15px 16px;
+    margin-bottom:20px;
+    font-size:13px;
+    line-height:1.6;
+    color:var(--ink);
+  }
+  .narrativa-box b{color:var(--green-ink);}
+  .narrativa-title{
+    font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--ink-soft); font-weight:700; margin-bottom:8px;
+  }
+
+  .score-total{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:14px 16px;
+    background:var(--green-ink);
+    color:#fff;
+    border-radius:12px;
+    margin-bottom:22px;
+  }
+  .score-total .lbl{font-size:12px; opacity:.75;}
+  .score-total .val{font-family:'DM Mono',monospace; font-size:22px; font-weight:500;}
+
+  /* Historial */
+  .hist-row{
+    padding:13px 0;
+    border-bottom:1px solid var(--hairline);
+  }
+  .hist-row:last-child{border-bottom:none;}
+  .hist-top{display:flex; justify-content:space-between; font-size:13px; font-weight:600;}
+  .hist-mid{font-family:'DM Mono',monospace; font-size:11.5px; color:var(--ink-soft); margin-top:3px;}
+  .hist-bottom{display:flex; justify-content:space-between; align-items:center; margin-top:6px;}
+  .tag{
+    font-family:'DM Mono',monospace; font-size:10.5px; font-weight:500;
+    padding:3px 8px; border-radius:100px;
+  }
+  .tag.A{background:var(--green-soft); color:var(--green-ink);}
+  .tag.B{background:var(--amber-soft); color:var(--amber);}
+  .tag.C{background:var(--brick-soft); color:var(--brick);}
+  .hist-date{font-size:11px; color:#96A099;}
+
+  .empty-state{
+    text-align:center; padding:60px 20px; color:var(--ink-soft);
+  }
+  .empty-state .ico{font-size:34px; margin-bottom:10px;}
+  .empty-state p{font-size:13px; line-height:1.5;}
+
+  /* paywall */
+  .paywall-card{
+    background:var(--green-ink);
+    color:#fff;
+    border-radius:16px;
+    padding:26px 22px;
+    text-align:center;
+    margin-bottom:20px;
+  }
+  .paywall-card h2{font-size:19px; margin:0 0 8px;}
+  .paywall-card p{font-size:13px; opacity:.85; line-height:1.55; margin:0 0 18px;}
+  .paywall-card .btn-primary{background:#fff; color:var(--green-ink);}
+  .plan-row{display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--hairline); font-size:13px;}
+  .plan-row b{font-family:'DM Mono',monospace;}
+
+  .toast{
+    position:absolute; left:20px; right:20px; bottom:88px;
+    background:var(--ink); color:#fff;
+    padding:12px 16px; border-radius:10px;
+    font-size:12.5px;
+    text-align:center;
+    opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s;
+    transform:translateY(8px);
+    z-index:50;
+  }
+  .toast.show{opacity:1; transform:translateY(0);}
+
+  .gauge-card{
+    display:flex; flex-direction:column; align-items:center;
+    background:var(--white); border:1px solid var(--hairline); border-radius:12px;
+    padding:14px 10px 6px; margin-bottom:16px;
+  }
+  .gauge-tramo{font-size:14px; font-weight:700; color:var(--ink); margin-top:2px;}
+
+  .recomendacion-list{
+    margin:0; padding-left:18px; font-size:13px; line-height:1.6; color:var(--ink);
+  }
+  .recomendacion-list li{margin-bottom:4px;}
+  .recomendacion-list li:last-child{margin-bottom:0;}
+
+  .mini-stats-row{
+    display:flex; gap:10px; margin-bottom:14px;
+  }
+  .mini-stat{
+    flex:1; background:var(--white); border:1px solid var(--hairline); border-radius:10px;
+    padding:10px 12px;
+  }
+  .mini-stat .mini-lbl{font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;}
+  .mini-stat .mini-val{font-family:'DM Mono',monospace; font-size:14px; font-weight:500;}
+  .tendencia-val.tendencia-subiendo{color:var(--brick);}
+  .tendencia-val.tendencia-bajando{color:var(--green-ink);}
+  .tendencia-val.tendencia-estable{color:var(--ink-soft);}
+
+  .section-heading{
+    font-size:13.5px; font-weight:700; margin:22px 0 4px;
+  }
+  .section-sub{font-size:11.5px; color:var(--ink-soft); margin-bottom:10px; line-height:1.5;}
+
+  .entidad-row{
+    padding:11px 0;
+    border-bottom:1px solid var(--hairline);
+  }
+  .entidad-row:last-child{border-bottom:none;}
+  .entidad-nombre{font-size:12.5px; font-weight:600; margin-bottom:5px;}
+  .entidad-datos{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .entidad-monto{font-family:'DM Mono',monospace; font-size:11.5px; color:var(--ink);}
+  .entidad-atraso{font-size:11px; color:var(--ink-soft);}
+
+  .sparkline-block{margin-bottom:14px;}
+  .sparkline-title{font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;}
+  .sparkline-holder{background:var(--white); border:1px solid var(--hairline); border-radius:10px; padding:8px 6px;}
+
+  .fuente-nota{font-size:10.5px; color:#96A099; line-height:1.5; margin:10px 0 4px;}
+
+  .select-banco{
+    width:100%;
+    padding:13px 14px;
+    border:1px solid var(--hairline);
+    border-radius:10px;
+    background:var(--white);
+    font-family:'DM Sans', sans-serif;
+    font-size:14.5px;
+    color:var(--ink);
+    outline:none;
+    appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0 L5 6 L10 0' fill='none' stroke='%235B655F' stroke-width='1.5'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+  }
+  .select-banco:focus{border-color:var(--green);}
+
+  .razon-social-preview{
+    display:none;
+    align-items:center;
+    gap:7px;
+    margin-top:8px;
+    padding:9px 11px;
+    border-radius:8px;
+    font-size:12.5px;
+    line-height:1.4;
+  }
+  .razon-social-preview.show{display:flex;}
+  .razon-social-preview.rs-loading{background:var(--paper-2); color:var(--ink-soft);}
+  .razon-social-preview.rs-found{background:var(--green-soft); color:var(--green-ink); font-weight:600;}
+  .razon-social-preview.rs-unknown{background:var(--paper-2); color:var(--ink-soft);}
+
+  .fuente-badge{
+    display:inline-block;
+    font-size:10.5px;
+    font-weight:600;
+    padding:3px 9px;
+    border-radius:100px;
+    margin-left:4px;
+  }
+  .fuente-badge.fuente-real{background:var(--green-soft); color:var(--green-ink);}
+  .fuente-badge.fuente-demo{background:var(--amber-soft); color:var(--amber);}
+
+  .breakdown-row-nd .br-val{color:var(--ink-soft); font-style:italic;}
+
+  .detalle-mensual-toggle{
+    font-size:11.5px; font-weight:600; color:var(--green-ink);
+    margin-top:9px; cursor:pointer; display:flex; align-items:center; gap:4px;
+  }
+  .dm-arrow{font-size:10px;}
+  .detalle-mensual-tabla{
+    margin-top:8px; border:1px solid var(--hairline); border-radius:8px;
+    max-height:300px; overflow-y:scroll; overflow-x:scroll;
+    scrollbar-width:thin; scrollbar-color:var(--hairline) transparent;
+  }
+  .detalle-mensual-tabla::-webkit-scrollbar{width:7px; height:7px;}
+  .detalle-mensual-tabla::-webkit-scrollbar-track{background:transparent;}
+  .detalle-mensual-tabla::-webkit-scrollbar-thumb{background:#A9C3D6; border-radius:10px;}
+  .dm-nota{
+    font-size:10.5px; color:var(--ink-soft); line-height:1.4;
+    padding:8px 10px; border-bottom:1px solid var(--hairline); background:var(--paper-2);
+  }
+  .detalle-mensual-tabla table{
+    width:100%; min-width:380px; border-collapse:collapse; font-family:'DM Mono',monospace; font-size:10.5px;
+  }
+  .detalle-mensual-tabla th{
+    position:sticky; top:0; background:var(--paper-2); text-align:right;
+    padding:6px 6px; font-family:'DM Sans',sans-serif; font-weight:600;
+    color:var(--ink-soft); font-size:9.5px; text-transform:uppercase; letter-spacing:.02em;
+    border-bottom:1px solid var(--hairline); white-space:nowrap;
+  }
+  .detalle-mensual-tabla th:first-child, .detalle-mensual-tabla td:first-child{text-align:left;}
+  .detalle-mensual-tabla td{
+    padding:5px 6px; border-bottom:1px solid var(--hairline); white-space:nowrap;
+    text-align:right; overflow:hidden; text-overflow:ellipsis;
+  }
+  .detalle-mensual-tabla tr:last-child td{border-bottom:none;}
+  .breakdown-row-nd .br-desc{font-style:italic;}
+
+  .camara-modal{
+    position:fixed; inset:0; z-index:200;
+    background:#000;
+    display:flex; flex-direction:column;
+  }
+  .camara-modal video{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover;
+  }
+  .camara-overlay{
+    position:relative; flex:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    pointer-events:none;
+  }
+  .camara-marco{
+    width:86%; aspect-ratio:2.2/1;
+    border:2.5px dashed rgba(255,255,255,.85);
+    border-radius:10px;
+    box-shadow:0 0 0 2000px rgba(0,0,0,.45);
+  }
+  @media (orientation:landscape){
+    .camara-marco{ width:70%; aspect-ratio:2.4/1; }
+  }
+  .camara-instrucciones{
+    color:#fff; font-size:13px; text-align:center;
+    margin-top:16px; padding:0 30px;
+    text-shadow:0 1px 4px rgba(0,0,0,.6);
+  }
+  .camara-controles{
+    position:relative; z-index:1;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:22px 24px calc(22px + env(safe-area-inset-bottom));
+    background:rgba(0,0,0,.55);
+  }
+  .camara-btn-cancelar{
+    background:none; border:none; color:#fff; font-size:14px; font-family:'DM Sans',sans-serif;
+    font-weight:600; cursor:pointer; width:64px; text-align:left;
+  }
+  .camara-btn-capturar{
+    width:64px; height:64px; border-radius:50%;
+    background:#fff; border:4px solid rgba(255,255,255,.4);
+    cursor:pointer; flex-shrink:0;
+  }
+  .camara-btn-capturar:active{background:var(--paper-2);}
+
+  .confirmacion-banner{
+    position:fixed; left:16px; right:16px; bottom:16px; z-index:150;
+    max-width:380px; margin:0 auto;
+    background:var(--white); border:1px solid var(--hairline); border-radius:14px;
+    padding:16px 18px; box-shadow:0 8px 28px rgba(18,58,92,.18);
+  }
+  .confirmacion-banner p{ margin:0 0 12px; font-size:13.5px; line-height:1.4; color:var(--ink); }
+  .confirmacion-banner-botones{ display:flex; gap:10px; }
+  .confirmacion-banner-botones button{
+    flex:1; padding:10px; border-radius:9px; border:none; font-family:'DM Sans',sans-serif;
+    font-weight:700; font-size:13.5px; cursor:pointer;
+  }
+  .confirmacion-banner-botones .btn-si{ background:var(--green); color:#fff; }
+  .confirmacion-banner-botones .btn-no{ background:var(--brick-soft); color:var(--brick); }
+
+  ::-webkit-scrollbar{width:0;}
+</style>
+</head>
+<body>
+
+<div class="device">
+  <div class="statusbar"></div>
+
+  <!-- ===================== REGISTRO ===================== -->
+  <div class="screen active" id="screen-registro">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Open<span>Check</span> Score</div>
+      </div>
+    </div>
+    <div class="content">
+      <h1 class="page-title">Creá tu cuenta</h1>
+      <p class="page-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA. Sin Nosis, sin vueltas.</p>
+
+      <div class="segmented">
+        <div class="seg-opt active" id="seg-fisica" onclick="setTipoPersona('fisica')">Persona física</div>
+        <div class="seg-opt" id="seg-juridica" onclick="setTipoPersona('juridica')">Persona jurídica</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" id="lbl-nombre">Nombre y apellido</label>
+        <input type="text" id="reg-nombre" placeholder="Ej: Juan Pérez">
+      </div>
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input type="email" id="reg-email" placeholder="vos@empresa.com">
+      </div>
+      <div class="field">
+        <label class="field-label" id="lbl-cuit">CUIT / DNI</label>
+        <input type="text" class="mono" id="reg-cuit" placeholder="20-12345678-9" maxlength="13">
+        <div class="field-hint" id="hint-cuit">Usamos esto para verificar tu identidad como usuario, no para calificarte a vos.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Contraseña</label>
+        <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres">
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="reg-tc">
+        <p>Acepto los <a href="#">Términos y Condiciones</a> y la <a href="#">Política de Privacidad</a> de OpenCheck Score, conforme a la Ley 25.326 de Protección de Datos Personales.</p>
+      </div>
+      <div class="tc-meta" id="tc-meta">Documento v1.0 · registrado</div>
+
+      <button class="btn btn-primary" id="btn-registrar" disabled>Crear cuenta</button>
+      <div class="link-line" style="justify-content:center; margin-top:14px;" onclick="irA('login')">
+        <span>¿Ya tenés cuenta? <b>Iniciar sesión</b></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== LOGIN ===================== -->
+  <div class="screen" id="screen-login">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Open<span>Check</span> Score</div>
+      </div>
+    </div>
+    <div class="content">
+      <h1 class="page-title">Iniciar sesión</h1>
+      <p class="page-sub">Entrá con tu email y contraseña.</p>
+
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input type="email" id="login-email" placeholder="vos@empresa.com">
+      </div>
+      <div class="field">
+        <label class="field-label">Contraseña</label>
+        <input type="password" id="login-password" placeholder="Tu contraseña">
+      </div>
+
+      <button class="btn btn-primary" id="btn-login" onclick="iniciarSesion()">Entrar</button>
+      <div class="link-line" style="justify-content:center; margin-top:14px;" onclick="irA('registro')">
+        <span>¿No tenés cuenta? <b>Registrate</b></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== HOME / CONSULTA ===================== -->
+  <div class="screen" id="screen-home">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Open<span>Check</span> Score</div>
+      </div>
+      <div class="topbar-sub" id="user-chip">—</div>
+    </div>
+    <div class="content">
+      <h1 class="page-title">Consultar librador</h1>
+      <p class="page-sub">Ingresá un CUIT o sacá una foto del cheque para calificar el riesgo del librador.</p>
+
+      <div class="counter-banner">
+        <div>
+          <div class="num"><span id="queries-left">10</span>/10</div>
+          <div class="lbl">consultas gratis este mes</div>
+        </div>
+        <div class="cta" onclick="irA('cuenta')">Ver planes</div>
+      </div>
+
+      <input type="file" accept="image/*" capture="environment" id="ocr-file-input" style="display:none" onchange="procesarFotoCheque(this.files[0])">
+      <button class="ocr-btn" id="ocr-btn" onclick="abrirCamaraCheque()">
+        <div class="ocr-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 8V6a2 2 0 012-2h2M20 8V6a2 2 0 00-2-2h-2M4 16v2a2 2 0 002 2h2M20 16v2a2 2 0 01-2 2h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3.3" stroke="currentColor" stroke-width="1.8"/></svg>
+        </div>
+        <div class="ocr-text">
+          <b id="ocr-btn-label">Sacar foto del cheque</b>
+          <span>Intentamos leer el CUIT y el número automáticamente</span>
+        </div>
+      </button>
+
+      <div class="field">
+        <label class="field-label">CUIT del librador</label>
+        <input type="text" class="mono" id="consulta-cuit" placeholder="30-70893479-4" maxlength="13">
+        <div class="razon-social-preview" id="razon-social-preview"></div>
+      </div>
+      <div class="field">
+        <label class="field-label">Número de cheque (opcional)</label>
+        <div class="field-hint" style="margin:0 0 8px;">La API del BCRA pide banco + número de cheque para verificar una denuncia.</div>
+        <select id="consulta-banco-cheque" class="select-banco"></select>
+        <input type="text" class="mono" id="consulta-numero-cheque" placeholder="Ej: 00021458" style="margin-top:8px;">
+        <div class="field-hint">Si cargás banco y número, además chequeamos si ese cheque está denunciado en BCRA.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Fecha de vencimiento del cheque</label>
+        <input type="date" id="consulta-fecha-vencimiento">
+        <div class="field-hint">Obligatoria si cargaste número de cheque — con esto podemos verificar más adelante si efectivamente se cobró.</div>
+      </div>
+      <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
+
+      <div class="divider-label">Otras herramientas</div>
+      <div class="link-line" onclick="irA('denuncia')">
+        <span>¿Un cheque fue denunciado como extraviado o robado?</span>
+        <span class="arrow">→</span>
+      </div>
+      <div class="link-line" onclick="irA('historial')">
+        <span>Ver historial de consultas</span>
+        <span class="arrow">→</span>
+      </div>
+    </div>
+    <div class="navbar">
+      <div class="nav-item active" data-nav="home" onclick="irA('home')">Inicio</div>
+      <div class="nav-item" data-nav="historial" onclick="irA('historial')">Historial</div>
+      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')">Cuenta</div>
+    </div>
+  </div>
+
+  <!-- ===================== VERIFICAR DENUNCIA ===================== -->
+  <div class="screen" id="screen-denuncia">
+    <div class="topbar">
+      <span onclick="irA('home')" style="cursor:pointer; font-size:19px; line-height:1;">←</span>
+      <div class="brand-name">Cheque denunciado</div>
+    </div>
+    <div class="content">
+      <h1 class="page-title">Verificar denuncia BCRA</h1>
+      <p class="page-sub">Elegí el banco y el número de cheque para chequear si figura como extraviado, robado o con oposición al pago. La API pública del BCRA identifica cada cheque por banco + número.</p>
+      <div class="field">
+        <label class="field-label">Banco</label>
+        <select id="denuncia-banco" class="select-banco"></select>
+      </div>
+      <div class="field">
+        <label class="field-label">Número de cheque</label>
+        <input type="text" class="mono" id="denuncia-numero" placeholder="Ej: 00021458">
+      </div>
+      <button class="btn btn-primary" onclick="verificarDenuncia()">Verificar</button>
+      <div id="denuncia-resultado" style="margin-top:20px;"></div>
+    </div>
+  </div>
+
+  <!-- ===================== RESULTADO ===================== -->
+  <div class="screen" id="screen-resultado">
+    <div class="topbar">
+      <span onclick="irA('home')" style="cursor:pointer; font-size:19px; line-height:1;">←</span>
+      <div class="brand-name">Resultado</div>
+    </div>
+    <div class="content">
+      <div class="stamp-wrap" id="stamp-holder"></div>
+      <div class="result-meta">
+        <div class="company" id="res-empresa">—</div>
+        <div class="cuit" id="res-cuit">—</div>
+        <div id="res-fuente" style="margin-top:6px;"></div>
+      </div>
+
+      <div id="res-alerta"></div>
+
+      <div class="gauge-card">
+        <div id="res-gauge"></div>
+        <div class="gauge-tramo" id="res-tramo">—</div>
+      </div>
+
+      <div class="narrativa-box" id="res-recomendacion"></div>
+
+      <div class="narrativa-box" id="res-narrativa"></div>
+
+      <div class="breakdown" id="res-breakdown"></div>
+
+      <div class="section-heading">Detalle por entidad bancaria</div>
+      <div class="section-sub">Deuda vigente informada por cada entidad a la Central de Deudores del BCRA (acceso público y gratuito).</div>
+      <div class="mini-stats-row">
+        <div class="mini-stat">
+          <div class="mini-lbl">Entidades</div>
+          <div class="mini-val" id="res-entidades-count">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-lbl">Concentración</div>
+          <div class="mini-val" id="res-concentracion">—</div>
+        </div>
+      </div>
+      <div class="breakdown" id="res-entidades"></div>
+
+      <div class="section-heading">Evolución BCRA (24 meses)</div>
+      <div class="section-sub">Historial completo público de situación crediticia y endeudamiento informado por el BCRA (hasta 24 períodos).</div>
+      <div class="mini-stats-row">
+        <div class="mini-stat">
+          <div class="mini-lbl">Peor situación 12m</div>
+          <div class="mini-val" id="res-peor-situacion">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-lbl">Tendencia de deuda</div>
+          <div class="mini-val tendencia-val" id="res-tendencia">—</div>
+        </div>
+      </div>
+      <div class="sparkline-block">
+        <div class="sparkline-title">Situación crediticia por mes</div>
+        <div class="sparkline-holder" id="res-sparkline-situacion"></div>
+      </div>
+      <div class="sparkline-block">
+        <div class="sparkline-title">Endeudamiento total (en millones)</div>
+        <div class="sparkline-holder" id="res-sparkline-deuda"></div>
+      </div>
+      <div class="fuente-nota">Fuente: Central de Deudores del Sistema Financiero, Banco Central de la República Argentina (BCRA) — centraldedeudores.bcra.gob.ar. Acceso público y gratuito.</div>
+
+      <button class="btn btn-secondary" onclick="irA('home')">Volver a consultar</button>
+    </div>
+  </div>
+
+  <!-- ===================== HISTORIAL ===================== -->
+  <div class="screen" id="screen-historial">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Historial</div>
+      </div>
+    </div>
+    <div class="content">
+      <h1 class="page-title">Trazabilidad</h1>
+      <p class="page-sub">Cada consulta queda registrada con usuario, CUIT, fecha y resultado.</p>
+      <div id="historial-lista"></div>
+    </div>
+    <div class="navbar">
+      <div class="nav-item" data-nav="home" onclick="irA('home')">Inicio</div>
+      <div class="nav-item active" data-nav="historial" onclick="irA('historial')">Historial</div>
+      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')">Cuenta</div>
+    </div>
+  </div>
+
+  <!-- ===================== CUENTA / PAYWALL ===================== -->
+  <div class="screen" id="screen-cuenta">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Cuenta</div>
+      </div>
+    </div>
+    <div class="content" id="cuenta-content"></div>
+    <div class="navbar">
+      <div class="nav-item" data-nav="home" onclick="irA('home')">Inicio</div>
+      <div class="nav-item" data-nav="historial" onclick="irA('historial')">Historial</div>
+      <div class="nav-item active" data-nav="cuenta" onclick="irA('cuenta')">Cuenta</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="camara-modal" id="camara-modal" style="display:none">
+    <video id="camara-video" autoplay playsinline muted></video>
+    <div class="camara-overlay">
+      <div class="camara-marco"></div>
+      <div class="camara-instrucciones">Girá el teléfono en horizontal y encuadrá el cheque completo, bien apoyado y con buena luz</div>
+    </div>
+    <div class="camara-controles">
+      <button class="camara-btn-cancelar" onclick="cerrarCamaraCheque()">Cancelar</button>
+      <button class="camara-btn-capturar" onclick="capturarFotoCheque()" aria-label="Capturar foto"></button>
+      <div style="width:64px;"></div>
+    </div>
+    <canvas id="camara-canvas" style="display:none"></canvas>
+  </div>
+</div>
+
+<script>
+/* =======================================================
+   SUPABASE — cliente, autenticación y persistencia
+   ======================================================= */
+const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_MZNmdrBaRx6HwGtgmd0VHQ_uRPQj_Zx";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Clave pública VAPID — segura de tener en el frontend (la privada vive
+// solo en la Netlify Function que manda las notificaciones).
+const VAPID_PUBLIC_KEY = "BCmyLsLgxi-xD4YkBVAfCT_Z_UDMd0znH_jtXmf4tYZdrvISoT_hrcsGXBruMOoI3vWT6LlIEcZtMAXIHdBr_10";
+
+if ("serviceWorker" in navigator){
+  navigator.serviceWorker.register("/service-worker.js")
+    .catch(e => console.warn("[OpenCheck Score] No se pudo registrar el service worker:", e.message));
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function activarNotificacionesPush(){
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)){
+    mostrarToast("Tu navegador no soporta notificaciones push.");
+    return;
+  }
+  if (!state.user){
+    mostrarToast("Iniciá sesión primero.");
+    return;
+  }
+  const permiso = await Notification.requestPermission();
+  if (permiso !== "granted"){
+    mostrarToast("No diste permiso para las notificaciones — podés activarlas después desde el navegador.");
+    return;
+  }
+  try {
+    const registro = await navigator.serviceWorker.ready;
+    const suscripcion = await registro.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const s = suscripcion.toJSON();
+    const { error } = await supabaseClient.from("push_subscriptions").insert({
+      usuario_id: state.user.id, endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth
+    });
+    if (error) throw error;
+    mostrarToast("¡Notificaciones activadas! Te vamos a avisar cuando haya un cheque para confirmar.");
+    renderCuenta();
+  } catch (e){
+    console.warn("[OpenCheck Score] Error activando push:", e.message);
+    mostrarToast("No pudimos activar las notificaciones.");
+  }
+}
+
+// Cartel dentro de la app: respaldo para cuando la push no llegó (el
+// usuario no dio permiso, el navegador no la soporta, etc.) — cada vez
+// que hay sesión activa, chequeamos si hay algún cheque esperando
+// confirmación y lo mostramos.
+async function verificarConfirmacionesPendientes(){
+  if (!state.user) return;
+  const { data, error } = await supabaseClient
+    .from("consultas")
+    .select("id, cuit_consultado, razon_social, numero_cheque_consultado, token_confirmacion")
+    .eq("usuario_id", state.user.id)
+    .eq("confirmacion_activada", true)
+    .is("resultado_real", null)
+    .order("creado_en", { ascending: false })
+    .limit(1);
+  if (error || !data || data.length === 0) return;
+  mostrarBannerConfirmacion(data[0]);
+}
+
+function mostrarBannerConfirmacion(consulta){
+  if (document.querySelector(".confirmacion-banner")) return; // ya hay uno mostrado
+  const banner = document.createElement("div");
+  banner.className = "confirmacion-banner";
+  banner.innerHTML = `
+    <p>¿Se cobró el cheque N° ${consulta.numero_cheque_consultado} de ${consulta.razon_social || consulta.cuit_consultado}?</p>
+    <div class="confirmacion-banner-botones">
+      <button class="btn-si" onclick="responderConfirmacion('${consulta.id}','${consulta.token_confirmacion}','pagado', this)">Sí</button>
+      <button class="btn-no" onclick="responderConfirmacion('${consulta.id}','${consulta.token_confirmacion}','rechazado', this)">No</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
+}
+
+async function responderConfirmacion(id, token, resultado, btn){
+  btn.closest(".confirmacion-banner").remove();
+  try {
+    await fetch(`/.netlify/functions/confirmar-pago?id=${id}&token=${token}&resultado=${resultado}&fuente=usuario_app`);
+    mostrarToast("¡Gracias por confirmarnos!");
+  } catch (e){
+    console.warn("[OpenCheck Score] Error confirmando:", e.message);
+  }
+}
+
+// Trae (o crea si no existe) la fila de public.usuarios asociada al
+// usuario autenticado. Devuelve null si no hay sesión.
+async function obtenerPerfilUsuario(){
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabaseClient
+    .from("usuarios")
+    .select("*")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (error){ console.warn("[OpenCheck Score] Error trayendo perfil:", error.message); return null; }
+  return data;
+}
+
+async function crearPerfilUsuario({ authUserId, nombre, email, cuitDni, tipoPersona }){
+  const { data, error } = await supabaseClient
+    .from("usuarios")
+    .insert({ auth_user_id: authUserId, nombre, email, cuit_dni: cuitDni, tipo_persona: tipoPersona })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function registrarAceptacionTC(usuarioId){
+  const { error } = await supabaseClient
+    .from("aceptaciones_tc")
+    .insert({ usuario_id: usuarioId, version_tc: "v1.0" });
+  if (error) console.warn("[OpenCheck Score] No se pudo registrar aceptación de T&C:", error.message);
+}
+
+async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento }){
+  const { error } = await supabaseClient
+    .from("consultas")
+    .insert({
+      usuario_id: usuarioId,
+      cuit_consultado: cuit,
+      razon_social: razonSocial,
+      categoria,
+      puntos_finales: puntos,
+      fuente,
+      numero_cheque_consultado: numeroCheque || null,
+      banco_cheque_consultado: bancoCheque || null,
+      cheque_denunciado: chequeDenunciado,
+      fecha_vencimiento_cheque: fechaVencimiento || null
+    });
+  if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
+}
+
+// Trae las últimas consultas del usuario actual desde Supabase (no de
+// memoria local) — así el historial persiste entre sesiones/dispositivos.
+async function obtenerHistorialUsuario(usuarioId){
+  const { data, error } = await supabaseClient
+    .from("consultas")
+    .select("*")
+    .eq("usuario_id", usuarioId)
+    .order("creado_en", { ascending: false })
+    .limit(50);
+  if (error){ console.warn("[OpenCheck Score] Error trayendo historial:", error.message); return []; }
+  return data || [];
+}
+
+// Incrementa el contador de consultas del mes, reseteándolo primero si
+// cambió el mes desde la última consulta.
+async function incrementarConsultasUsadas(usuario){
+  const mesActual = new Date().toISOString().slice(0,7);
+  const nuevoContador = usuario.mes_actual === mesActual ? (usuario.consultas_usadas_mes || 0) + 1 : 1;
+  const { data, error } = await supabaseClient
+    .from("usuarios")
+    .update({ consultas_usadas_mes: nuevoContador, mes_actual: mesActual })
+    .eq("id", usuario.id)
+    .select()
+    .single();
+  if (error){ console.warn("[OpenCheck Score] No se pudo actualizar el contador de consultas:", error.message); return usuario; }
+  return data;
+}
+
+/* =======================================================
+   MOTOR DE SCORING — validado con Node contra casos reales
+   ======================================================= */
+function scoreSituacion(sit){
+  // 30 pts: situación crediticia VIGENTE (hoy)
+  const tabla = {1:30, 2:24, 3:16, 4:9, 5:4, 6:0};
+  return tabla[sit] ?? 0;
+}
+function scoreSituacion24m(peorSituacion24m){
+  // 20 pts: peor situación registrada en los últimos 24 meses (el
+  // comportamiento sostenido pesa tanto como la foto de hoy, no menos).
+  const tabla = {1:20, 2:16, 3:11, 4:6, 5:3, 6:0};
+  return tabla[peorSituacion24m] ?? 0;
+}
+// Los tramos de abajo están calibrados en pesos de este período. Con
+// inflación, un monto nominal futuro hay que "traerlo" a pesos de este
+// mes antes de compararlo contra los tramos — si no, los umbrales quedan
+// desactualizados solos con el tiempo y dejan de discriminar bien.
+const ENDEUDAMIENTO_PERIODO_BASE = "202608";
+
+function scoreEndeudamiento(mNominal, factorAjuste = 1){
+  // 10 pts. Más deuda bancaria informada suma, no resta (refleja acceso a
+  // crédito bancario, no riesgo por sí solo). mNominal se ajusta primero
+  // a pesos "de calibración" dividiendo por factorAjuste (la inflación
+  // acumulada desde ENDEUDAMIENTO_PERIODO_BASE hasta hoy).
+  const m = mNominal / factorAjuste;
+  if (m >= 100) return 10;
+  if (m >= 50) return 8;
+  if (m >= 25) return 6;
+  if (m >= 5) return 4;
+  if (m >= 1) return 2;
+  return 0;
+}
+function scoreBancos(n){
+  // 10 pts. INVERTIDO respecto a versiones anteriores: más entidades
+  // bancarias = mejor puntaje (como en OpenCheck real — más bancos indica
+  // mayor bancarización y acceso al crédito, no más riesgo disperso).
+  if (n >= 5) return 10;
+  if (n === 4) return 8;
+  if (n === 3) return 6;
+  if (n === 2) return 4;
+  if (n === 1) return 2;
+  return 0;
+}
+function scoreRechazos(d){
+  // 20 pts: variable propia, no solo ausencia de penalización.
+  // "Sin fondos" es la señal real de insolvencia y es lo único que resta
+  // acá. "Defectos formales" (firma, datos mal puestos) es un error
+  // administrativo, no financiero — no penaliza nada. Un "sin fondos" en
+  // los últimos 6 meses fuerza C2 directo aparte (ver calcularScore).
+  if (d.rechazosSinFondos6m > 0) return 0;
+  if (d.rechazosSinFondos6a12m > 0) return 4;
+  if (d.rechazosSinFondos12a24m > 0) return 12;
+  return 20;
+}
+
+/* =======================================================
+   MATRIZ DE ATRASOS Y RECURRENCIA
+   Penalizaciones adicionales sobre el puntaje base, separadas del
+   historial de rechazos de cheques. Usan datos que ya traemos del BCRA
+   pero que hasta ahora no estábamos aprovechando: días de atraso por
+   entidad (Deudas vigentes) y la cantidad de períodos con atraso dentro
+   del historial de 24 meses (Deudas/Historicas).
+   ======================================================= */
+
+// Cruza banda de puntaje base × monto en mora × días de atraso.
+// Devuelve { tipo: "ninguna" | "penalizacion" | "C2", factor }
+function calcularMatrizAtrasos(puntosBaseVariable, montoEnMoraMillones, diasAtrasoMax){
+  if (diasAtrasoMax <= 0) return { tipo:"ninguna", factor:0 };
+
+  const bandaBaja = puntosBaseVariable < 35;
+  const montoAlto = montoEnMoraMillones > 25;
+  const montoMedio = montoEnMoraMillones > 5 && montoEnMoraMillones <= 25;
+  const diasMuyGraves = diasAtrasoMax > 180;
+  const diasGraves = diasAtrasoMax > 60 && diasAtrasoMax <= 180;
+  const diasLeves = diasAtrasoMax > 0 && diasAtrasoMax <= 60;
+
+  // C2 directo: mora grande y sostenida, o mora grave con puntaje ya débil
+  if (montoAlto && diasMuyGraves) return { tipo:"C2", factor:null };
+  if (bandaBaja && montoAlto && diasGraves) return { tipo:"C2", factor:null };
+
+  // Penalizaciones graduales
+  if (diasMuyGraves) return { tipo:"penalizacion", factor:0.15 };
+  if (diasGraves && (montoMedio || montoAlto)) return { tipo:"penalizacion", factor:0.10 };
+  if (diasGraves) return { tipo:"penalizacion", factor:0.05 };
+  if (diasLeves && montoAlto) return { tipo:"penalizacion", factor:0.05 };
+  return { tipo:"ninguna", factor:0 };
+}
+
+// Pondera la recurrencia por CUÁNTO de la deuda estuvo en mora, no solo
+// CUÁNTOS meses. Un mes con el 10% de la deuda afectada no debería pesar
+// igual que un mes con el 100% afectado.
+function calcularMatrizRecurrencia(historialMontoEnMora, historialDeuda){
+  const sumaDeuda = (historialDeuda || []).reduce((s,v) => s + v, 0);
+  if (sumaDeuda <= 0) return { proporcion:0, factor:0 };
+  const sumaMora = (historialMontoEnMora || []).reduce((s,v) => s + v, 0);
+  const proporcion = sumaMora / sumaDeuda;
+
+  let factor = 0;
+  if (proporcion > 0.60) factor = 0.15;
+  else if (proporcion > 0.30) factor = 0.10;
+  else if (proporcion > 0.10) factor = 0.05;
+
+  return { proporcion, factor };
+}
+
+function categoriaDesdePuntos(p){
+  if (p >= 90) return "A1";
+  if (p >= 75) return "A2";
+  if (p >= 58) return "B1";
+  if (p >= 42) return "B2";
+  if (p >= 25) return "C1";
+  return "C2";
+}
+
+/* ---- Explicaciones por variable: lo que el usuario ve en el desglose ---- */
+function explicarSituacion(sit){
+  const textos = {
+    1: "Situación 1 en BCRA: cumplimiento normal, sin atrasos registrados en el sistema financiero.",
+    2: "Situación 2 en BCRA: riesgo bajo, con atrasos ocasionales de hasta 31 días.",
+    3: "Situación 3 en BCRA: riesgo medio, con atrasos de entre 31 y 90 días.",
+    4: "Situación 4 en BCRA: riesgo alto, con atrasos de entre 90 y 180 días.",
+    5: "Situación 5 en BCRA: cartera irrecuperable, atrasos mayores a 180 días.",
+    6: "Situación 6 en BCRA: irrecuperable por disposición técnica."
+  };
+  return textos[sit] || "Situación crediticia no informada por BCRA.";
+}
+function explicarSituacion24m(peorSituacion24m){
+  if (peorSituacion24m <= 1) return "En los últimos 24 meses no registró ningún atraso: siempre en situación 1.";
+  const textos = {
+    2: "riesgo bajo (atrasos ocasionales de hasta 31 días)",
+    3: "riesgo medio (atrasos de 31 a 90 días)",
+    4: "riesgo alto (atrasos de 90 a 180 días)",
+    5: "cartera irrecuperable",
+    6: "irrecuperable por disposición técnica"
+  };
+  return `En los últimos 24 meses, la peor situación registrada fue situación ${peorSituacion24m} — ${textos[peorSituacion24m] || "sin detalle"}. Aunque hoy esté mejor, este dato queda en el historial público del BCRA.`;
+}
+function explicarEndeudamiento(m){
+  if (m >= 100) return `Endeudamiento bancario informado de $${m}M: perfil muy consolidado, con amplio acceso a financiamiento bancario.`;
+  if (m >= 50) return `Endeudamiento bancario informado de $${m}M: buen acceso a crédito bancario, perfil financiero sólido.`;
+  if (m >= 25) return `Endeudamiento bancario informado de $${m}M: nivel de financiamiento bancario moderado a alto.`;
+  if (m >= 5) return `Endeudamiento bancario informado de $${m}M: nivel de financiamiento bancario moderado.`;
+  if (m >= 1) return `Endeudamiento bancario informado de $${m}M: financiamiento bancario bajo.`;
+  return `Sin endeudamiento bancario informado: sin historial de financiamiento bancario relevante en BCRA.`;
+}
+function explicarBancos(n){
+  if (n >= 5) return `Opera con ${n} entidades bancarias: alta bancarización, buen acceso a crédito.`;
+  if (n === 4) return `Opera con ${n} entidades bancarias: buena bancarización.`;
+  if (n === 3) return `Opera con ${n} entidades bancarias: bancarización moderada.`;
+  if (n === 2) return `Opera con ${n} entidades bancarias: bancarización baja.`;
+  if (n === 1) return `Opera con ${n} entidad bancaria: bancarización muy baja.`;
+  return `Sin entidades bancarias informadas: sin relación bancaria activa registrada en BCRA.`;
+}
+function explicarAntiguedad(a){
+  if (a >= 15) return `CUIT con ${a} años de antigüedad en AFIP: trayectoria consolidada.`;
+  if (a >= 8) return `CUIT con ${a} años de antigüedad en AFIP: trayectoria intermedia.`;
+  if (a >= 3) return `CUIT con ${a} años de antigüedad en AFIP: historia todavía limitada.`;
+  return `CUIT con ${a} año${a===1?"":"s"} de antigüedad en AFIP: muy reciente, sin trayectoria consolidada.`;
+}
+function explicarRechazos(d){
+  if (d.rechazosSinFondos6m > 0) return "Rechazo de cheque por falta de fondos en los últimos 6 meses: la cuenta pasa directamente a C2, sin importar el resto del puntaje.";
+  if (d.rechazosSinFondos6a12m > 0) return "Rechazo de cheque por falta de fondos entre 6 y 12 meses: todavía reciente, resta la mayor parte del puntaje de esta variable.";
+  if (d.rechazosSinFondos12a24m > 0) return "Rechazo de cheque por falta de fondos entre 12 y 24 meses: ya superado, resta solo una parte menor.";
+  if (d.rechazosDefectosFormales6m > 0 || d.rechazosDefectosFormales6a12m > 0 || d.rechazosDefectosFormales12a24m > 0)
+    return "Hubo algún rechazo por defectos formales (firma, datos mal puestos) en los últimos 24 meses, pero no por falta de fondos — es un error administrativo, no una señal de insolvencia, así que no resta nada acá.";
+  return "Sin rechazos de cheques informados por BCRA en los últimos 24 meses: puntaje máximo en esta variable.";
+}
+
+function calcularScore(d){
+  const peorSituacion24m = d.historialSituacion && d.historialSituacion.length
+    ? Math.max(...d.historialSituacion)
+    : d.situacion;
+
+  const pSituacion = scoreSituacion(d.situacion);
+  const pSituacion24m = scoreSituacion24m(peorSituacion24m);
+  const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1);
+  const pBancos = scoreBancos(d.cantidadBancos);
+  const pRechazos = scoreRechazos(d);
+
+  // ---- Deuda real vs. inflación: 10 pts, redistribuidos si no está disponible ----
+  const inflacionDisponible = d.deudaVsInflacion && d.deudaVsInflacion.disponible;
+  const pDeudaVsInflacion = inflacionDisponible ? scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) : null;
+
+  let puntosBase = inflacionDisponible
+    ? pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos + pDeudaVsInflacion
+    : Math.round((pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos) * (100/90));
+
+  // ---- Matriz de atrasos: monto en mora vigente × días de atraso ----
+  const entidadesEnMora = (d.entidades || []).filter(e => e.situacion > 1);
+  const montoEnMoraMillones = entidadesEnMora.reduce((s,e) => s + e.monto, 0) / 1e6;
+  const diasAtrasoMax = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.diasAtraso || 0)) : 0;
+  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraMillones, diasAtrasoMax);
+
+  // ---- Matriz de recurrencia: qué proporción de la deuda estuvo en mora ----
+  const recurrencia = calcularMatrizRecurrencia(d.historialMontoEnMora, d.historialDeuda);
+  const factorRecurrencia = recurrencia.factor;
+
+  let puntosFinales = puntosBase;
+  let forzadoC2 = false;
+  let motivo = null;
+
+  if (d.rechazosSinFondos6m > 0){
+    // Un rechazo por falta de fondos tan reciente sigue siendo un corte
+    // duro, no se diluye sumándolo como puntos: fuerza C2 directo, igual
+    // que antes. Los rechazos por defectos formales NO fuerzan C2 — no son
+    // una señal de insolvencia.
+    forzadoC2 = true;
+    puntosFinales = Math.min(puntosBase, 20);
+    motivo = "Rechazo de cheque por falta de fondos en los últimos 6 meses. Cuenta no operable.";
+  } else if (atrasos.tipo === "C2"){
+    forzadoC2 = true;
+    puntosFinales = Math.min(puntosBase, 20);
+    motivo = `Matriz de atrasos: mora vigente de $${montoEnMoraMillones.toFixed(1)}M con ${diasAtrasoMax} días de atraso. Cuenta no operable.`;
+  } else {
+    const factorAtrasos = atrasos.factor || 0;
+    const factorTotal = Math.min(factorAtrasos + factorRecurrencia, 1);
+    puntosFinales = Math.round(puntosBase * (1 - factorTotal));
+
+    const partes = [];
+    if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraMillones.toFixed(1)}M, ${diasAtrasoMax} días de atraso)`);
+    if (factorRecurrencia > 0) partes.push(`${Math.round(factorRecurrencia*100)}% por recurrencia (${Math.round(recurrencia.proporcion*100)}% de la deuda de los últimos 24 meses estuvo en mora)`);
+    if (partes.length){
+      motivo = `Penalización aplicada: ${partes.join(" + ")}.`;
+    } else if (d.rechazosSinFondos6a12m > 0){
+      motivo = "Rechazo de cheque por falta de fondos entre 6 y 12 meses: descontado dentro del historial de rechazos.";
+    } else if (d.rechazosSinFondos12a24m > 0){
+      motivo = "Rechazo de cheque por falta de fondos entre 12 y 24 meses: descontado dentro del historial de rechazos, con impacto menor por ya estar superado.";
+    }
+  }
+
+  const categoria = forzadoC2 ? "C2" : categoriaDesdePuntos(puntosFinales);
+
+  const detalle = {
+    situacion: {puntos:pSituacion, max:30, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
+    situacion24m: {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
+    rechazos: {puntos:pRechazos, max:20, label:"Historial de rechazos (24 meses)", desc: explicarRechazos(d)},
+    endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
+    bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
+    deudaVsInflacion: inflacionDisponible
+      ? {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación", desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo), detalleMensual: d.deudaVsInflacion.detalleMensual}
+      : {puntos:null, max:10, label:"Deuda real vs. inflación", noDisponible:true,
+         desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
+  };
+
+  return {
+    puntosBase, puntosFinales, categoria, forzadoC2, motivo, detalle,
+    matrizAtrasos: { montoEnMoraMillones, diasAtrasoMax, tipo: atrasos.tipo, factor: atrasos.factor },
+    matrizRecurrencia: { proporcionEnMora: recurrencia.proporcion, factor: factorRecurrencia },
+    narrativa: construirNarrativa(categoria, puntosFinales, detalle, forzadoC2, motivo)
+  };
+}
+
+/* ---- Resumen narrativo: por qué llegó a esa categoría ---- */
+const NOMBRE_CATEGORIA = {
+  A1: "riesgo muy bajo", A2: "riesgo bajo", B1: "riesgo medio-bajo",
+  B2: "riesgo medio-alto", C1: "riesgo alto", C2: "no operable"
+};
+
+function construirNarrativa(categoria, puntos, detalle, forzadoC2, motivo){
+  const entradas = Object.values(detalle).filter(e => e.puntos !== null);
+  const conPct = entradas.map(e => ({...e, pct: e.puntos / e.max}));
+  const fortaleza = conPct.reduce((a,b) => b.pct > a.pct ? b : a);
+  const debilidad = conPct.reduce((a,b) => b.pct < a.pct ? b : a);
+
+  if (forzadoC2){
+    // Sacamos "historial de rechazos" de la comparación acá: en este caso
+    // vale 0 por definición (es la causa del C2), así que compararlo como
+    // "debilidad" sería tautológico. Mostramos qué hubiera dado el resto.
+    const sinRechazos = conPct.filter(e =>
+      e.label !== "Historial de rechazos (24 meses)" && e.label !== "Deuda real vs. inflación"
+    );
+    const fortalezaSinR = sinRechazos.reduce((a,b) => b.pct > a.pct ? b : a);
+    const debilidadSinR = sinRechazos.reduce((a,b) => b.pct < a.pct ? b : a);
+    return `Se asignó <b>C2 (no operable)</b> de forma directa: ${motivo.charAt(0).toLowerCase() + motivo.slice(1)} Este criterio pisa cualquier otro resultado del cálculo base, que sin este motivo hubiera dado ${puntos_texto(fortalezaSinR, debilidadSinR)}.`;
+  }
+
+  let base = `Con <b>${puntos} puntos sobre 100</b>, el librador quedó en la categoría <b>${categoria}</b> (${NOMBRE_CATEGORIA[categoria]}). `;
+  if (fortaleza.pct === debilidad.pct){
+    base += `Las variables analizadas rindieron de forma pareja, sin un factor que se destaque por encima del resto. `;
+  } else {
+    base += `El factor que más sumó fue <b>${fortaleza.label.toLowerCase()}</b> (${fortaleza.puntos}/${fortaleza.max} pts), mientras que <b>${debilidad.label.toLowerCase()}</b> fue el que más restó (${debilidad.puntos}/${debilidad.max} pts). `;
+  }
+
+  if (motivo){
+    base += `Además, se aplicó una penalización: ${motivo.charAt(0).toLowerCase() + motivo.slice(1)}`;
+  } else {
+    base += `No se registraron rechazos de cheques en los últimos 24 meses, por lo que no hubo penalizaciones adicionales sobre el puntaje base.`;
+  }
+  return base;
+}
+function puntos_texto(fortaleza, debilidad){
+  if (fortaleza.pct === debilidad.pct){
+    return `un resultado parejo entre las cuatro variables analizadas`;
+  }
+  return `un resultado sostenido por ${fortaleza.label.toLowerCase()} y afectado por ${debilidad.label.toLowerCase()}`;
+}
+
+// Aproximación fija de inflación mensual (4%) usada solo para deflactar
+// los datos de demo/simulados — declarada acá arriba porque prepararDatos()
+// la necesita al construir BCRA_DB al cargar la página, antes de llegar a
+// la sección de "Deuda real vs. inflación" más abajo en el archivo.
+const INFLACION_MENSUAL_DEMO_APROX = 0.04;
+
+/* =======================================================
+   DATOS SIMULADOS BCRA (calibrados a los casos de prueba)
+   Cada caso incluye detalle por entidad bancaria e historial
+   de 12 meses (situación y deuda), tal como lo expone gratis
+   la Central de Deudores del BCRA.
+   ======================================================= */
+const BCRA_DB_RAW = {
+  "20000000011": {
+    empresa:"Empresa Demo A", antiguedadCuitAnios:18, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+    entidades:[
+      {nombre:"Banco de la Nación Argentina", situacion:1, monto:2000000, diasAtraso:0},
+      {nombre:"Banco Galicia", situacion:1, monto:1000000, diasAtraso:0}
+    ],
+    historialSituacion:[1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1],
+    historialDeuda:[2.9,3.0,2.9,3.0,3.1,3.0,2.9,3.0,3.1,3.0,2.9,3.0, 2.9,3.0,3.1,3.0,2.9,3.0,3.1,3.0,2.9,3.0,3.0,3.0],
+    historialMontoEnMora:[0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0]
+  },
+  "20000000022": {
+    empresa:"Empresa Demo B", antiguedadCuitAnios:10, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+    entidades:[
+      {nombre:"Banco de la Nación Argentina", situacion:2, monto:6000000, diasAtraso:15},
+      {nombre:"Banco de la Provincia de Buenos Aires", situacion:1, monto:5000000, diasAtraso:0},
+      {nombre:"Banco Macro", situacion:2, monto:4000000, diasAtraso:20}
+    ],
+    historialSituacion:[1,1,1,2,2,2,2,3,3,3,3,3, 3,3,2,2,2,2,2,2,2,2,2,2],
+    historialDeuda:[3,4,5,5,6,7,7,8,8,9,9,9, 9,10,11,12,13,13,14,14,15,15,15,15],
+    historialMontoEnMora:[0,0,0,3.3,4.0,4.7,4.7,5.3,5.3,6.0,6.0,6.0, 6.0,6.7,7.3,8.0,8.7,8.7,9.3,9.3,10.0,10.0,10.0,10.0]
+  },
+  "20000000033": {
+    empresa:"Empresa Demo C", antiguedadCuitAnios:9, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+    entidades:[
+      {nombre:"Banco de la Nación Argentina", situacion:3, monto:9000000, diasAtraso:75},
+      {nombre:"Banco Santander", situacion:2, monto:6000000, diasAtraso:20}
+    ],
+    historialSituacion:[1,1,1,1,1,1,1,1,1,2,2,2, 1,2,2,2,3,3,3,3,3,3,3,3],
+    historialDeuda:[4,5,5,6,6,7,7,8,8,9,9,10, 10,11,12,12,13,13,14,14,15,15,15,15],
+    historialMontoEnMora:[0,0,0,0,0,0,0,0,0,9.0,9.0,10.0, 0,11.0,12.0,12.0,13.0,13.0,14.0,14.0,15.0,15.0,15.0,15.0]
+  },
+  "20000000044": {
+    empresa:"Empresa Demo D", antiguedadCuitAnios:5, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+    entidades:[
+      {nombre:"Banco de la Nación Argentina", situacion:4, monto:15000000, diasAtraso:110},
+      {nombre:"Banco Galicia", situacion:3, monto:10000000, diasAtraso:45},
+      {nombre:"Banco Macro", situacion:4, monto:8000000, diasAtraso:95},
+      {nombre:"Banco Credicoop", situacion:3, monto:7000000, diasAtraso:40}
+    ],
+    historialSituacion:[1,1,1,2,2,2,2,2,2,2,2,2, 2,2,3,3,3,3,4,4,4,4,4,4],
+    historialDeuda:[10,12,14,16,18,20,21,22,23,24,25,25, 25,27,29,31,33,35,36,37,38,39,40,40],
+    historialMontoEnMora:[0,0,0,16.0,18.0,20.0,21.0,22.0,23.0,24.0,25.0,25.0, 25.0,27.0,29.0,31.0,33.0,35.0,36.0,37.0,38.0,39.0,40.0,40.0]
+  },
+  "20000000055": {
+    empresa:"Empresa Demo E", antiguedadCuitAnios:4, rechazosSinFondos6m:1, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0,
+    entidades:[
+      {nombre:"Banco de la Nación Argentina", situacion:4, monto:20000000, diasAtraso:130},
+      {nombre:"Banco Galicia", situacion:4, monto:18000000, diasAtraso:125},
+      {nombre:"Banco Macro", situacion:4, monto:15000000, diasAtraso:120},
+      {nombre:"Banco Credicoop", situacion:3, monto:14000000, diasAtraso:50},
+      {nombre:"Banco Santander", situacion:3, monto:13000000, diasAtraso:45},
+      {nombre:"ICBC", situacion:4, monto:10000000, diasAtraso:115}
+    ],
+    historialSituacion:[1,1,1,1,1,1,1,1,1,1,1,1, 1,1,2,2,3,3,3,4,4,4,4,4],
+    historialDeuda:[15,18,20,23,26,30,33,36,40,44,47,50, 50,55,60,65,70,75,80,83,86,88,90,90],
+    historialMontoEnMora:[0,0,0,0,0,0,0,0,0,0,0,0, 0,0,60.0,65.0,70.0,75.0,80.0,83.0,86.0,88.0,90.0,90.0]
+  }
+};
+
+// Deriva situación / endeudamiento / cantidad de bancos a partir del detalle
+// por entidad, para que el desglose y el puntaje nunca queden desalineados.
+function calcularFactorAjusteEndeudamientoDemo(){
+  const hoy = new Date();
+  const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
+  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
+  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
+  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10);
+  let meses = 0;
+  while (true){
+    const periodoStr = String(anio) + String(mes).padStart(2,"0");
+    if (periodoStr >= periodoHoy) break;
+    meses++;
+    mes++; if (mes > 12){ mes = 1; anio++; }
+  }
+  return Math.pow(1 + INFLACION_MENSUAL_DEMO_APROX, meses);
+}
+
+function prepararDatos(raw){
+  const situacionVigente = Math.max(...raw.entidades.map(e => e.situacion));
+  const endeudamientoMillones = Math.round(raw.entidades.reduce((s,e) => s + e.monto, 0) / 1e6);
+  const deudaVsInflacion = raw.deudaVsInflacion || calcularDeudaVsInflacionDemo(raw.historialDeuda || []);
+  const factorAjusteEndeudamiento = raw.factorAjusteEndeudamiento || calcularFactorAjusteEndeudamientoDemo();
+  return {
+    ...raw,
+    situacion: situacionVigente,
+    endeudamientoMillones,
+    cantidadBancos: raw.entidades.length,
+    deudaVsInflacion,
+    factorAjusteEndeudamiento
+  };
+}
+
+const BCRA_DB = {};
+for (const [cuit, raw] of Object.entries(BCRA_DB_RAW)) BCRA_DB[cuit] = prepararDatos(raw);
+
+/* =======================================================
+   CONEXIÓN REAL AL BCRA — portado del código productivo de
+   OpenCheck (marketplace). Llama directo desde el navegador
+   (sin proxy: la API del BCRA acepta fetch con CORS abierto).
+   Si falla (red/CORS/500), cae al dataset simulado de arriba
+   para que la demo nunca se rompa.
+   ======================================================= */
+const BCRA_DEUDAS_URL = "https://api.bcra.gob.ar/CentralDeDeudores/v1.0/Deudas";
+const BCRA_HISTORICAS_URL = "https://api.bcra.gob.ar/CentralDeDeudores/v1.0/Deudas/Historicas";
+const BCRA_RECHAZADOS_URL = "https://api.bcra.gob.ar/CentralDeDeudores/v1.0/Deudas/ChequesRechazados";
+const BCRA_DENUNCIADOS_URL = "https://api.bcra.gob.ar/cheques/v1.0/denunciados";
+const BCRA_ENTIDADES_URL = "https://api.bcra.gob.ar/cheques/v1.0/entidades";
+
+// Deuda vigente + razón social. 404 = sin deuda informada (no es error).
+async function consultarDeudorBCRA(cuit){
+  const r = await fetch(BCRA_DEUDAS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (r.status === 404) return { ok:true, sinDatos:true, denominacion:null, entidades:[] };
+  if (!r.ok) return { ok:false, error:"HTTP " + r.status };
+  const data = await r.json();
+  if (!data || !data.results) return { ok:false, error:"Sin results" };
+  const periodo = (data.results.periodos || [])[0];
+  const entidades = (periodo ? periodo.entidades : []).map(e => ({
+    nombre: e.entidad, situacion: e.situacion,
+    monto: (e.monto || 0) * 1000,       // BCRA informa en miles de pesos
+    diasAtraso: e.diasAtrasoPago || 0
+  }));
+  return { ok:true, sinDatos:entidades.length===0, denominacion:data.results.denominacion || null, entidades };
+}
+
+// Historial de hasta 24 períodos. Best-effort: si falla, seguimos sin cortar el flujo.
+async function consultarHistorialBCRA(cuit){
+  const r = await fetch(BCRA_HISTORICAS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (r.status === 404) return { ok:true, historialSituacion:[], historialDeuda:[], historialMontoEnMora:[], historialPeriodos:[] };
+  if (!r.ok) return { ok:false };
+  const data = await r.json();
+  if (!data || !data.results) return { ok:false };
+  const periodos = [...(data.results.periodos || [])].sort((a,b) => a.periodo.localeCompare(b.periodo));
+  const historialSituacion = periodos.map(p => Math.max(...p.entidades.map(e => e.situacion), 1));
+  const historialDeuda = periodos.map(p => Number((p.entidades.reduce((s,e) => s + (e.monto||0), 0)/1000).toFixed(1)));
+  // Monto real en mora por período: viene directo de las entidades con
+  // situación>1 de ESE mes — no es una aproximación, es el dato real.
+  const historialMontoEnMora = periodos.map(p => Number((p.entidades.filter(e => e.situacion > 1).reduce((s,e) => s + (e.monto||0), 0)/1000).toFixed(1)));
+  const historialPeriodos = periodos.map(p => p.periodo); // "AAAAMM", para alinear con la inflación
+  return { ok:true, historialSituacion, historialDeuda, historialMontoEnMora, historialPeriodos };
+}
+
+// Cheques rechazados, agrupados por causal/entidad, con bucket de recencia.
+async function consultarRechazadosBCRA(cuit, ahora = new Date()){
+  const r = await fetch(BCRA_RECHAZADOS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (r.status === 404) return { ok:true, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0 };
+  if (!r.ok) return { ok:false, error:"HTTP " + r.status };
+  const data = await r.json();
+  if (!data || !data.results) return { ok:false, error:"Sin results" };
+
+  // "Sin fondos" es la señal real de insolvencia. Cualquier otra causal
+  // (defectos formales, error de firma, etc.) es mayormente administrativa,
+  // no financiera — la tratamos aparte, con mucho menos peso.
+  let rechazosSinFondos6m=0, rechazosSinFondos6a12m=0, rechazosSinFondos12a24m=0;
+  let rechazosDefectosFormales6m=0, rechazosDefectosFormales6a12m=0, rechazosDefectosFormales12a24m=0;
+
+  for (const causalGrupo of data.results.causales || []){
+    const esSinFondos = /sin\s*fondos/i.test(causalGrupo.causal || "");
+    for (const entidad of causalGrupo.entidades || []){
+      for (const cheque of entidad.detalle || []){
+        const fecha = new Date(cheque.fechaRechazo);
+        const meses = (ahora.getFullYear()-fecha.getFullYear())*12 + (ahora.getMonth()-fecha.getMonth());
+        if (esSinFondos){
+          if (meses <= 6) rechazosSinFondos6m++;
+          else if (meses <= 12) rechazosSinFondos6a12m++;
+          else if (meses <= 24) rechazosSinFondos12a24m++;
+        } else {
+          if (meses <= 6) rechazosDefectosFormales6m++;
+          else if (meses <= 12) rechazosDefectosFormales6a12m++;
+          else if (meses <= 24) rechazosDefectosFormales12a24m++;
+        }
+      }
+    }
+  }
+  return { ok:true, rechazosSinFondos6m, rechazosSinFondos6a12m, rechazosSinFondos12a24m, rechazosDefectosFormales6m, rechazosDefectosFormales6a12m, rechazosDefectosFormales12a24m };
+}
+
+// Cheque denunciado. IMPORTANTE (confirmado con el código real de OpenCheck):
+// la API devuelve results como ARRAY, no un booleano — denunciado = results.length > 0.
+async function consultarChequeDenunciadoBCRA(codigoEntidad, numeroCheque){
+  const r = await fetch(`${BCRA_DENUNCIADOS_URL}/${codigoEntidad}/${numeroCheque}`, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (r.status === 404) return { ok:true, denunciado:false };
+  if (!r.ok) return { ok:false, error:"HTTP " + r.status };
+  const data = await r.json();
+  const denunciado = !!(data && data.results && data.results.length > 0);
+  return { ok:true, denunciado, motivo: denunciado ? "Este cheque figura denunciado en el registro público del BCRA." : null };
+}
+
+// Orquesta las 3 llamadas y arma el objeto `datos` en el mismo formato
+// que usa calcularScore(), idéntico al de BCRA_DB. Lanza si algo sale mal;
+// el llamador decide si cae al dataset simulado.
+async function construirDatosLibradorReal(cuit){
+  const [deuda, rechazos] = await Promise.all([
+    consultarDeudorBCRA(cuit),
+    consultarRechazadosBCRA(cuit)
+  ]);
+  if (!deuda.ok) throw new Error(deuda.error || "Fallo consultando deuda BCRA");
+  if (!rechazos.ok) throw new Error(rechazos.error || "Fallo consultando rechazados BCRA");
+
+  // El historial es best-effort: si falla, seguimos con un solo punto (el vigente)
+  // en vez de cortar toda la consulta.
+  let historial = { historialSituacion:[], historialDeuda:[], historialMontoEnMora:[] };
+  try {
+    const h = await consultarHistorialBCRA(cuit);
+    if (h.ok && h.historialSituacion.length) historial = h;
+  } catch (e) { /* silencioso: el historial es un complemento, no un bloqueante */ }
+
+  if (historial.historialSituacion.length === 0){
+    const situacionVigente = deuda.entidades.length ? Math.max(...deuda.entidades.map(e=>e.situacion)) : 1;
+    const deudaVigente = deuda.entidades.reduce((s,e)=>s+e.monto,0)/1e6;
+    const moraVigente = deuda.entidades.filter(e=>e.situacion>1).reduce((s,e)=>s+e.monto,0)/1e6;
+    const hoyPeriodo = new Date().toISOString().slice(0,7).replace("-","");
+    historial = {
+      historialSituacion:[situacionVigente],
+      historialDeuda:[Number(deudaVigente.toFixed(1))],
+      historialMontoEnMora:[Number(moraVigente.toFixed(1))],
+      historialPeriodos:[hoyPeriodo]
+    };
+  }
+
+  // Deuda real vs. inflación: best-effort con la serie real del BCRA. Si
+  // falla (o falta algún mes), calcularScore lo detecta (disponible:false)
+  // y redistribuye el peso de esta variable en vez de romper la consulta.
+  let deudaVsInflacion = { disponible:false };
+  let factorAjusteEndeudamiento = 1;
+  try {
+    const inflacionPorPeriodo = await obtenerInflacionMensualBCRA();
+    deudaVsInflacion = calcularDeudaRealVsInflacion(historial.historialDeuda, historial.historialPeriodos, inflacionPorPeriodo);
+    if (!deudaVsInflacion.disponible){
+      console.warn("[OpenCheck Score] Inflación OK pero no se pudo alinear con historialPeriodos:", historial.historialPeriodos, "vs mapa:", inflacionPorPeriodo);
+    }
+    factorAjusteEndeudamiento = calcularFactorAjusteEndeudamiento(inflacionPorPeriodo);
+  } catch (e) {
+    console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", e.message);
+  }
+
+  return prepararDatos({
+    empresa: deuda.denominacion || ("Librador " + cuit),
+    antiguedadCuitAnios: null, // no disponible en las APIs del BCRA — pendiente AFIP/ARCA
+    rechazosSinFondos6m: rechazos.rechazosSinFondos6m,
+    rechazosSinFondos6a12m: rechazos.rechazosSinFondos6a12m,
+    rechazosSinFondos12a24m: rechazos.rechazosSinFondos12a24m,
+    rechazosDefectosFormales6m: rechazos.rechazosDefectosFormales6m,
+    rechazosDefectosFormales6a12m: rechazos.rechazosDefectosFormales6a12m,
+    rechazosDefectosFormales12a24m: rechazos.rechazosDefectosFormales12a24m,
+    entidades: deuda.entidades,
+    historialSituacion: historial.historialSituacion,
+    historialDeuda: historial.historialDeuda,
+    historialMontoEnMora: historial.historialMontoEnMora,
+    deudaVsInflacion,
+    factorAjusteEndeudamiento
+  });
+}
+
+// Simula GET /cheques/v1.0/entidades — cuando se conecte el backend real,
+// este listado se reemplaza por la respuesta viva de esa API.
+const ENTIDADES_CHEQUES = [
+  {codigo:11, nombre:"Banco de la Nación Argentina"},
+  {codigo:7,  nombre:"Banco Galicia"},
+  {codigo:285,nombre:"Banco Macro"},
+  {codigo:72, nombre:"Banco Santander"},
+  {codigo:191,nombre:"Banco Credicoop"},
+  {codigo:14, nombre:"Banco de la Provincia de Buenos Aires"},
+  {codigo:17, nombre:"BBVA Argentina"},
+  {codigo:97, nombre:"ICBC"},
+  {codigo:27, nombre:"Banco Supervielle"},
+  {codigo:338,nombre:"Banco Patagonia"}
+];
+const NOMBRES_BANCOS = ENTIDADES_CHEQUES.map(e => e.nombre);
+
+// Intenta traer el listado real de entidades; si falla, se queda con el de arriba.
+async function actualizarListadoEntidadesReal(){
+  try {
+    const r = await fetch(BCRA_ENTIDADES_URL, { method:"GET", headers:{ "Accept":"application/json" } });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data || !Array.isArray(data.results) || !data.results.length) return;
+    ENTIDADES_CHEQUES.length = 0;
+    data.results.forEach(e => ENTIDADES_CHEQUES.push({ codigo:e.codigoEntidad, nombre:e.denominacion }));
+    poblarSelectoresBanco();
+  } catch (e) { /* silencioso: seguimos con el listado local */ }
+}
+
+// Clave compuesta banco+número, igual que pide la API real
+// (GET /cheques/v1.0/denunciados/{codigoEntidad}/{numeroCheque}).
+const DENUNCIAS_DB = {
+  "11_00021458": { denunciado:true, motivo:"Extravío denunciado por el titular el 03/06/2026." },
+  "7_00099210": { denunciado:true, motivo:"Robo denunciado — oposición al pago vigente." },
+  "285_00045012": { denunciado:false }
+};
+
+// Genera datos plausibles y deterministicos para un CUIT que no está en la base simulada
+function generarDatosSimulados(cuitDigits){
+  let seed = 0;
+  for (let i=0; i<cuitDigits.length; i++) seed += cuitDigits.charCodeAt(i) * (i+1);
+  const r = (n) => (seed * (n+7)) % 97 / 97;
+
+  const situacionBase = 1 + Math.floor(r(1) * 6);
+  const endeudamientoTotal = Math.round(r(2) * 120) * 1e6;
+  const nBancos = 1 + Math.floor(r(3) * 6);
+  const antiguedadCuitAnios = Math.round(r(4) * 22);
+  // "Sin fondos" (insolvencia real) es más raro que "defectos formales"
+  // (error administrativo) en la generación aleatoria de demo.
+  const rechazosSinFondos6m = r(5) > 0.94 ? 1 : 0;
+  const rechazosSinFondos6a12m = r(6) > 0.90 ? 1 : 0;
+  const rechazosSinFondos12a24m = r(7) > 0.85 ? 1 : 0;
+  const rechazosDefectosFormales6m = r(15) > 0.88 ? 1 : 0;
+  const rechazosDefectosFormales6a12m = r(16) > 0.85 ? 1 : 0;
+  const rechazosDefectosFormales12a24m = r(17) > 0.80 ? 1 : 0;
+
+  // Distribuye el endeudamiento entre entidades con pesos decrecientes
+  const pesos = Array.from({length:nBancos}, (_,i) => 1/(i+1));
+  const pesoTotal = pesos.reduce((a,b)=>a+b,0);
+  const entidades = pesos.map((p,i) => {
+    const situacionEntidad = Math.max(1, Math.min(6, situacionBase - (i===0?0:Math.floor(r(8+i)*2))));
+    return {
+      nombre: NOMBRES_BANCOS[i % NOMBRES_BANCOS.length],
+      situacion: situacionEntidad,
+      monto: Math.round(endeudamientoTotal * (p/pesoTotal)),
+      diasAtraso: situacionEntidad === 1 ? 0 : Math.round(situacionEntidad * 22 + r(20+i)*15)
+    };
+  });
+
+  // Historial de 24 meses (el máximo que expone gratis la API del BCRA):
+  // parte de un valor inicial y converge hacia el actual
+  const tendenciaSube = r(30) > 0.5;
+  const historialSituacion = [];
+  const historialDeuda = [];
+  for (let i=0; i<24; i++){
+    const progreso = i/23;
+    const sitInicio = tendenciaSube ? Math.max(1, situacionBase - 2) : Math.min(6, situacionBase + 1);
+    historialSituacion.push(Math.round(sitInicio + (situacionBase - sitInicio) * progreso));
+    const deudaInicioM = (endeudamientoTotal/1e6) * (tendenciaSube ? 0.35 : 1.25);
+    historialDeuda.push(Number((deudaInicioM + ((endeudamientoTotal/1e6) - deudaInicioM) * progreso).toFixed(1)));
+  }
+  historialSituacion[23] = situacionBase;
+  historialDeuda[23] = Number((endeudamientoTotal/1e6).toFixed(1));
+
+  // Aproxima el monto en mora de cada mes histórico con la misma proporción
+  // de deuda-en-mora que tiene hoy (no tenemos el detalle real mes a mes
+  // para CUITs fuera de la base simulada; con la API real esto viene exacto).
+  const totalHoy = entidades.reduce((s,e) => s + e.monto, 0);
+  const proporcionEnMoraHoy = totalHoy > 0
+    ? entidades.filter(e => e.situacion > 1).reduce((s,e) => s + e.monto, 0) / totalHoy
+    : 0;
+  const historialMontoEnMora = historialSituacion.map((sit, i) =>
+    sit > 1 ? Number((historialDeuda[i] * proporcionEnMoraHoy).toFixed(1)) : 0
+  );
+
+  return prepararDatos({
+    empresa: "Librador " + cuitDigits.slice(0,2) + "-" + cuitDigits.slice(2,4) + "…",
+    antiguedadCuitAnios, rechazosSinFondos6m, rechazosSinFondos6a12m, rechazosSinFondos12a24m,
+    rechazosDefectosFormales6m, rechazosDefectosFormales6a12m, rechazosDefectosFormales12a24m,
+    entidades, historialSituacion, historialDeuda, historialMontoEnMora
+  });
+}
+
+function calcularConcentracionBancaria(entidades){
+  const total = entidades.reduce((s,e) => s + e.monto, 0);
+  if (total === 0) return 0;
+  const mayor = Math.max(...entidades.map(e => e.monto));
+  return Math.round((mayor/total) * 100);
+}
+
+// Pendiente por cuadrados mínimos sobre TODA la serie, expresada como
+// cambio total relativo a lo largo del período (no solo primer vs último
+// punto — eso es muy sensible a un repunte o caída puntual reciente).
+// Reutilizada tanto para tendencia nominal como para tendencia real
+// (deflactada por inflación).
+function calcularPendienteRelativa(serie){
+  const n = serie.length;
+  if (n < 2) return 0;
+  const promedioX = (n - 1) / 2;
+  const promedioY = serie.reduce((a,b) => a+b, 0) / n;
+  if (promedioY === 0) return 0;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++){
+    num += (i - promedioX) * (serie[i] - promedioY);
+    den += (i - promedioX) ** 2;
+  }
+  const pendiente = den === 0 ? 0 : num / den;
+  return (pendiente * (n - 1)) / promedioY;
+}
+
+function calcularTendenciaDeuda(historialDeuda){
+  const cambio = calcularPendienteRelativa(historialDeuda);
+  if (cambio > 0.10) return "Subiendo";
+  if (cambio < -0.10) return "Bajando";
+  return "Estable";
+}
+
+/* =======================================================
+   DEUDA REAL VS. INFLACIÓN
+   Deflacta el historial de deuda con la inflación mensual real publicada
+   por el BCRA (API de Estadísticas Monetarias) y calcula si la deuda EN
+   TÉRMINOS REALES sube, baja o se mantiene — no solo en pesos nominales,
+   que en Argentina casi siempre "suben" aunque la deuda real se achique.
+   ======================================================= */
+const BCRA_MONETARIAS_URL = "https://api.bcra.gob.ar/estadisticas/v4.0/monetarias";
+let cacheInflacionMensualBCRA = null; // { "202406": 4.2, ... } valores en % mensual
+
+// Busca el ID de la variable "Inflación mensual" dinámicamente en vez de
+// hardcodear un número — el BCRA podría reasignar IDs entre versiones.
+async function obtenerInflacionMensualBCRA(){
+  if (cacheInflacionMensualBCRA) return cacheInflacionMensualBCRA;
+
+  const rVars = await fetch(BCRA_MONETARIAS_URL, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (!rVars.ok){
+    console.warn("[OpenCheck Score] Falló GET", BCRA_MONETARIAS_URL, "status:", rVars.status);
+    throw new Error("No se pudo listar las variables monetarias del BCRA (HTTP " + rVars.status + ")");
+  }
+  const dataVars = await rVars.json();
+  const listado = dataVars.results || [];
+  const variable = listado.find(v => /inflaci[oó]n\s*mensual/i.test(v.descripcion || ""));
+  if (!variable){
+    console.warn("[OpenCheck Score] No matcheó ninguna variable con /inflaci[oó]n\\s*mensual/i.");
+    console.warn("[OpenCheck Score] Listado completo de descripciones recibidas:", listado.map(v => `#${v.idVariable}: ${v.descripcion}`));
+    throw new Error("No se encontró la variable 'Inflación mensual' en el listado del BCRA");
+  }
+  console.info("[OpenCheck Score] Variable de inflación encontrada:", variable.idVariable, variable.descripcion);
+
+  const hoy = new Date();
+  const hasta = hoy.toISOString().slice(0,10);
+  const desdeDate = new Date(hoy); desdeDate.setMonth(desdeDate.getMonth() - 25);
+  const desde = desdeDate.toISOString().slice(0,10);
+
+  const urlSerie = `${BCRA_MONETARIAS_URL}/${variable.idVariable}?desde=${desde}&hasta=${hasta}&limit=100`;
+  console.info("[OpenCheck Score] Pidiendo serie de inflación:", urlSerie);
+  const rSerie = await fetch(urlSerie, { method:"GET", headers:{ "Accept":"application/json" } });
+  if (!rSerie.ok){
+    console.warn("[OpenCheck Score] Falló GET", urlSerie, "status:", rSerie.status);
+    throw new Error("No se pudo obtener la serie de inflación mensual del BCRA (HTTP " + rSerie.status + ")");
+  }
+  const dataSerie = await rSerie.json();
+  console.info("[OpenCheck Score] Metadata de la respuesta (resultset):", dataSerie.metadata);
+
+  // La respuesta viene anidada: results[] son las variables consultadas
+  // (una sola, acá), y CADA UNA tiene un array `detalle` con los puntos
+  // reales {fecha, valor}. No es una lista plana de puntos.
+  const puntos = (dataSerie.results || []).flatMap(v => v.detalle || []);
+  console.info("[OpenCheck Score] Puntos reales de inflación recibidos:", puntos.length, "Primeros 3:", puntos.slice(0,3));
+
+  const mapa = {};
+  for (const punto of puntos){
+    const periodo = (punto.fecha || "").slice(0,7).replace("-", ""); // "2026-06-30" -> "202606"
+    if (periodo) mapa[periodo] = punto.valor; // % mensual
+  }
+  cacheInflacionMensualBCRA = mapa;
+  console.info("[OpenCheck Score] Mapa de inflación por período construido:", mapa);
+  return mapa;
+}
+
+// Deflacta historialDeuda mes a mes usando la inflación real, y devuelve
+// el cambio relativo total de la deuda YA EN TÉRMINOS REALES.
+// Cuánto acumuló la inflación desde ENDEUDAMIENTO_PERIODO_BASE hasta hoy,
+// usando la misma serie mensual que ya usamos para "deuda vs. inflación".
+// Reutilizamos ese mapa en vez de pedirlo de nuevo.
+function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
+  const hoy = new Date();
+  const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
+  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
+
+  let factor = 1;
+  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
+  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10); // 1-12
+  while (true){
+    const periodoStr = String(anio) + String(mes).padStart(2,"0");
+    if (periodoStr >= periodoHoy) break;
+    const infl = inflacionPorPeriodo[periodoStr];
+    if (infl !== undefined) factor *= (1 + infl/100);
+    mes++;
+    if (mes > 12){ mes = 1; anio++; }
+  }
+  return factor;
+}
+
+function calcularDeudaRealVsInflacion(historialDeuda, historialPeriodos, inflacionPorPeriodo){
+  const n = historialDeuda.length;
+  if (!n || !historialPeriodos || historialPeriodos.length !== n) return { disponible:false };
+
+  const indices = new Array(n);
+  indices[n-1] = 1; // el mes más reciente es la base (índice = 1)
+  for (let i = n-2; i >= 0; i--){
+    const infl = inflacionPorPeriodo[historialPeriodos[i+1]];
+    if (infl === undefined) return { disponible:false }; // falta un mes: no deflactamos a medias
+    indices[i] = indices[i+1] * (1 + infl/100);
+  }
+  // indices[i] = cuánto crecieron los precios entre el mes i y hoy.
+  // Para expresar el monto de ese mes "en pesos de hoy" hay que MULTIPLICAR
+  // por ese factor (no dividir) — un monto viejo, ajustado por la inflación
+  // que pasó desde entonces, se ve más grande en pesos de hoy si se mantuvo
+  // parejo con los precios, y más chico si no llegó a acompañarlos.
+  const deudaReal = historialDeuda.map((v,i) => v * indices[i]);
+
+  const detalleMensual = historialPeriodos.map((periodo, i) => ({
+    periodo,
+    inflacionMensual: inflacionPorPeriodo[periodo] ?? null,
+    indiceAcumulado: Number(indices[i].toFixed(3)),
+    deudaNominal: historialDeuda[i],
+    deudaReal: Number(deudaReal[i].toFixed(2))
+  }));
+
+  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal), detalleMensual };
+}
+
+// Solo para datos de demo/simulados (sin conexión real a la API de
+// inflación): asume una inflación mensual constante aproximada, para que
+// la demo funcione siempre sin depender de la red.
+function calcularDeudaVsInflacionDemo(historialDeuda){
+  const n = historialDeuda.length;
+  if (!n) return { disponible:false };
+  const indices = new Array(n);
+  indices[n-1] = 1;
+  for (let i = n-2; i >= 0; i--) indices[i] = indices[i+1] * (1 + INFLACION_MENSUAL_DEMO_APROX);
+  const deudaReal = historialDeuda.map((v,i) => v * indices[i]);
+
+  const detalleMensual = historialDeuda.map((v,i) => ({
+    periodo: i === n-1 ? "Este mes" : `Hace ${n-1-i} mes${n-1-i===1?"":"es"}`,
+    inflacionMensual: INFLACION_MENSUAL_DEMO_APROX * 100,
+    indiceAcumulado: Number(indices[i].toFixed(3)),
+    deudaNominal: v,
+    deudaReal: Number(deudaReal[i].toFixed(2))
+  }));
+
+  return { disponible:true, cambioTotalRelativo: calcularPendienteRelativa(deudaReal), detalleMensual };
+}
+
+function scoreDeudaVsInflacion(cambioRealTotal){
+  // 10 pts: compara el crecimiento de la deuda YA DESCONTADA la inflación.
+  // 5 rangos en cuartiles de 25% (0-25-50-75-100%), interpolados linealmente
+  // dentro de cada cuartil, más un quinto tramo plano en 0 para todo lo que
+  // supere el 100% de crecimiento real.
+  const pct = cambioRealTotal * 100;
+  const puntos = [
+    { x: 0,   y: 10 },
+    { x: 25,  y: 7.5 },
+    { x: 50,  y: 5 },
+    { x: 75,  y: 2.5 },
+    { x: 100, y: 0 }
+  ];
+  if (pct <= puntos[0].x) return puntos[0].y;
+  if (pct >= puntos[puntos.length-1].x) return puntos[puntos.length-1].y; // >100%: quinto tramo, plano en 0
+  for (let i = 0; i < puntos.length - 1; i++){
+    const a = puntos[i], b = puntos[i+1];
+    if (pct >= a.x && pct <= b.x){
+      const t = (pct - a.x) / (b.x - a.x);
+      return Math.round((a.y + t * (b.y - a.y)) * 10) / 10;
+    }
+  }
+  return 0;
+}
+
+function explicarDeudaVsInflacion(cambioRealTotal){
+  // Piso solo visual: la métrica es una proyección de tendencia (regresión),
+  // no un simple "% de cambio punta a punta", así que puede matemáticamente
+  // superar -100% — pero mostrar "-120%" es confuso, así que topeamos el
+  // texto en -100% ("se redujo a una fracción mínima"). El puntaje no cambia:
+  // cualquier valor ≤0% ya da el máximo de 10 pts.
+  const pctReal = cambioRealTotal * 100;
+  const pct = Math.round(Math.max(pctReal, -100));
+  if (cambioRealTotal <= -1) return `La deuda, ya descontada la inflación, se redujo a una fracción mínima en los últimos 24 meses: no está creciendo por encima de los precios.`;
+  if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios.`;
+  if (cambioRealTotal <= 0.25) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: dentro de un rango normal, puede obedecer a una línea de inversión productiva.`;
+  if (cambioRealTotal <= 0.50) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: empieza a estar por encima de lo esperable, vale la pena monitorear.`;
+  if (cambioRealTotal <= 0.75) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: bastante por encima de la inflación, señal a revisar.`;
+  return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: muy por encima de la inflación, señal de alerta.`;
+}
+
+/* =======================================================
+   ESTADO DE LA APP
+   ======================================================= */
+const state = {
+  user: null,
+  queriesLimit: 10,
+  queriesUsed: 0,
+  history: []
+};
+
+function limpiarCuit(v){ return (v || "").replace(/\D/g, ""); }
+function formatearCuit(v){
+  const d = limpiarCuit(v).slice(0,11);
+  if (d.length <= 2) return d;
+  if (d.length <= 10) return d.slice(0,2) + "-" + d.slice(2);
+  return d.slice(0,2) + "-" + d.slice(2,10) + "-" + d.slice(10);
+}
+function mascaraCuitInput(el){
+  el.addEventListener("input", () => {
+    const pos = el.selectionStart;
+    const before = el.value.length;
+    el.value = formatearCuit(el.value);
+    const after = el.value.length;
+    el.selectionStart = el.selectionEnd = Math.max(0, pos + (after-before));
+  });
+}
+mascaraCuitInput(document.getElementById("reg-cuit"));
+mascaraCuitInput(document.getElementById("consulta-cuit"));
+document.getElementById("consulta-cuit").addEventListener("input", previsualizarRazonSocial);
+
+function ipSimulada(){
+  return "190.191." + Math.floor(Math.random()*255) + "." + Math.floor(Math.random()*255);
+}
+
+function mostrarToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ---- Navegación ---- */
+function irA(pantalla){
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("screen-" + pantalla).classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.nav === pantalla));
+  if (pantalla === "historial") renderHistorial();
+  if (pantalla === "cuenta") renderCuenta();
+  if (pantalla === "paywall") renderPaywall();
+  if (pantalla === "home" && state.user){
+    const mesActual = new Date().toISOString().slice(0,7);
+    const usadas = state.user.mes_actual === mesActual ? (state.user.consultas_usadas_mes || 0) : 0;
+    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - usadas);
+  }
+  window.scrollTo(0,0);
+}
+
+/* ---- Registro ---- */
+let tipoPersona = "fisica";
+function setTipoPersona(tipo){
+  tipoPersona = tipo;
+  document.getElementById("seg-fisica").classList.toggle("active", tipo === "fisica");
+  document.getElementById("seg-juridica").classList.toggle("active", tipo === "juridica");
+  const lblNombre = document.getElementById("lbl-nombre");
+  const lblCuit = document.getElementById("lbl-cuit");
+  const inputNombre = document.getElementById("reg-nombre");
+  const hintCuit = document.getElementById("hint-cuit");
+  if (tipo === "juridica"){
+    lblNombre.textContent = "Razón social";
+    inputNombre.placeholder = "Ej: Mi Empresa S.A.";
+    lblCuit.textContent = "CUIT";
+    hintCuit.textContent = "CUIT de la empresa, para verificar tu identidad como usuario registrado.";
+  } else {
+    lblNombre.textContent = "Nombre y apellido";
+    inputNombre.placeholder = "Ej: Juan Pérez";
+    lblCuit.textContent = "CUIT / DNI";
+    hintCuit.textContent = "Usamos esto para verificar tu identidad como usuario, no para calificarte a vos.";
+  }
+}
+
+const tcCheckbox = document.getElementById("reg-tc");
+const btnRegistrar = document.getElementById("btn-registrar");
+tcCheckbox.addEventListener("change", () => {
+  btnRegistrar.disabled = !tcCheckbox.checked;
+  const meta = document.getElementById("tc-meta");
+  if (tcCheckbox.checked){
+    meta.style.display = "block";
+    meta.textContent = "Términos v1.0 aceptados · " + new Date().toLocaleString("es-AR");
+  } else {
+    meta.style.display = "none";
+  }
+});
+
+btnRegistrar.addEventListener("click", async () => {
+  const nombre = document.getElementById("reg-nombre").value.trim();
+  const email = document.getElementById("reg-email").value.trim();
+  const cuit = document.getElementById("reg-cuit").value.trim();
+  const password = document.getElementById("reg-password").value;
+  if (!nombre || !email || limpiarCuit(cuit).length < 10){
+    mostrarToast("Completá todos los campos para continuar");
+    return;
+  }
+  if (!password || password.length < 6){
+    mostrarToast("La contraseña necesita al menos 6 caracteres");
+    return;
+  }
+
+  btnRegistrar.disabled = true;
+  btnRegistrar.textContent = "Creando cuenta…";
+
+  try {
+    let { data: authData, error: authError } = await supabaseClient.auth.signUp({ email, password });
+
+    if (authError && /already registered|already exists/i.test(authError.message || "")){
+      // Usuario "fantasma": existe en auth pero puede no tener perfil
+      // (por ejemplo, si antes quedó a mitad de camino esperando
+      // confirmación por mail). Probamos loguearlo con la misma
+      // contraseña que acaba de tipear, y si no tiene perfil, se lo
+      // creamos ahora en vez de dejarlo trabado.
+      const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (loginError) throw new Error("Ese email ya está registrado, pero con otra contraseña. Iniciá sesión normalmente o usá otro email.");
+      authData = { user: loginData.user, session: loginData.session };
+      authError = null;
+    } else if (authError){
+      throw authError;
+    }
+
+    if (!authData.session){
+      // El proyecto tiene "Confirm email" activado: no hay sesión todavía,
+      // hay que confirmar por mail antes de poder loguearse.
+      mostrarToast("Te mandamos un email para confirmar la cuenta. Confirmalo y volvé a iniciar sesión.");
+      btnRegistrar.disabled = false;
+      btnRegistrar.textContent = "Crear cuenta";
+      irA("login");
+      return;
+    }
+
+    let perfil = await obtenerPerfilUsuario();
+    if (!perfil){
+      perfil = await crearPerfilUsuario({
+        authUserId: authData.user.id, nombre, email, cuitDni: cuit, tipoPersona
+      });
+      await registrarAceptacionTC(perfil.id);
+    }
+
+    state.user = perfil;
+    document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
+    mostrarToast("Cuenta creada — bienvenido/a a OpenCheck Score");
+    irA("home");
+  } catch (e){
+    mostrarToast("No pudimos crear la cuenta: " + e.message);
+  } finally {
+    btnRegistrar.disabled = false;
+    btnRegistrar.textContent = "Crear cuenta";
+  }
+});
+
+async function iniciarSesion(){
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  if (!email || !password){
+    mostrarToast("Completá email y contraseña");
+    return;
+  }
+  const btn = document.getElementById("btn-login");
+  btn.disabled = true;
+  btn.textContent = "Entrando…";
+  try {
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    const perfil = await obtenerPerfilUsuario();
+    if (!perfil) throw new Error("No encontramos tu perfil. Probá registrarte de nuevo.");
+    state.user = perfil;
+    document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
+    mostrarToast("¡Hola de nuevo, " + perfil.nombre.split(" ")[0] + "!");
+    irA("home");
+    verificarConfirmacionesPendientes();
+  } catch (e){
+    mostrarToast("No pudimos iniciar sesión: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Entrar";
+  }
+}
+
+async function cerrarSesion(){
+  await supabaseClient.auth.signOut();
+  state.user = null;
+  mostrarToast("Sesión cerrada");
+  irA("registro");
+}
+
+// Al cargar la página: si ya hay una sesión activa (Supabase la persiste
+// sola entre visitas), saltamos registro/login directo a Inicio.
+async function cargarSesionExistente(){
+  const perfil = await obtenerPerfilUsuario();
+  if (perfil){
+    state.user = perfil;
+    document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
+    irA("home");
+    verificarConfirmacionesPendientes();
+  }
+}
+cargarSesionExistente();
+
+/* ---- Consulta CUIT ---- */
+let razonSocialTimeout = null;
+
+function previsualizarRazonSocial(){
+  const el = document.getElementById("consulta-cuit");
+  const preview = document.getElementById("razon-social-preview");
+  const digits = limpiarCuit(el.value);
+
+  clearTimeout(razonSocialTimeout);
+
+  if (digits.length !== 11){
+    preview.className = "razon-social-preview";
+    preview.innerHTML = "";
+    return;
+  }
+
+  preview.className = "razon-social-preview show rs-loading";
+  preview.innerHTML = "Buscando razón social en BCRA…";
+
+  razonSocialTimeout = setTimeout(async () => {
+    // Chequeo de carrera: si el usuario ya cambió el CUIT, este resultado quedó viejo
+    if (limpiarCuit(document.getElementById("consulta-cuit").value) !== digits) return;
+
+    try {
+      const real = await consultarDeudorBCRA(digits);
+      if (limpiarCuit(document.getElementById("consulta-cuit").value) !== digits) return;
+      if (real.ok && real.denominacion){
+        preview.className = "razon-social-preview show rs-found";
+        preview.innerHTML = `✓ ${real.denominacion} <span class="fuente-badge fuente-real">API BCRA real</span>`;
+        return;
+      }
+      if (real.ok && real.sinDatos){
+        preview.className = "razon-social-preview show rs-unknown";
+        preview.innerHTML = "No encontramos una razón social asociada en BCRA. Puede no tener antecedentes financieros informados. <span class=\"fuente-badge fuente-real\">API BCRA real</span>";
+        return;
+      }
+      throw new Error(real.error || "Respuesta inesperada");
+    } catch (e){
+      // Fallback: dataset simulado (sin conexión real, CORS, o error de red)
+      const datos = BCRA_DB[digits];
+      if (datos){
+        preview.className = "razon-social-preview show rs-found";
+        preview.innerHTML = `✓ ${datos.empresa} <span class="fuente-badge fuente-demo">Demo — sin conexión</span>`;
+      } else {
+        preview.className = "razon-social-preview show rs-unknown";
+        preview.innerHTML = "No pudimos consultar al BCRA en este momento. <span class=\"fuente-badge fuente-demo\">Demo — sin conexión</span>";
+      }
+    }
+  }, 350);
+}
+
+function setCuit(valor){
+  document.getElementById("consulta-cuit").value = formatearCuit(valor);
+  previsualizarRazonSocial();
+}
+
+function poblarSelectoresBanco(){
+  const opciones = ENTIDADES_CHEQUES.map(e => `<option value="${e.codigo}">${e.nombre}</option>`).join("");
+  document.getElementById("consulta-banco-cheque").innerHTML = opciones;
+  document.getElementById("denuncia-banco").innerHTML = opciones;
+}
+poblarSelectoresBanco();
+actualizarListadoEntidadesReal();
+
+function buscarDenuncia(codigoEntidad, numero){
+  if (!numero || !codigoEntidad) return null;
+  const key = `${codigoEntidad}_${numero.trim().padStart(8, "0")}`;
+  const info = DENUNCIAS_DB[key];
+  return info || { denunciado:false };
+}
+
+async function consultarCuit(){
+  const raw = document.getElementById("consulta-cuit").value;
+  const numeroCheque = document.getElementById("consulta-numero-cheque").value.trim();
+  const bancoCheque = document.getElementById("consulta-banco-cheque").value;
+  const fechaVencimiento = document.getElementById("consulta-fecha-vencimiento").value;
+  const digits = limpiarCuit(raw);
+  if (digits.length !== 11){
+    mostrarToast(digits.length === 0 ? "Ingresá un CUIT" : `El CUIT debe tener 11 dígitos exactos (tiene ${digits.length})`);
+    return;
+  }
+  if (numeroCheque && !fechaVencimiento){
+    mostrarToast("Si cargás número de cheque, necesitamos también la fecha de vencimiento.");
+    return;
+  }
+  const mesActual = new Date().toISOString().slice(0,7);
+  const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
+  if (state.user && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
+    irA("cuenta");
+    return;
+  }
+
+  const btn = document.getElementById("btn-consultar");
+  btn.disabled = true;
+  btn.textContent = "Consultando BCRA…";
+
+  let datos, fuente;
+  try {
+    datos = await construirDatosLibradorReal(digits);
+    fuente = "real";
+  } catch (e) {
+    datos = BCRA_DB[digits] || generarDatosSimulados(digits);
+    fuente = "demo";
+  }
+
+  let chequeInfo = null;
+  if (numeroCheque){
+    try {
+      const real = await consultarChequeDenunciadoBCRA(bancoCheque, numeroCheque);
+      if (!real.ok) throw new Error(real.error);
+      chequeInfo = real;
+    } catch (e) {
+      chequeInfo = buscarDenuncia(bancoCheque, numeroCheque);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Consultar score";
+
+  const resultado = calcularScore(datos);
+
+  if (state.user){
+    state.user = await incrementarConsultasUsadas(state.user);
+    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    await registrarConsulta({
+      usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
+      categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
+      numeroCheque: numeroCheque || null, bancoCheque: numeroCheque ? bancoCheque : null,
+      chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null,
+      fechaVencimiento: document.getElementById("consulta-fecha-vencimiento").value || null
+    });
+  }
+
+  mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente);
+  irA("resultado");
+}
+
+// Algoritmo estándar de validación de CUIT (dígito verificador, módulo 11).
+// Lo usamos para filtrar ruido del OCR: de todos los números de 11 dígitos
+// que aparecen en el texto leído, solo nos quedamos con el que realmente
+// pasa la validación matemática de un CUIT argentino.
+function esCuitValido(cuit11){
+  if (!/^\d{11}$/.test(cuit11)) return false;
+  const digitos = cuit11.split("").map(Number);
+  const multiplicadores = [5,4,3,2,7,6,5,4,3,2];
+  let suma = 0;
+  for (let i=0; i<10; i++) suma += digitos[i]*multiplicadores[i];
+  let verificador = 11 - (suma % 11);
+  if (verificador === 11) verificador = 0;
+  if (verificador === 10) return false; // no existe dígito verificador 10
+  return verificador === digitos[10];
+}
+
+function extraerCuitDeTexto(texto){
+  // Buscamos tokens que YA se ven como un bloque de ~11 dígitos en el
+  // texto original (con guiones/espacios internos opcionales, como los
+  // separadores típicos de un CUIT), en vez de concatenar TODO el texto
+  // en un solo string y deslizar una ventana — eso podía "armar" un CUIT
+  // que pase la validación matemática de pura casualidad, cruzando
+  // dígitos de números que no tienen nada que ver entre sí (sucursal,
+  // cuenta, monto, fecha...).
+  //
+  // Devuelve {valor, confiable}: si encontramos uno que pasa el dígito
+  // verificador, va con confiable:true. Si no, pero hay un candidato de
+  // 11 dígitos que arranca con un prefijo real de CUIT (probablemente el
+  // OCR erró un solo dígito), lo devolvemos igual con confiable:false —
+  // mejor una sugerencia editable que dejar el campo vacío.
+  const tokens = (texto || "").match(/\d[\d\-\s]{9,14}\d/g) || [];
+  let candidatoSinValidar = null;
+  for (const token of tokens){
+    const digitos = token.replace(/\D/g, "");
+    if (digitos.length !== 11) continue;
+    if (esCuitValido(digitos)) return { valor: digitos, confiable: true };
+    if (!candidatoSinValidar && /^(20|23|24|25|26|27|30|33|34)/.test(digitos)){
+      candidatoSinValidar = digitos;
+    }
+  }
+  if (candidatoSinValidar) return { valor: candidatoSinValidar, confiable: false };
+  return null;
+}
+
+// Best-effort: busca un grupo de 6 a 8 dígitos aislado que no sea parte
+// del CUIT ya encontrado. Es mucho menos confiable que el CUIT (no hay
+// forma de validarlo matemáticamente), así que queda como sugerencia.
+function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
+  const candidatos = (texto || "").match(/\b\d{6,8}\b/g) || [];
+  for (const c of candidatos){
+    if (!cuitEncontrado || !cuitEncontrado.includes(c)) return c.padStart(8, "0");
+  }
+  return null;
+}
+
+// Best-effort: la fecha suele estar escrita a mano, así que es el dato
+// menos confiable de los tres. Igual la intentamos — el campo siempre
+// queda editable para corregirla a mano si hace falta.
+function extraerFechaDeTexto(texto){
+  const meses = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+
+  const numerico = (texto || "").match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
+  if (numerico){
+    const [, d, m] = numerico;
+    const dd = parseInt(d,10), mm = parseInt(m,10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31){
+      return `${numerico[3]}-${String(mm).padStart(2,"0")}-${String(dd).padStart(2,"0")}`;
+    }
+  }
+
+  const textual = (texto || "").toLowerCase().match(/(\d{1,2})\s+de\s+([a-zñ]+)\s+de\s+(\d{4})/);
+  if (textual){
+    const mm = meses[textual[2]];
+    if (mm) return `${textual[3]}-${String(mm).padStart(2,"0")}-${textual[1].padStart(2,"0")}`;
+  }
+
+  return null;
+}
+
+// Antes de mandarle la imagen a Tesseract, la agrandamos si es chica y
+// le subimos el contraste en escala de grises — mejora bastante la
+// lectura sobre fotos de celular con luz pareja mediocre.
+// Calcula el umbral óptimo de Otsu a partir de un histograma de grises
+// (0-255): el punto que mejor separa "fondo claro" de "texto oscuro",
+// maximizando la varianza entre ambos grupos. Es el mismo método que
+// usan las apps de "escanear documento" para pasar una foto a blanco y
+// negro puro, en vez de solo subirle el contraste.
+function calcularUmbralOtsu(histograma, totalPixeles){
+  let sumaTotal = 0;
+  for (let t = 0; t < 256; t++) sumaTotal += t * histograma[t];
+
+  let sumaFondo = 0, pesoFondo = 0, mejorVarianza = -1, umbral = 128;
+  for (let t = 0; t < 256; t++){
+    pesoFondo += histograma[t];
+    if (pesoFondo === 0) continue;
+    const pesoTexto = totalPixeles - pesoFondo;
+    if (pesoTexto === 0) break;
+
+    sumaFondo += t * histograma[t];
+    const mediaFondo = sumaFondo / pesoFondo;
+    const mediaTexto = (sumaTotal - sumaFondo) / pesoTexto;
+    const varianzaEntre = pesoFondo * pesoTexto * Math.pow(mediaFondo - mediaTexto, 2);
+
+    if (varianzaEntre > mejorVarianza){
+      mejorVarianza = varianzaEntre;
+      umbral = t;
+    }
+  }
+  return umbral;
+}
+
+async function preprocesarImagenCheque(archivo){
+  const bitmap = await createImageBitmap(archivo);
+  const escala = Math.min(2.5, Math.max(1, 1800 / Math.max(bitmap.width, bitmap.height)));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * escala);
+  canvas.height = Math.round(bitmap.height * escala);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const datos = imgData.data;
+  const totalPixeles = canvas.width * canvas.height;
+
+  // Escala de grises + histograma en un solo recorrido
+  const grises = new Uint8ClampedArray(totalPixeles);
+  const histograma = new Array(256).fill(0);
+  for (let i = 0, p = 0; i < datos.length; i += 4, p++){
+    const g = Math.round(0.299*datos[i] + 0.587*datos[i+1] + 0.114*datos[i+2]);
+    grises[p] = g;
+    histograma[g]++;
+  }
+
+  const umbral = calcularUmbralOtsu(histograma, totalPixeles);
+
+  // Binarización: blanco y negro puro, como un documento escaneado —
+  // esto es lo que de verdad mejora la lectura, más que solo contraste.
+  for (let i = 0, p = 0; i < datos.length; i += 4, p++){
+    const v = grises[p] > umbral ? 255 : 0;
+    datos[i] = datos[i+1] = datos[i+2] = v;
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  return new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.95));
+}
+
+let camaraStream = null;
+
+async function abrirCamaraCheque(){
+  // Si el navegador no soporta cámara en vivo (o el permiso falla),
+  // caemos al selector de archivo/cámara nativa como respaldo.
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    document.getElementById("ocr-file-input").click();
+    return;
+  }
+  try {
+    camaraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    });
+    const video = document.getElementById("camara-video");
+    video.srcObject = camaraStream;
+    document.getElementById("camara-modal").style.display = "flex";
+  } catch (e){
+    console.warn("[OpenCheck Score] No se pudo abrir la cámara en vivo:", e.message);
+    document.getElementById("ocr-file-input").click();
+  }
+}
+
+function cerrarCamaraCheque(){
+  if (camaraStream){
+    camaraStream.getTracks().forEach(t => t.stop());
+    camaraStream = null;
+  }
+  document.getElementById("camara-modal").style.display = "none";
+}
+
+function capturarFotoCheque(){
+  const video = document.getElementById("camara-video");
+  const canvas = document.getElementById("camara-canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(async (blob) => {
+    cerrarCamaraCheque();
+    await procesarFotoCheque(blob);
+  }, "image/jpeg", 0.92);
+}
+
+async function procesarFotoCheque(archivo){
+  if (!archivo) return;
+  const btn = document.getElementById("ocr-btn");
+  const label = document.getElementById("ocr-btn-label");
+  btn.style.opacity = "0.6";
+  btn.style.pointerEvents = "none";
+  label.textContent = "Leyendo el cheque…";
+  mostrarToast("Analizando la foto, puede tardar unos segundos…");
+
+  try {
+    let imagenParaOCR = archivo;
+    try {
+      imagenParaOCR = await preprocesarImagenCheque(archivo);
+    } catch (e){
+      console.warn("[OpenCheck Score] No se pudo preprocesar la imagen, uso la original:", e.message);
+    }
+
+    const resultado = await Tesseract.recognize(imagenParaOCR, "spa", { logger: () => {} });
+    const texto = resultado.data.text || "";
+    console.info("[OpenCheck Score] Texto OCR crudo:", texto);
+
+    const cuit = extraerCuitDeTexto(texto);
+    const numeroEncontrado = extraerNumeroChequeDeTexto(texto, cuit ? cuit.valor : null);
+    const fechaEncontrada = extraerFechaDeTexto(texto);
+
+    if (cuit) setCuit(formatearCuit(cuit.valor));
+    if (numeroEncontrado) document.getElementById("consulta-numero-cheque").value = numeroEncontrado;
+    if (fechaEncontrada) document.getElementById("consulta-fecha-vencimiento").value = fechaEncontrada;
+
+    if (cuit && !cuit.confiable){
+      mostrarToast("Encontramos un CUIT parecido pero no lo pudimos confirmar del todo — revisalo antes de consultar.");
+    } else if (cuit || numeroEncontrado || fechaEncontrada){
+      mostrarToast("Revisá los datos leídos antes de consultar — el OCR no siempre acierta.");
+    } else {
+      mostrarToast("No pudimos leer datos del cheque. Probá con más luz y bien encuadrado, o completá los campos a mano.");
+    }
+  } catch (e){
+    console.warn("[OpenCheck Score] Falló el OCR:", e.message);
+    mostrarToast("No pudimos procesar la foto. Completá los datos a mano.");
+  } finally {
+    btn.style.opacity = "1";
+    btn.style.pointerEvents = "auto";
+    label.textContent = "Sacar foto del cheque";
+  }
+}
+
+/* ---- Sello / resultado visual ---- */
+const TIER_COLORS = {
+  A1: {main:"#0F6E56", ink:"#0A3F33", soft:"#E4EFEA"},
+  A2: {main:"#0F6E56", ink:"#0A3F33", soft:"#E4EFEA"},
+  B1: {main:"#B8862E", ink:"#8A6420", soft:"#F4E9D6"},
+  B2: {main:"#B8862E", ink:"#8A6420", soft:"#F4E9D6"},
+  C1: {main:"#A63D3D", ink:"#7A2C2C", soft:"#F3E1DF"},
+  C2: {main:"#A63D3D", ink:"#7A2C2C", soft:"#F3E1DF"}
+};
+
+function construirSello(categoria){
+  const c = TIER_COLORS[categoria];
+  const idArc1 = "arcTop" + Math.random().toString(36).slice(2,8);
+  const idArc2 = "arcBottom" + Math.random().toString(36).slice(2,8);
+  return `
+  <svg class="stamp-svg" width="188" height="188" viewBox="0 0 188 188" style="transform:rotate(-4deg);">
+    <defs>
+      <path id="${idArc1}" d="M 24 100 A 70 70 0 1 1 164 100" fill="none"/>
+      <path id="${idArc2}" d="M 34 118 A 60 60 0 0 0 154 118" fill="none"/>
+      <filter id="inkTexture">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="noise" seed="4"/>
+        <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0"/>
+      </filter>
+    </defs>
+    <circle cx="94" cy="94" r="86" fill="none" stroke="${c.main}" stroke-width="2.5" opacity="0.85"/>
+    <circle cx="94" cy="94" r="78" fill="none" stroke="${c.main}" stroke-width="1" stroke-dasharray="2 4" opacity="0.6"/>
+    <circle cx="94" cy="94" r="86" fill="${c.main}" opacity="0.06"/>
+    <text font-size="9.5" font-weight="500" letter-spacing="3" fill="${c.ink}">
+      <textPath href="#${idArc1}" startOffset="50%" text-anchor="middle">OPENCHECK · SCORE ·</textPath>
+    </text>
+    <text font-size="8.5" font-weight="500" letter-spacing="2.5" fill="${c.ink}" opacity="0.75">
+      <textPath href="#${idArc2}" startOffset="50%" text-anchor="middle">VERIFICADO BCRA</textPath>
+    </text>
+    <text x="94" y="106" text-anchor="middle" font-size="46" font-weight="500" fill="${c.ink}">${categoria}</text>
+    <rect x="94" y="94" width="0" height="0" filter="url(#inkTexture)"/>
+  </svg>`;
+}
+
+/* ---- Gauge del índice de riesgo (0-100) ---- */
+const TRAMO_LABEL = {
+  A1: "Riesgo muy bajo", A2: "Riesgo bajo", B1: "Riesgo medio-bajo",
+  B2: "Riesgo medio-alto", C1: "Riesgo alto", C2: "No operable"
+};
+
+function construirGauge(puntos, categoria){
+  const c = TIER_COLORS[categoria];
+  const cx = 110, cy = 108, r = 86;
+  const angleFor = (pct) => Math.PI - (pct * Math.PI); // 0pct=180° (izq), 100pct=0° (der)
+  const pointAt = (pct) => {
+    const a = angleFor(pct);
+    return [cx + r * Math.cos(a), cy - r * Math.sin(a)];
+  };
+  const arcPath = (pctStart, pctEnd, radius) => {
+    const a0 = angleFor(pctStart), a1 = angleFor(pctEnd);
+    const p0 = [cx + radius*Math.cos(a0), cy - radius*Math.sin(a0)];
+    const p1 = [cx + radius*Math.cos(a1), cy - radius*Math.sin(a1)];
+    return `M ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A ${radius} ${radius} 0 0 1 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}`;
+  };
+  // Zonas de fondo: C (0-42) rojo, B (42-75) ámbar, A (75-100) verde
+  const zonas = [
+    {desde:0, hasta:0.42, color:"#D8A2A2"},
+    {desde:0.42, hasta:0.75, color:"#E4CB9C"},
+    {desde:0.75, hasta:1, color:"#A9CFC0"}
+  ];
+  const pct = Math.max(0, Math.min(100, puntos))/100;
+  const agujaAngulo = angleFor(pct);
+  const agujaX = cx + (r-8) * Math.cos(agujaAngulo);
+  const agujaY = cy - (r-8) * Math.sin(agujaAngulo);
+
+  return `
+  <svg width="220" height="130" viewBox="0 0 220 130">
+    ${zonas.map(z => `<path d="${arcPath(z.desde, z.hasta, r)}" fill="none" stroke="${z.color}" stroke-width="14" stroke-linecap="butt"/>`).join("")}
+    <path d="${arcPath(0, pct, r)}" fill="none" stroke="${c.main}" stroke-width="14" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${agujaX.toFixed(1)}" y2="${agujaY.toFixed(1)}" stroke="${c.ink}" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="${c.ink}"/>
+    <text x="${cx}" y="${cy-24}" text-anchor="middle" font-family="DM Mono, monospace" font-size="30" font-weight="500" fill="${c.ink}">${puntos}</text>
+    <text x="${cx}" y="${cy-6}" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" fill="${c.ink}" opacity="0.7">de 100 puntos</text>
+  </svg>`;
+}
+
+/* ---- Recomendación operativa por categoría ---- */
+const RECOMENDACIONES = {
+  A1: ["Podés operar sin restricciones especiales.", "Es el perfil de menor riesgo dentro de la escala de OpenCheck Score."],
+  A2: ["Perfil de riesgo bajo. Operar en condiciones habituales.", "No hacen falta resguardos adicionales para montos estándar."],
+  B1: ["Riesgo medio-bajo. Podés operar en condiciones estándar.", "Conviene seguir de cerca la evolución de su endeudamiento en las próximas consultas."],
+  B2: ["Riesgo medio-alto. Operar con resguardos.", "Recomendamos plazos cortos, montos moderados o pago anticipado parcial."],
+  C1: ["Riesgo alto. Reforzar el análisis antes de operar.", "Pedí garantías adicionales y limitá la exposición total con este librador."],
+  C2: ["No operable según los criterios de OpenCheck Score.", "Evitá la operación o exigí garantías totales y verificación adicional."]
+};
+
+/* ---- Detalle por entidad bancaria (BCRA, gratuito) ---- */
+function chipSituacion(sit){
+  const tier = sit <= 2 ? "A" : (sit <= 4 ? "B" : "C");
+  return `<span class="tag ${tier}">Sit. ${sit}</span>`;
+}
+function formatearMonto(m){
+  return "$" + Math.round(m).toLocaleString("es-AR");
+}
+
+function construirTablaEntidades(entidades){
+  const filas = entidades.map(e => `
+    <div class="entidad-row">
+      <div class="entidad-nombre">${e.nombre}</div>
+      <div class="entidad-datos">
+        ${chipSituacion(e.situacion)}
+        <span class="entidad-monto">${formatearMonto(e.monto)}</span>
+        <span class="entidad-atraso">${e.diasAtraso > 0 ? e.diasAtraso + " días atraso" : "al día"}</span>
+      </div>
+    </div>
+  `).join("");
+  return filas;
+}
+
+/* ---- Evolución histórica (12 meses, datos públicos BCRA) ---- */
+function construirSparklineSituacion(historial){
+  const w = 320, h = 60, pad = 4;
+  const n = historial.length;
+  const barW = (w - pad*2) / n - 3;
+  const colorSit = (s) => s <= 2 ? "#0F6E56" : (s <= 4 ? "#B8862E" : "#A63D3D");
+  const barras = historial.map((sit, i) => {
+    const alto = (sit/6) * (h - pad*2);
+    const x = pad + i * ((w-pad*2)/n);
+    const y = h - pad - alto;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${alto.toFixed(1)}" rx="2" fill="${colorSit(sit)}" opacity="${i===n-1?1:0.55}"/>`;
+  }).join("");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${barras}</svg>`;
+}
+
+function construirSparklineDeuda(historial){
+  const w = 320, h = 60, pad = 6;
+  const n = historial.length;
+  const max = Math.max(...historial, 1);
+  const min = Math.min(...historial, 0);
+  const rango = Math.max(max - min, 0.01);
+  const puntos = historial.map((v,i) => {
+    const x = pad + i * ((w-pad*2)/(n-1));
+    const y = h - pad - ((v-min)/rango) * (h-pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${puntos}" fill="none" stroke="#0F6E56" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+const TENDENCIA_ICONO = { Subiendo:"▲", Bajando:"▼", Estable:"→" };
+
+// Tabla desplegable con el detalle mes a mes de la deuda vs inflación,
+// para poder revisar/ajustar el cálculo con criterio propio.
+function formatearPeriodoLegible(periodo){
+  // "202509" -> "sep '25" | "Hace 23 meses" (demo) se deja tal cual
+  if (!/^\d{6}$/.test(periodo)) return periodo;
+  const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const anio = periodo.slice(2,4);
+  const mes = parseInt(periodo.slice(4,6), 10) - 1;
+  return `${meses[mes]} '${anio}`;
+}
+
+function construirDetalleMensualToggle(detalleMensual, idx){
+  const id = "detalle-mensual-" + idx;
+  const filas = detalleMensual.map(m => `
+    <tr>
+      <td>${formatearPeriodoLegible(m.periodo)}</td>
+      <td>${m.inflacionMensual === null ? "—" : m.inflacionMensual.toFixed(1) + "%"}</td>
+      <td>$${m.deudaNominal.toLocaleString("es-AR")}M</td>
+      <td>$${m.deudaReal.toLocaleString("es-AR")}M</td>
+    </tr>
+  `).join("");
+  return `
+    <div class="detalle-mensual-toggle" onclick="toggleDetalleMensual('${id}', this)">
+      Ver detalle mes a mes <span class="dm-arrow">▸</span>
+    </div>
+    <div class="detalle-mensual-tabla" id="${id}" style="display:none">
+      <div class="dm-nota"><b>"Monto real" es la deuda que efectivamente existía ese mes — ese es el dato real.</b> "En pesos de hoy" es el mismo monto llevado a lo que valdría hoy, solo para poder comparar meses entre sí sin que la inflación distorsione la comparación.</div>
+      <table>
+        <thead>
+          <tr><th>Mes</th><th>Inflación</th><th>Monto real</th><th>En pesos de hoy</th></tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+  `;
+}
+function toggleDetalleMensual(id, el){
+  const tabla = document.getElementById(id);
+  const abierta = tabla.style.display !== "none";
+  tabla.style.display = abierta ? "none" : "block";
+  el.querySelector(".dm-arrow").textContent = abierta ? "▸" : "▾";
+}
+
+function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
+  // Guardado para poder auditar el cálculo exacto desde la consola:
+  // copy(JSON.stringify(window.ultimoResultado.detalle.deudaVsInflacion.detalleMensual))
+  window.ultimoResultado = resultado;
+  window.ultimosDatos = datos;
+
+  document.getElementById("stamp-holder").innerHTML = construirSello(resultado.categoria);
+  document.getElementById("res-empresa").textContent = datos.empresa;
+  document.getElementById("res-cuit").textContent = document.getElementById("consulta-cuit").value || "—";
+
+  const fuenteBadge = fuente === "real"
+    ? `<span class="fuente-badge fuente-real">API BCRA real</span>`
+    : `<span class="fuente-badge fuente-demo">Demo — API no disponible en este momento</span>`;
+  document.getElementById("res-fuente").innerHTML = fuenteBadge;
+
+  document.getElementById("res-gauge").innerHTML = construirGauge(resultado.puntosFinales, resultado.categoria);
+  document.getElementById("res-tramo").textContent = TRAMO_LABEL[resultado.categoria];
+
+  document.getElementById("res-recomendacion").innerHTML = `
+    <div class="narrativa-title">Cómo operar</div>
+    <ul class="recomendacion-list">
+      ${RECOMENDACIONES[resultado.categoria].map(r => `<li>${r}</li>`).join("")}
+    </ul>
+  `;
+
+  const alertaBox = document.getElementById("res-alerta");
+  let alertaHtml = "";
+  if (resultado.forzadoC2){
+    alertaHtml += `<div class="alert-block danger"><span>⛔</span><div><b>No operable</b>${resultado.motivo}</div></div>`;
+  } else if (resultado.motivo){
+    alertaHtml += `<div class="alert-block danger"><span>⚠️</span><div><b>Penalización aplicada</b>${resultado.motivo}</div></div>`;
+  } else {
+    alertaHtml += `<div class="alert-block ok"><span>✓</span><div><b>Sin rechazos registrados</b>El librador no presenta rechazos de cheques en los últimos 24 meses.</div></div>`;
+  }
+
+  if (numeroCheque){
+    if (chequeInfo && chequeInfo.denunciado){
+      alertaHtml += `<div class="alert-block danger"><span>⛔</span><div><b>Cheque N° ${numeroCheque} denunciado</b>${chequeInfo.motivo}</div></div>`;
+    } else {
+      alertaHtml += `<div class="alert-block ok"><span>✓</span><div><b>Cheque N° ${numeroCheque} sin denuncias</b>No registra extravío, robo ni oposición al pago en BCRA.</div></div>`;
+    }
+  }
+  alertaBox.innerHTML = alertaHtml;
+
+  document.getElementById("res-narrativa").innerHTML = `
+    <div class="narrativa-title">Por qué obtuvo esta categoría</div>
+    ${resultado.narrativa}
+  `;
+
+  const filas = Object.values(resultado.detalle);
+  document.getElementById("res-breakdown").innerHTML = filas.map((v, idx) => `
+    <div class="breakdown-row${v.noDisponible ? " breakdown-row-nd" : ""}">
+      <div class="br-top">
+        <div class="br-label">${v.label}</div>
+        <div class="br-bar"><div class="br-bar-fill" style="width:${v.noDisponible ? 0 : (v.puntos/v.max*100).toFixed(0)}%"></div></div>
+        <div class="br-val">${v.noDisponible ? "N/D" : v.puntos + "/" + v.max}</div>
+      </div>
+      <div class="br-desc">${v.desc}</div>
+      ${v.detalleMensual ? construirDetalleMensualToggle(v.detalleMensual, idx) : ""}
+    </div>
+  `).join("");
+
+  /* ---- Detalle por entidad bancaria ---- */
+  const concentracion = calcularConcentracionBancaria(datos.entidades);
+  document.getElementById("res-concentracion").textContent = concentracion + "%";
+  document.getElementById("res-entidades-count").textContent = datos.entidades.length;
+  document.getElementById("res-entidades").innerHTML = construirTablaEntidades(datos.entidades);
+
+  /* ---- Evolución histórica (12 meses) ---- */
+  const peorSituacion12m = Math.max(...datos.historialSituacion.slice(-12));
+  const tendencia = calcularTendenciaDeuda(datos.historialDeuda);
+  document.getElementById("res-peor-situacion").textContent = "Situación " + peorSituacion12m;
+  document.getElementById("res-tendencia").innerHTML = `${TENDENCIA_ICONO[tendencia]} ${tendencia}`;
+  document.getElementById("res-tendencia").className = "mini-val tendencia-val tendencia-" + tendencia.toLowerCase();
+  document.getElementById("res-sparkline-situacion").innerHTML = construirSparklineSituacion(datos.historialSituacion);
+  document.getElementById("res-sparkline-deuda").innerHTML = construirSparklineDeuda(datos.historialDeuda);
+}
+
+/* ---- Verificar denuncia de cheque ---- */
+async function verificarDenuncia(){
+  const num = document.getElementById("denuncia-numero").value.trim();
+  const banco = document.getElementById("denuncia-banco").value;
+  const box = document.getElementById("denuncia-resultado");
+  if (!num){
+    mostrarToast("Ingresá un número de cheque");
+    return;
+  }
+
+  box.innerHTML = `<div class="alert-block ok"><span>⏳</span><div><b>Consultando BCRA…</b></div></div>`;
+
+  let info, fuente;
+  try {
+    const real = await consultarChequeDenunciadoBCRA(banco, num);
+    if (!real.ok) throw new Error(real.error);
+    info = real;
+    fuente = "real";
+  } catch (e) {
+    info = buscarDenuncia(banco, num);
+    fuente = "demo";
+  }
+
+  const badge = fuente === "real"
+    ? `<span class="fuente-badge fuente-real">API BCRA real</span>`
+    : `<span class="fuente-badge fuente-demo">Demo — sin conexión</span>`;
+
+  if (info && info.denunciado){
+    box.innerHTML = `<div class="alert-block danger"><span>⛔</span><div><b>Cheque denunciado ${badge}</b>${info.motivo}</div></div>`;
+  } else {
+    box.innerHTML = `<div class="alert-block ok"><span>✓</span><div><b>Sin denuncias ${badge}</b>Este cheque no registra denuncia de extravío ni robo en BCRA para el banco seleccionado.</div></div>`;
+  }
+}
+
+/* ---- Historial ---- */
+async function renderHistorial(){
+  const cont = document.getElementById("historial-lista");
+
+  if (!state.user){
+    cont.innerHTML = `<div class="empty-state"><div class="ico">🔒</div><p>Iniciá sesión para ver tu historial.</p></div>`;
+    return;
+  }
+
+  cont.innerHTML = `<div class="empty-state"><p>Cargando historial…</p></div>`;
+  const historial = await obtenerHistorialUsuario(state.user.id);
+
+  if (historial.length === 0){
+    cont.innerHTML = `<div class="empty-state"><div class="ico">📄</div><p>Todavía no hiciste ninguna consulta.<br>Cuando consultes un CUIT, va a quedar registrado acá.</p></div>`;
+    return;
+  }
+
+  cont.innerHTML = historial.map(h => {
+    const tier = h.categoria ? h.categoria[0] : "?";
+    const fecha = new Date(h.creado_en);
+    const fuenteLabel = h.fuente === "real" ? "API BCRA real" : "Demo";
+    return `
+    <div class="hist-row">
+      <div class="hist-top">
+        <span>${h.razon_social || h.cuit_consultado}</span>
+        <span class="tag ${tier}">${h.categoria || "—"}</span>
+      </div>
+      <div class="hist-mid">${h.cuit_consultado} · ${fuenteLabel}</div>
+      <div class="hist-bottom">
+        <span class="hist-date">${fecha.toLocaleString("es-AR")}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ---- Cuenta ---- */
+function renderCuenta(){
+  const cont = document.getElementById("cuenta-content");
+  const u = state.user;
+  cont.innerHTML = `
+    <h1 class="page-title">Tu cuenta</h1>
+    <p class="page-sub">Datos de registro y estado de tu plan.</p>
+    <div class="plan-row"><span>Nombre</span><b>${u ? u.nombre : "—"}</b></div>
+    <div class="plan-row"><span>Email</span><b>${u ? u.email : "—"}</b></div>
+    <div class="plan-row"><span>CUIT / DNI</span><b>${u ? u.cuit_dni : "—"}</b></div>
+    <div class="plan-row"><span>Tipo</span><b>${u ? (u.tipo_persona === "juridica" ? "Persona jurídica" : "Persona física") : "—"}</b></div>
+    <div class="plan-row"><span>Plan</span><b>${u ? (u.plan === "b2b" ? "B2B" : "Gratis") : "—"}</b></div>
+    <div class="plan-row"><span>Consultas usadas este mes</span><b>${u ? (u.consultas_usadas_mes || 0) : 0}/${state.queriesLimit}</b></div>
+    <div class="divider-label">Notificaciones</div>
+    <p class="page-sub" style="margin-top:-4px;">Te avisamos cuando venza un cheque que consultaste, para preguntarte si se cobró.</p>
+    <button class="btn btn-secondary" onclick="activarNotificacionesPush()">
+      ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "Notificaciones activadas ✓" : "Activar notificaciones"}
+    </button>
+    <div class="divider-label">Plan</div>
+    <div class="paywall-card" style="margin-top:6px;">
+      <h2>OpenCheck Score B2B</h2>
+      <p>Consultas ilimitadas, historial exportable y acceso multiusuario para contadores, fintechs y fondos.</p>
+      <button class="btn btn-primary" onclick="mostrarToast('Te vamos a contactar para activar el plan B2B')">Solicitar acceso</button>
+    </div>
+    <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
+    ${u && u.es_admin ? `
+      <div class="divider-label">Administración</div>
+      <a href="/admin.html" style="text-decoration:none;">
+        <button class="btn btn-primary" style="background:var(--ink);">Panel de Admin</button>
+      </a>
+    ` : ""}
+  `;
+}
+
+function renderPaywall(){
+  irA("cuenta");
+}
+
+/* Inicializa T&C oculto */
+document.getElementById("tc-meta").style.display = "none";
+</script>
+</body>
+</html>
