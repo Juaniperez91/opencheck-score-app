@@ -569,6 +569,9 @@
     border-radius:10px;
     box-shadow:0 0 0 2000px rgba(0,0,0,.45);
   }
+  @media (orientation:landscape){
+    .camara-marco{ width:70%; aspect-ratio:2.4/1; }
+  }
   .camara-instrucciones{
     color:#fff; font-size:13px; text-align:center;
     margin-top:16px; padding:0 30px;
@@ -874,7 +877,7 @@
     <video id="camara-video" autoplay playsinline muted></video>
     <div class="camara-overlay">
       <div class="camara-marco"></div>
-      <div class="camara-instrucciones">Encuadrá el cheque completo dentro del marco</div>
+      <div class="camara-instrucciones">Girá el teléfono en horizontal y encuadrá el cheque completo, bien apoyado y con buena luz</div>
     </div>
     <div class="camara-controles">
       <button class="camara-btn-cancelar" onclick="cerrarCamaraCheque()">Cancelar</button>
@@ -2212,11 +2215,23 @@ function extraerCuitDeTexto(texto){
   // que pase la validación matemática de pura casualidad, cruzando
   // dígitos de números que no tienen nada que ver entre sí (sucursal,
   // cuenta, monto, fecha...).
+  //
+  // Devuelve {valor, confiable}: si encontramos uno que pasa el dígito
+  // verificador, va con confiable:true. Si no, pero hay un candidato de
+  // 11 dígitos que arranca con un prefijo real de CUIT (probablemente el
+  // OCR erró un solo dígito), lo devolvemos igual con confiable:false —
+  // mejor una sugerencia editable que dejar el campo vacío.
   const tokens = (texto || "").match(/\d[\d\-\s]{9,14}\d/g) || [];
+  let candidatoSinValidar = null;
   for (const token of tokens){
     const digitos = token.replace(/\D/g, "");
-    if (digitos.length === 11 && esCuitValido(digitos)) return digitos;
+    if (digitos.length !== 11) continue;
+    if (esCuitValido(digitos)) return { valor: digitos, confiable: true };
+    if (!candidatoSinValidar && /^(20|23|24|25|26|27|30|33|34)/.test(digitos)){
+      candidatoSinValidar = digitos;
+    }
   }
+  if (candidatoSinValidar) return { valor: candidatoSinValidar, confiable: false };
   return null;
 }
 
@@ -2231,6 +2246,54 @@ function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
   return null;
 }
 
+// Best-effort: la fecha suele estar escrita a mano, así que es el dato
+// menos confiable de los tres. Igual la intentamos — el campo siempre
+// queda editable para corregirla a mano si hace falta.
+function extraerFechaDeTexto(texto){
+  const meses = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+
+  const numerico = (texto || "").match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
+  if (numerico){
+    const [, d, m] = numerico;
+    const dd = parseInt(d,10), mm = parseInt(m,10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31){
+      return `${numerico[3]}-${String(mm).padStart(2,"0")}-${String(dd).padStart(2,"0")}`;
+    }
+  }
+
+  const textual = (texto || "").toLowerCase().match(/(\d{1,2})\s+de\s+([a-zñ]+)\s+de\s+(\d{4})/);
+  if (textual){
+    const mm = meses[textual[2]];
+    if (mm) return `${textual[3]}-${String(mm).padStart(2,"0")}-${textual[1].padStart(2,"0")}`;
+  }
+
+  return null;
+}
+
+// Antes de mandarle la imagen a Tesseract, la agrandamos si es chica y
+// le subimos el contraste en escala de grises — mejora bastante la
+// lectura sobre fotos de celular con luz pareja mediocre.
+async function preprocesarImagenCheque(archivo){
+  const bitmap = await createImageBitmap(archivo);
+  const escala = Math.min(2.5, Math.max(1, 1800 / Math.max(bitmap.width, bitmap.height)));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * escala);
+  canvas.height = Math.round(bitmap.height * escala);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const datos = imgData.data;
+  for (let i = 0; i < datos.length; i += 4){
+    const gris = 0.299*datos[i] + 0.587*datos[i+1] + 0.114*datos[i+2];
+    const contrastado = Math.min(255, Math.max(0, (gris - 128) * 1.35 + 128));
+    datos[i] = datos[i+1] = datos[i+2] = contrastado;
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  return new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.95));
+}
+
 let camaraStream = null;
 
 async function abrirCamaraCheque(){
@@ -2242,7 +2305,7 @@ async function abrirCamaraCheque(){
   }
   try {
     camaraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
     });
     const video = document.getElementById("camara-video");
     video.srcObject = camaraStream;
@@ -2284,20 +2347,31 @@ async function procesarFotoCheque(archivo){
   mostrarToast("Analizando la foto, puede tardar unos segundos…");
 
   try {
-    const resultado = await Tesseract.recognize(archivo, "spa", { logger: () => {} });
+    let imagenParaOCR = archivo;
+    try {
+      imagenParaOCR = await preprocesarImagenCheque(archivo);
+    } catch (e){
+      console.warn("[OpenCheck Score] No se pudo preprocesar la imagen, uso la original:", e.message);
+    }
+
+    const resultado = await Tesseract.recognize(imagenParaOCR, "spa", { logger: () => {} });
     const texto = resultado.data.text || "";
     console.info("[OpenCheck Score] Texto OCR crudo:", texto);
 
-    const cuitEncontrado = extraerCuitDeTexto(texto);
-    const numeroEncontrado = extraerNumeroChequeDeTexto(texto, cuitEncontrado);
+    const cuit = extraerCuitDeTexto(texto);
+    const numeroEncontrado = extraerNumeroChequeDeTexto(texto, cuit ? cuit.valor : null);
+    const fechaEncontrada = extraerFechaDeTexto(texto);
 
-    if (cuitEncontrado) setCuit(formatearCuit(cuitEncontrado));
+    if (cuit) setCuit(formatearCuit(cuit.valor));
     if (numeroEncontrado) document.getElementById("consulta-numero-cheque").value = numeroEncontrado;
+    if (fechaEncontrada) document.getElementById("consulta-fecha-vencimiento").value = fechaEncontrada;
 
-    if (cuitEncontrado || numeroEncontrado){
+    if (cuit && !cuit.confiable){
+      mostrarToast("Encontramos un CUIT parecido pero no lo pudimos confirmar del todo — revisalo antes de consultar.");
+    } else if (cuit || numeroEncontrado || fechaEncontrada){
       mostrarToast("Revisá los datos leídos antes de consultar — el OCR no siempre acierta.");
     } else {
-      mostrarToast("No pudimos leer datos del cheque automáticamente. Completá los campos a mano.");
+      mostrarToast("No pudimos leer datos del cheque. Probá con más luz y bien encuadrado, o completá los campos a mano.");
     }
   } catch (e){
     console.warn("[OpenCheck Score] Falló el OCR:", e.message);
