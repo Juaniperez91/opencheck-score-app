@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2472B8">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OpenCheck">
+<meta name="mobile-web-app-capable" content="yes">
 <title>OpenCheck Score</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -919,6 +927,34 @@ if ("serviceWorker" in navigator){
   navigator.serviceWorker.register("/service-worker.js")
     .catch(e => console.warn("[OpenCheck Score] No se pudo registrar el service worker:", e.message));
 }
+
+// Capturamos el evento de instalación para poder mostrar nuestro propio
+// botón "Instalar app" en vez de depender de que el usuario lo encuentre
+// solo en el menú del navegador. Solo dispara en navegadores compatibles
+// (Chrome/Edge en Android; iOS no lo soporta — ahí se instala manual
+// desde "Compartir → Agregar a inicio", ya cubierto por las meta tags).
+let eventoInstalacionDiferido = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  eventoInstalacionDiferido = e;
+  const btn = document.getElementById("btn-instalar-app");
+  if (btn) btn.style.display = "flex";
+});
+
+async function instalarApp(){
+  if (!eventoInstalacionDiferido) return;
+  eventoInstalacionDiferido.prompt();
+  const { outcome } = await eventoInstalacionDiferido.userChoice;
+  if (outcome === "accepted") mostrarToast("¡Listo! Ya tenés OpenCheck Score instalada.");
+  eventoInstalacionDiferido = null;
+  const btn = document.getElementById("btn-instalar-app");
+  if (btn) btn.style.display = "none";
+}
+
+window.addEventListener("appinstalled", () => {
+  const btn = document.getElementById("btn-instalar-app");
+  if (btn) btn.style.display = "none";
+});
 
 function urlBase64ToUint8Array(base64String){
   const padding = "=".repeat((4 - base64String.length % 4) % 4);
@@ -2889,6 +2925,9 @@ function renderCuenta(){
     <p class="page-sub" style="margin-top:-4px;">Te avisamos cuando venza un cheque que consultaste, para preguntarte si se cobró.</p>
     <button class="btn btn-secondary" onclick="activarNotificacionesPush()">
       ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "Notificaciones activadas ✓" : "Activar notificaciones"}
+    </button>
+    <button class="btn btn-primary" id="btn-instalar-app" onclick="instalarApp()" style="display:none; margin-top:10px; align-items:center; justify-content:center; gap:8px;">
+      Instalar OpenCheck Score en este dispositivo
     </button>
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">

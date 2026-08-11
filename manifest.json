@@ -1,0 +1,31 @@
+{
+  "name": "OpenCheck Score",
+  "short_name": "OpenCheck",
+  "description": "Riesgo crediticio de libradores de cheque con datos públicos del BCRA.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#F2F7FB",
+  "theme_color": "#2472B8",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

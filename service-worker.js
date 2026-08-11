@@ -1,5 +1,10 @@
-// Service Worker de OpenCheck Score — solo maneja notificaciones push.
-// No hace caching de la app (no es un objetivo offline-first por ahora).
+// Service Worker de OpenCheck Score — maneja notificaciones push y deja
+// un fetch handler mínimo (pass-through, sin caché) porque algunos
+// navegadores lo piden como requisito para permitir instalar la PWA.
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request));
+});
 
 self.addEventListener('push', (event) => {
   let data = {};
