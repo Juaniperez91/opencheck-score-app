@@ -2273,6 +2273,35 @@ function extraerFechaDeTexto(texto){
 // Antes de mandarle la imagen a Tesseract, la agrandamos si es chica y
 // le subimos el contraste en escala de grises — mejora bastante la
 // lectura sobre fotos de celular con luz pareja mediocre.
+// Calcula el umbral óptimo de Otsu a partir de un histograma de grises
+// (0-255): el punto que mejor separa "fondo claro" de "texto oscuro",
+// maximizando la varianza entre ambos grupos. Es el mismo método que
+// usan las apps de "escanear documento" para pasar una foto a blanco y
+// negro puro, en vez de solo subirle el contraste.
+function calcularUmbralOtsu(histograma, totalPixeles){
+  let sumaTotal = 0;
+  for (let t = 0; t < 256; t++) sumaTotal += t * histograma[t];
+
+  let sumaFondo = 0, pesoFondo = 0, mejorVarianza = -1, umbral = 128;
+  for (let t = 0; t < 256; t++){
+    pesoFondo += histograma[t];
+    if (pesoFondo === 0) continue;
+    const pesoTexto = totalPixeles - pesoFondo;
+    if (pesoTexto === 0) break;
+
+    sumaFondo += t * histograma[t];
+    const mediaFondo = sumaFondo / pesoFondo;
+    const mediaTexto = (sumaTotal - sumaFondo) / pesoTexto;
+    const varianzaEntre = pesoFondo * pesoTexto * Math.pow(mediaFondo - mediaTexto, 2);
+
+    if (varianzaEntre > mejorVarianza){
+      mejorVarianza = varianzaEntre;
+      umbral = t;
+    }
+  }
+  return umbral;
+}
+
 async function preprocesarImagenCheque(archivo){
   const bitmap = await createImageBitmap(archivo);
   const escala = Math.min(2.5, Math.max(1, 1800 / Math.max(bitmap.width, bitmap.height)));
@@ -2284,10 +2313,24 @@ async function preprocesarImagenCheque(archivo){
 
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const datos = imgData.data;
-  for (let i = 0; i < datos.length; i += 4){
-    const gris = 0.299*datos[i] + 0.587*datos[i+1] + 0.114*datos[i+2];
-    const contrastado = Math.min(255, Math.max(0, (gris - 128) * 1.35 + 128));
-    datos[i] = datos[i+1] = datos[i+2] = contrastado;
+  const totalPixeles = canvas.width * canvas.height;
+
+  // Escala de grises + histograma en un solo recorrido
+  const grises = new Uint8ClampedArray(totalPixeles);
+  const histograma = new Array(256).fill(0);
+  for (let i = 0, p = 0; i < datos.length; i += 4, p++){
+    const g = Math.round(0.299*datos[i] + 0.587*datos[i+1] + 0.114*datos[i+2]);
+    grises[p] = g;
+    histograma[g]++;
+  }
+
+  const umbral = calcularUmbralOtsu(histograma, totalPixeles);
+
+  // Binarización: blanco y negro puro, como un documento escaneado —
+  // esto es lo que de verdad mejora la lectura, más que solo contraste.
+  for (let i = 0, p = 0; i < datos.length; i += 4, p++){
+    const v = grises[p] > umbral ? 255 : 0;
+    datos[i] = datos[i+1] = datos[i+2] = v;
   }
   ctx.putImageData(imgData, 0, 0);
 
