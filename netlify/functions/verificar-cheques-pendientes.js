@@ -67,14 +67,17 @@ export default async () => {
       const diasDesdeVencimiento = Math.floor((hoy - new Date(consulta.fecha_vencimiento_cheque)) / 86400000);
 
       let resultado = null;
+      let fuente = null;
       if (fueRechazado){
         resultado = "rechazado";
+        fuente = "bcra_rechazo";
         rechazadasEncontradas++;
       } else if (diasDesdeVencimiento >= DIAS_ESPERA_MAXIMO){
         // Pasó el margen máximo y nunca apareció como rechazado: lo damos
         // por pagado. Es una inferencia por ausencia de evidencia, no una
         // confirmación directa — queda documentado en el código a propósito.
         resultado = "pagado";
+        fuente = "bcra_inferido";
         pagadasInferidas++;
       }
       // Si todavía está dentro de la ventana sin señal, lo dejamos sin
@@ -89,7 +92,7 @@ export default async () => {
             "Content-Type": "application/json",
             Prefer: "return=minimal"
           },
-          body: JSON.stringify({ resultado_real: resultado })
+          body: JSON.stringify({ resultado_real: resultado, resultado_real_fuente: fuente })
         });
       }
       verificadas++;

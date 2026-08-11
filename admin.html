@@ -57,7 +57,7 @@
   .panel h2{font-size:14px; margin:0 0 14px; font-weight:700;}
 
   .bar-row{display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12.5px;}
-  .bar-row .bar-label{width:70px; font-family:'DM Mono',monospace; flex-shrink:0;}
+  .bar-row .bar-label{width:110px; font-family:'DM Mono',monospace; font-size:11px; flex-shrink:0;}
   .bar-track{flex:1; height:10px; background:var(--paper-2); border-radius:6px; overflow:hidden;}
   .bar-fill{height:100%; border-radius:6px;}
   .bar-row .bar-count{width:36px; text-align:right; font-family:'DM Mono',monospace; color:var(--ink-soft); flex-shrink:0;}
@@ -123,7 +123,7 @@ async function cargarDashboard(){
 
   const [{ data: usuarios }, { data: consultas }] = await Promise.all([
     supabaseClient.from("usuarios").select("id, creado_en"),
-    supabaseClient.from("consultas").select("id, cuit_consultado, razon_social, categoria, fuente, cheque_denunciado, creado_en, usuario_id").order("creado_en", { ascending:false }).limit(5000)
+    supabaseClient.from("consultas").select("id, cuit_consultado, razon_social, categoria, fuente, cheque_denunciado, creado_en, usuario_id, resultado_real, resultado_real_fuente, numero_cheque_consultado, fecha_vencimiento_cheque").order("creado_en", { ascending:false }).limit(5000)
   ]);
 
   const totalUsuarios = (usuarios || []).length;
@@ -152,6 +152,17 @@ async function cargarDashboard(){
       <div class="panel">
         <h2>Fuente de datos</h2>
         <div id="barras-fuente"></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2>Feedback loop: ¿se cobró o se rechazó?</h2>
+        <div id="barras-resultado-real"></div>
+      </div>
+      <div class="panel">
+        <h2>¿De dónde vino el dato?</h2>
+        <div id="barras-fuente-resultado"></div>
       </div>
     </div>
 
@@ -190,6 +201,27 @@ async function cargarDashboard(){
     { etiqueta:"demo", cantidad: totalConsultas - consultasReales }
   ];
   construirBarras("barras-fuente", porFuente, (f) => f==="real" ? "#0F6E56" : "#B8862E");
+
+  // Feedback loop: cuántos cheques con seguimiento activado ya tienen
+  // resultado real conocido, y cómo se reparte pagado/rechazado/pendiente.
+  const conSeguimiento = (consultas || []).filter(c => c.numero_cheque_consultado && c.fecha_vencimiento_cheque);
+  const pagados = conSeguimiento.filter(c => c.resultado_real === "pagado").length;
+  const rechazados = conSeguimiento.filter(c => c.resultado_real === "rechazado").length;
+  const pendientes = conSeguimiento.length - pagados - rechazados;
+  construirBarras("barras-resultado-real", [
+    { etiqueta:"Pagado", cantidad: pagados },
+    { etiqueta:"Rechazado", cantidad: rechazados },
+    { etiqueta:"Pendiente", cantidad: pendientes }
+  ], (e) => e==="Pagado" ? "#0F6E56" : e==="Rechazado" ? "#A63D3D" : "#B8862E");
+
+  // De qué fuente vino cada resultado ya confirmado (para saber cuánto
+  // pesa cada mecanismo: BCRA directo, inferido, o respuesta del usuario)
+  const fuentes = ["bcra_rechazo","bcra_inferido","usuario_push","usuario_app"];
+  const etiquetasFuente = { bcra_rechazo:"BCRA (rechazo)", bcra_inferido:"BCRA (inferido)", usuario_push:"Usuario (push)", usuario_app:"Usuario (app)" };
+  construirBarras("barras-fuente-resultado",
+    fuentes.map(f => ({ etiqueta: etiquetasFuente[f], cantidad: conSeguimiento.filter(c => c.resultado_real_fuente === f).length })),
+    () => "#123A5C"
+  );
 
   // Top CUITs
   const conteoPorCuit = {};

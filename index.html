@@ -594,6 +594,21 @@
   }
   .camara-btn-capturar:active{background:var(--paper-2);}
 
+  .confirmacion-banner{
+    position:fixed; left:16px; right:16px; bottom:16px; z-index:150;
+    max-width:380px; margin:0 auto;
+    background:var(--white); border:1px solid var(--hairline); border-radius:14px;
+    padding:16px 18px; box-shadow:0 8px 28px rgba(18,58,92,.18);
+  }
+  .confirmacion-banner p{ margin:0 0 12px; font-size:13.5px; line-height:1.4; color:var(--ink); }
+  .confirmacion-banner-botones{ display:flex; gap:10px; }
+  .confirmacion-banner-botones button{
+    flex:1; padding:10px; border-radius:9px; border:none; font-family:'DM Sans',sans-serif;
+    font-weight:700; font-size:13.5px; cursor:pointer;
+  }
+  .confirmacion-banner-botones .btn-si{ background:var(--green); color:#fff; }
+  .confirmacion-banner-botones .btn-no{ background:var(--brick-soft); color:var(--brick); }
+
   ::-webkit-scrollbar{width:0;}
 </style>
 </head>
@@ -895,6 +910,99 @@
 const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_MZNmdrBaRx6HwGtgmd0VHQ_uRPQj_Zx";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Clave pública VAPID — segura de tener en el frontend (la privada vive
+// solo en la Netlify Function que manda las notificaciones).
+const VAPID_PUBLIC_KEY = "BCmyLsLgxi-xD4YkBVAfCT_Z_UDMd0znH_jtXmf4tYZdrvISoT_hrcsGXBruMOoI3vWT6LlIEcZtMAXIHdBr_10";
+
+if ("serviceWorker" in navigator){
+  navigator.serviceWorker.register("/service-worker.js")
+    .catch(e => console.warn("[OpenCheck Score] No se pudo registrar el service worker:", e.message));
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function activarNotificacionesPush(){
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)){
+    mostrarToast("Tu navegador no soporta notificaciones push.");
+    return;
+  }
+  if (!state.user){
+    mostrarToast("Iniciá sesión primero.");
+    return;
+  }
+  const permiso = await Notification.requestPermission();
+  if (permiso !== "granted"){
+    mostrarToast("No diste permiso para las notificaciones — podés activarlas después desde el navegador.");
+    return;
+  }
+  try {
+    const registro = await navigator.serviceWorker.ready;
+    const suscripcion = await registro.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const s = suscripcion.toJSON();
+    const { error } = await supabaseClient.from("push_subscriptions").insert({
+      usuario_id: state.user.id, endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth
+    });
+    if (error) throw error;
+    mostrarToast("¡Notificaciones activadas! Te vamos a avisar cuando haya un cheque para confirmar.");
+    renderCuenta();
+  } catch (e){
+    console.warn("[OpenCheck Score] Error activando push:", e.message);
+    mostrarToast("No pudimos activar las notificaciones.");
+  }
+}
+
+// Cartel dentro de la app: respaldo para cuando la push no llegó (el
+// usuario no dio permiso, el navegador no la soporta, etc.) — cada vez
+// que hay sesión activa, chequeamos si hay algún cheque esperando
+// confirmación y lo mostramos.
+async function verificarConfirmacionesPendientes(){
+  if (!state.user) return;
+  const { data, error } = await supabaseClient
+    .from("consultas")
+    .select("id, cuit_consultado, razon_social, numero_cheque_consultado, token_confirmacion")
+    .eq("usuario_id", state.user.id)
+    .eq("confirmacion_activada", true)
+    .is("resultado_real", null)
+    .order("creado_en", { ascending: false })
+    .limit(1);
+  if (error || !data || data.length === 0) return;
+  mostrarBannerConfirmacion(data[0]);
+}
+
+function mostrarBannerConfirmacion(consulta){
+  if (document.querySelector(".confirmacion-banner")) return; // ya hay uno mostrado
+  const banner = document.createElement("div");
+  banner.className = "confirmacion-banner";
+  banner.innerHTML = `
+    <p>¿Se cobró el cheque N° ${consulta.numero_cheque_consultado} de ${consulta.razon_social || consulta.cuit_consultado}?</p>
+    <div class="confirmacion-banner-botones">
+      <button class="btn-si" onclick="responderConfirmacion('${consulta.id}','${consulta.token_confirmacion}','pagado', this)">Sí</button>
+      <button class="btn-no" onclick="responderConfirmacion('${consulta.id}','${consulta.token_confirmacion}','rechazado', this)">No</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
+}
+
+async function responderConfirmacion(id, token, resultado, btn){
+  btn.closest(".confirmacion-banner").remove();
+  try {
+    await fetch(`/.netlify/functions/confirmar-pago?id=${id}&token=${token}&resultado=${resultado}&fuente=usuario_app`);
+    mostrarToast("¡Gracias por confirmarnos!");
+  } catch (e){
+    console.warn("[OpenCheck Score] Error confirmando:", e.message);
+  }
+}
 
 // Trae (o crea si no existe) la fila de public.usuarios asociada al
 // usuario autenticado. Devuelve null si no hay sesión.
@@ -2027,6 +2135,7 @@ async function iniciarSesion(){
     document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
     mostrarToast("¡Hola de nuevo, " + perfil.nombre.split(" ")[0] + "!");
     irA("home");
+    verificarConfirmacionesPendientes();
   } catch (e){
     mostrarToast("No pudimos iniciar sesión: " + e.message);
   } finally {
@@ -2050,6 +2159,7 @@ async function cargarSesionExistente(){
     state.user = perfil;
     document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
     irA("home");
+    verificarConfirmacionesPendientes();
   }
 }
 cargarSesionExistente();
@@ -2775,6 +2885,11 @@ function renderCuenta(){
     <div class="plan-row"><span>Tipo</span><b>${u ? (u.tipo_persona === "juridica" ? "Persona jurídica" : "Persona física") : "—"}</b></div>
     <div class="plan-row"><span>Plan</span><b>${u ? (u.plan === "b2b" ? "B2B" : "Gratis") : "—"}</b></div>
     <div class="plan-row"><span>Consultas usadas este mes</span><b>${u ? (u.consultas_usadas_mes || 0) : 0}/${state.queriesLimit}</b></div>
+    <div class="divider-label">Notificaciones</div>
+    <p class="page-sub" style="margin-top:-4px;">Te avisamos cuando venza un cheque que consultaste, para preguntarte si se cobró.</p>
+    <button class="btn btn-secondary" onclick="activarNotificacionesPush()">
+      ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "Notificaciones activadas ✓" : "Activar notificaciones"}
+    </button>
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">
       <h2>OpenCheck Score B2B</h2>
