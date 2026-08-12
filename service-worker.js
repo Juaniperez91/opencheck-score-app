@@ -1,10 +1,8 @@
-// Service Worker de OpenCheck Score — maneja notificaciones push y deja
-// un fetch handler mínimo (pass-through, sin caché) porque algunos
-// navegadores lo piden como requisito para permitir instalar la PWA.
-
-self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request));
-});
+// Service Worker de OpenCheck Score — maneja notificaciones push.
+// (Sacamos el fetch handler que tenía antes: interceptaba TODAS las
+// llamadas de red de la app, incluidas las del BCRA, y sospechamos que
+// eso estaba causando que las consultas reales cayeran a modo demo. No
+// es indispensable para que la PWA sea instalable.)
 
 self.addEventListener('push', (event) => {
   let data = {};
