@@ -729,7 +729,7 @@
         </div>
         <div class="ocr-text">
           <b id="ocr-btn-label">Sacar foto del cheque</b>
-          <span>Intentamos leer el CUIT y el número automáticamente</span>
+          <span>Para mejor lectura: girá el teléfono a horizontal antes de tocar acá</span>
         </div>
       </button>
 
@@ -1353,7 +1353,7 @@ function calcularScore(d){
   const detalle = {
     situacion: {puntos:pSituacion, max:30, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
     situacion24m: {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
-    rechazos: {puntos:pRechazos, max:20, label:"Historial de rechazos (24 meses)", desc: explicarRechazos(d)},
+    rechazos: {puntos:pRechazos, max:20, label:"Historial de rechazos (24 meses)", desc: explicarRechazos(d), detalleRechazos: d.detalleRechazos || []},
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
     deudaVsInflacion: inflacionDisponible
@@ -1572,7 +1572,7 @@ async function consultarHistorialBCRA(cuit){
 // Cheques rechazados, agrupados por causal/entidad, con bucket de recencia.
 async function consultarRechazadosBCRA(cuit, ahora = new Date()){
   const r = await fetch(BCRA_RECHAZADOS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
-  if (r.status === 404) return { ok:true, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0 };
+  if (r.status === 404) return { ok:true, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0, detalleRechazos:[] };
   if (!r.ok) return { ok:false, error:"HTTP " + r.status };
   const data = await r.json();
   if (!data || !data.results) return { ok:false, error:"Sin results" };
@@ -1582,6 +1582,7 @@ async function consultarRechazadosBCRA(cuit, ahora = new Date()){
   // no financiera — la tratamos aparte, con mucho menos peso.
   let rechazosSinFondos6m=0, rechazosSinFondos6a12m=0, rechazosSinFondos12a24m=0;
   let rechazosDefectosFormales6m=0, rechazosDefectosFormales6a12m=0, rechazosDefectosFormales12a24m=0;
+  const detalleRechazos = [];
 
   for (const causalGrupo of data.results.causales || []){
     const esSinFondos = /sin\s*fondos/i.test(causalGrupo.causal || "");
@@ -1598,10 +1599,29 @@ async function consultarRechazadosBCRA(cuit, ahora = new Date()){
           else if (meses <= 12) rechazosDefectosFormales6a12m++;
           else if (meses <= 24) rechazosDefectosFormales12a24m++;
         }
+        // Detalle completo por cheque — el BCRA sí informa monto, si se
+        // pagó el cheque y si se pagó la multa (confirmado contra el
+        // manual oficial del BCRA). Antes lo descartábamos, solo
+        // contábamos ocurrencias.
+        detalleRechazos.push({
+          nroCheque: cheque.nroCheque,
+          entidad: entidad.entidad,
+          fechaRechazo: cheque.fechaRechazo,
+          monto: cheque.monto || 0,
+          causal: causalGrupo.causal,
+          esSinFondos,
+          chequePagado: !!cheque.fechaPago,
+          multaPaga: !!cheque.fechaPagoMulta,
+          enRevision: !!cheque.enRevision,
+          procesoJudicial: !!cheque.procesoJud,
+          mesesDesdeRechazo: meses
+        });
       }
     }
   }
-  return { ok:true, rechazosSinFondos6m, rechazosSinFondos6a12m, rechazosSinFondos12a24m, rechazosDefectosFormales6m, rechazosDefectosFormales6a12m, rechazosDefectosFormales12a24m };
+  detalleRechazos.sort((a,b) => new Date(b.fechaRechazo) - new Date(a.fechaRechazo));
+
+  return { ok:true, rechazosSinFondos6m, rechazosSinFondos6a12m, rechazosSinFondos12a24m, rechazosDefectosFormales6m, rechazosDefectosFormales6a12m, rechazosDefectosFormales12a24m, detalleRechazos };
 }
 
 // Cheque denunciado. IMPORTANTE (confirmado con el código real de OpenCheck):
@@ -1672,6 +1692,7 @@ async function construirDatosLibradorReal(cuit){
     rechazosDefectosFormales6m: rechazos.rechazosDefectosFormales6m,
     rechazosDefectosFormales6a12m: rechazos.rechazosDefectosFormales6a12m,
     rechazosDefectosFormales12a24m: rechazos.rechazosDefectosFormales12a24m,
+    detalleRechazos: rechazos.detalleRechazos || [],
     entidades: deuda.entidades,
     historialSituacion: historial.historialSituacion,
     historialDeuda: historial.historialDeuda,
@@ -2810,6 +2831,39 @@ function construirDetalleMensualToggle(detalleMensual, idx){
     </div>
   `;
 }
+
+// Detalle de cada cheque rechazado informado por BCRA — causal, monto,
+// y si el cheque y la multa asociada ya fueron pagados/levantados.
+// Reutiliza el mismo toggle genérico (toggleDetalleMensual) que la tabla
+// de deuda vs. inflación, solo cambia el contenido.
+function construirDetalleRechazosToggle(detalleRechazos, idx){
+  const id = "detalle-rechazos-" + idx;
+  const filas = detalleRechazos.map(r => {
+    const fecha = new Date(r.fechaRechazo + "T00:00:00").toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric" });
+    return `
+    <tr>
+      <td>${fecha}</td>
+      <td>${r.esSinFondos ? "Sin fondos" : "Defectos formales"}</td>
+      <td>$${Number(r.monto || 0).toLocaleString("es-AR")}</td>
+      <td>${r.chequePagado ? "Pagado" : "Impago"}</td>
+      <td>${r.multaPaga ? "Paga" : "Impaga"}</td>
+    </tr>`;
+  }).join("");
+  return `
+    <div class="detalle-mensual-toggle" onclick="toggleDetalleMensual('${id}', this)">
+      Ver detalle de cheques rechazados (${detalleRechazos.length}) <span class="dm-arrow">▸</span>
+    </div>
+    <div class="detalle-mensual-tabla" id="${id}" style="display:none">
+      <div class="dm-nota">Cada cheque rechazado que informa el BCRA para este CUIT en los últimos 24 meses, con su causal, monto, y si el cheque y la multa asociada ya fueron pagados.</div>
+      <table>
+        <thead>
+          <tr><th>Fecha</th><th>Causal</th><th>Monto</th><th>Cheque</th><th>Multa</th></tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+  `;
+}
 function toggleDetalleMensual(id, el){
   const tabla = document.getElementById(id);
   const abierta = tabla.style.display !== "none";
@@ -2876,6 +2930,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
       </div>
       <div class="br-desc">${v.desc}</div>
       ${v.detalleMensual ? construirDetalleMensualToggle(v.detalleMensual, idx) : ""}
+      ${v.detalleRechazos && v.detalleRechazos.length ? construirDetalleRechazosToggle(v.detalleRechazos, idx) : ""}
     </div>
   `).join("");
 
