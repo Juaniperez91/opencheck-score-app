@@ -2226,14 +2226,14 @@ function previsualizarRazonSocial(){
     try {
       const real = await consultarDeudorBCRA(digits);
       if (limpiarCuit(document.getElementById("consulta-cuit").value) !== digits) return;
-      if (real.ok && real.denominacion){
-        preview.className = "razon-social-preview show rs-found";
-        preview.innerHTML = `✓ ${real.denominacion} <span class="fuente-badge fuente-real">API BCRA real</span>`;
-        return;
-      }
-      if (real.ok && real.sinDatos){
-        preview.className = "razon-social-preview show rs-unknown";
-        preview.innerHTML = "No encontramos una razón social asociada en BCRA. Puede no tener antecedentes financieros informados. <span class=\"fuente-badge fuente-real\">API BCRA real</span>";
+      if (real.ok){
+        if (real.denominacion){
+          preview.className = "razon-social-preview show rs-found";
+          preview.innerHTML = `✓ ${real.denominacion} <span class="fuente-badge fuente-real">API BCRA real</span>`;
+        } else {
+          preview.className = "razon-social-preview show rs-unknown";
+          preview.innerHTML = "El BCRA no informa una razón social para este CUIT (puede ser una persona física sin antecedentes financieros registrados). <span class=\"fuente-badge fuente-real\">API BCRA real</span>";
+        }
         return;
       }
       throw new Error(real.error || "Respuesta inesperada");
@@ -2388,6 +2388,30 @@ function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
   const candidatos = (texto || "").match(/\b\d{6,8}\b/g) || [];
   for (const c of candidatos){
     if (!cuitEncontrado || !cuitEncontrado.includes(c)) return c.padStart(8, "0");
+  }
+  return null;
+}
+
+// Busca el nombre/alias del banco impreso en el cheque (suele estar en
+// grande, arriba — el logo del banco es de lo más fácil de leer bien
+// para el OCR). Usamos alias cortos porque el OCR normalmente lee la
+// marca (ej. "BBVA"), no el nombre completo de la entidad ("BBVA Argentina").
+const ALIAS_BANCOS = [
+  { patron: /banco\s*de\s*la\s*naci[oó]n|\bbna\b/i, codigo: 11 },
+  { patron: /galicia/i, codigo: 7 },
+  { patron: /\bmacro\b/i, codigo: 285 },
+  { patron: /santander/i, codigo: 72 },
+  { patron: /credicoop/i, codigo: 191 },
+  { patron: /provincia|bapro/i, codigo: 14 },
+  { patron: /bbva/i, codigo: 17 },
+  { patron: /icbc/i, codigo: 97 },
+  { patron: /supervielle/i, codigo: 27 },
+  { patron: /patagonia/i, codigo: 338 }
+];
+
+function extraerBancoDeTexto(texto){
+  for (const alias of ALIAS_BANCOS){
+    if (alias.patron.test(texto || "")) return alias.codigo;
   }
   return null;
 }
@@ -2550,14 +2574,16 @@ async function procesarFotoCheque(archivo){
     const cuit = extraerCuitDeTexto(texto);
     const numeroEncontrado = extraerNumeroChequeDeTexto(texto, cuit ? cuit.valor : null);
     const fechaEncontrada = extraerFechaDeTexto(texto);
+    const codigoBanco = extraerBancoDeTexto(texto);
 
     if (cuit) setCuit(formatearCuit(cuit.valor));
     if (numeroEncontrado) document.getElementById("consulta-numero-cheque").value = numeroEncontrado;
     if (fechaEncontrada) document.getElementById("consulta-fecha-vencimiento").value = fechaEncontrada;
+    if (codigoBanco) document.getElementById("consulta-banco-cheque").value = codigoBanco;
 
     if (cuit && !cuit.confiable){
       mostrarToast("Encontramos un CUIT parecido pero no lo pudimos confirmar del todo — revisalo antes de consultar.");
-    } else if (cuit || numeroEncontrado || fechaEncontrada){
+    } else if (cuit || numeroEncontrado || fechaEncontrada || codigoBanco){
       mostrarToast("Revisá los datos leídos antes de consultar — el OCR no siempre acierta.");
     } else {
       mostrarToast("No pudimos leer datos del cheque. Probá con más luz y bien encuadrado, o completá los campos a mano.");
