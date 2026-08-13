@@ -601,6 +601,10 @@
     cursor:pointer; flex-shrink:0;
   }
   .camara-btn-capturar:active{background:var(--paper-2);}
+  .camara-btn-usar{
+    background:var(--green); color:#fff; border:none; padding:12px 22px;
+    border-radius:10px; font-family:'DM Sans',sans-serif; font-weight:700; font-size:14px; cursor:pointer;
+  }
 
   .confirmacion-banner{
     position:fixed; left:16px; right:16px; bottom:16px; z-index:150;
@@ -900,13 +904,23 @@
     <video id="camara-video" autoplay playsinline muted></video>
     <div class="camara-overlay">
       <div class="camara-marco"></div>
-      <div class="camara-instrucciones">Sostené el teléfono normal (vertical) y encuadrá el cheque completo dentro del marco, con buena luz</div>
+      <div class="camara-instrucciones">Sostené el teléfono normal (vertical), acercate bien al cheque, y encuadrá el cheque completo dentro del marco, con buena luz</div>
     </div>
     <div class="camara-controles">
       <button class="camara-btn-cancelar" onclick="cerrarCamaraCheque()">Cancelar</button>
       <button class="camara-btn-capturar" onclick="capturarFotoCheque()" aria-label="Capturar foto"></button>
       <div style="width:64px;"></div>
     </div>
+
+    <div id="camara-preview" style="display:none; position:absolute; inset:0; background:#000; flex-direction:column;">
+      <img id="camara-preview-img" style="flex:1; width:100%; object-fit:contain; background:#000;">
+      <div class="camara-controles">
+        <button class="camara-btn-cancelar" onclick="volverASacarFoto()">Volver a sacar</button>
+        <div style="flex:1;"></div>
+        <button class="camara-btn-usar" onclick="usarFotoCapturada()">Usar esta foto</button>
+      </div>
+    </div>
+
     <canvas id="camara-canvas" style="display:none"></canvas>
   </div>
 </div>
@@ -2610,7 +2624,11 @@ function cerrarCamaraCheque(){
     camaraStream = null;
   }
   document.getElementById("camara-modal").style.display = "none";
+  document.getElementById("camara-preview").style.display = "none";
+  fotoCapturadaBlob = null;
 }
+
+let fotoCapturadaBlob = null;
 
 function capturarFotoCheque(){
   const video = document.getElementById("camara-video");
@@ -2619,10 +2637,25 @@ function capturarFotoCheque(){
   canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  canvas.toBlob(async (blob) => {
-    cerrarCamaraCheque();
-    await procesarFotoCheque(blob);
+  canvas.toBlob((blob) => {
+    fotoCapturadaBlob = blob;
+    document.getElementById("camara-preview-img").src = URL.createObjectURL(blob);
+    document.getElementById("camara-preview").style.display = "flex";
   }, "image/jpeg", 0.92);
+}
+
+function volverASacarFoto(){
+  document.getElementById("camara-preview").style.display = "none";
+  fotoCapturadaBlob = null;
+  // La cámara sigue prendida (no cerramos el stream), así que volvemos
+  // directo a la vista en vivo sin tener que pedir permiso de nuevo.
+}
+
+async function usarFotoCapturada(){
+  const blob = fotoCapturadaBlob;
+  document.getElementById("camara-preview").style.display = "none";
+  cerrarCamaraCheque();
+  await procesarFotoCheque(blob);
 }
 
 async function procesarFotoCheque(archivo){
