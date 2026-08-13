@@ -2047,7 +2047,7 @@ function irA(pantalla){
   if (pantalla === "home" && state.user){
     const mesActual = new Date().toISOString().slice(0,7);
     const usadas = state.user.mes_actual === mesActual ? (state.user.consultas_usadas_mes || 0) : 0;
-    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - usadas);
+    document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - usadas);
   }
   window.scrollTo(0,0);
 }
@@ -2287,7 +2287,7 @@ async function consultarCuit(){
   }
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
-  if (state.user && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
+  if (state.user && !state.user.es_admin && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
     irA("cuenta");
     return;
   }
@@ -2323,7 +2323,7 @@ async function consultarCuit(){
 
   if (state.user){
     state.user = await incrementarConsultasUsadas(state.user);
-    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
       categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
@@ -2412,6 +2412,21 @@ const ALIAS_BANCOS = [
 function extraerBancoDeTexto(texto){
   for (const alias of ALIAS_BANCOS){
     if (alias.patron.test(texto || "")) return alias.codigo;
+  }
+  return extraerBancoPorCodigoNumerico(texto);
+}
+
+// Respaldo: el logo del banco a veces es un gráfico estilizado que el
+// OCR no lee bien como texto. Pero el código de banco (3 dígitos) suele
+// estar impreso en tipografía plana dentro del recuadro de cuenta, tipo
+// "017-149-1416 0" — mucho más fácil de leer. Si el primer grupo de 3
+// dígitos coincide con un código de banco real conocido, lo usamos.
+function extraerBancoPorCodigoNumerico(texto){
+  const codigosConocidos = new Map(ENTIDADES_CHEQUES.map(e => [String(e.codigo).padStart(3,"0"), e.codigo]));
+  const candidatos = (texto || "").match(/\b\d{3}-\d{2,4}/g) || [];
+  for (const c of candidatos){
+    const codigo3 = c.split("-")[0];
+    if (codigosConocidos.has(codigo3)) return codigosConocidos.get(codigo3);
   }
   return null;
 }
