@@ -2523,6 +2523,18 @@ async function abrirCamaraCheque(){
     const video = document.getElementById("camara-video");
     video.srcObject = camaraStream;
     document.getElementById("camara-modal").style.display = "flex";
+
+    // Forzamos horizontal por código en vez de depender de que el
+    // usuario gire el teléfono y el navegador lo detecte bien — mucho
+    // más confiable. Solo funciona en PWA instalada o pantalla completa;
+    // si falla, seguimos igual (el marco ya soporta ambas orientaciones).
+    try {
+      if (screen.orientation && screen.orientation.lock){
+        await screen.orientation.lock("landscape");
+      }
+    } catch (e){
+      console.warn("[OpenCheck Score] No se pudo forzar orientación horizontal:", e.message);
+    }
   } catch (e){
     console.warn("[OpenCheck Score] No se pudo abrir la cámara en vivo:", e.message);
     document.getElementById("ocr-file-input").click();
@@ -2535,6 +2547,9 @@ function cerrarCamaraCheque(){
     camaraStream = null;
   }
   document.getElementById("camara-modal").style.display = "none";
+  try {
+    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  } catch (e) {}
 }
 
 function capturarFotoCheque(){
