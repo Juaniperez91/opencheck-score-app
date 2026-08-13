@@ -729,7 +729,7 @@
         </div>
         <div class="ocr-text">
           <b id="ocr-btn-label">Sacar foto del cheque</b>
-          <span>Para mejor lectura: girá el teléfono a horizontal antes de tocar acá</span>
+          <span>Encuadrá el cheque completo dentro del marco</span>
         </div>
       </button>
 
@@ -900,7 +900,7 @@
     <video id="camara-video" autoplay playsinline muted></video>
     <div class="camara-overlay">
       <div class="camara-marco"></div>
-      <div class="camara-instrucciones">Girá el teléfono en horizontal y encuadrá el cheque completo, bien apoyado y con buena luz</div>
+      <div class="camara-instrucciones">Sostené el teléfono normal (vertical) y encuadrá el cheque completo dentro del marco, con buena luz</div>
     </div>
     <div class="camara-controles">
       <button class="camara-btn-cancelar" onclick="cerrarCamaraCheque()">Cancelar</button>
@@ -2559,18 +2559,6 @@ async function abrirCamaraCheque(){
     const video = document.getElementById("camara-video");
     video.srcObject = camaraStream;
     document.getElementById("camara-modal").style.display = "flex";
-
-    // Forzamos horizontal por código en vez de depender de que el
-    // usuario gire el teléfono y el navegador lo detecte bien — mucho
-    // más confiable. Solo funciona en PWA instalada o pantalla completa;
-    // si falla, seguimos igual (el marco ya soporta ambas orientaciones).
-    try {
-      if (screen.orientation && screen.orientation.lock){
-        await screen.orientation.lock("landscape");
-      }
-    } catch (e){
-      console.warn("[OpenCheck Score] No se pudo forzar orientación horizontal:", e.message);
-    }
   } catch (e){
     console.warn("[OpenCheck Score] No se pudo abrir la cámara en vivo:", e.message);
     document.getElementById("ocr-file-input").click();
@@ -2583,9 +2571,6 @@ function cerrarCamaraCheque(){
     camaraStream = null;
   }
   document.getElementById("camara-modal").style.display = "none";
-  try {
-    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
-  } catch (e) {}
 }
 
 function capturarFotoCheque(){
