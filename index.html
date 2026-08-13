@@ -1161,12 +1161,35 @@ function scoreBancos(n){
   if (n === 1) return 2;
   return 0;
 }
+// Determina si hay algún rechazo "sin fondos" en los últimos 6 meses que
+// TODAVÍA no está regularizado (cheque y multa pagados). Con el detalle
+// completo (detalleRechazos) lo miramos caso por caso; sin él (demo, o
+// BCRA sin ese detalle) usamos el conteo simple, asumiendo sin
+// regularizar por precaución — no queremos suavizar sin evidencia.
+function hayRechazoSinFondosSinRegularizar(d){
+  if (d.detalleRechazos && d.detalleRechazos.length){
+    return d.detalleRechazos.some(r => r.esSinFondos && r.mesesDesdeRechazo <= 6 && !(r.chequePagado && r.multaPaga));
+  }
+  return (d.rechazosSinFondos6m || 0) > 0;
+}
+
 function scoreRechazos(d){
   // 20 pts: variable propia, no solo ausencia de penalización.
-  // "Sin fondos" es la señal real de insolvencia y es lo único que resta
-  // acá. "Defectos formales" (firma, datos mal puestos) es un error
-  // administrativo, no financiero — no penaliza nada. Un "sin fondos" en
-  // los últimos 6 meses fuerza C2 directo aparte (ver calcularScore).
+  // "Sin fondos" es la única causal que resta acá. Si tenemos el detalle
+  // completo, un rechazo YA regularizado (cheque y multa pagados) pesa
+  // bastante menos que uno idéntico que sigue sin resolverse — la
+  // situación real de riesgo no es la misma.
+  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos && r.mesesDesdeRechazo <= 24) : [];
+
+  if (sinFondos.length){
+    const peor = sinFondos.reduce((a,b) => a.mesesDesdeRechazo < b.mesesDesdeRechazo ? a : b);
+    const regularizado = peor.chequePagado && peor.multaPaga;
+    if (peor.mesesDesdeRechazo <= 6) return regularizado ? 8 : 0;
+    if (peor.mesesDesdeRechazo <= 12) return regularizado ? 14 : 4;
+    return regularizado ? 18 : 12; // 12-24m
+  }
+
+  // Sin detalle completo: conteo simple, como antes.
   if (d.rechazosSinFondos6m > 0) return 0;
   if (d.rechazosSinFondos6a12m > 0) return 4;
   if (d.rechazosSinFondos12a24m > 0) return 12;
@@ -1278,6 +1301,21 @@ function explicarAntiguedad(a){
   return `CUIT con ${a} año${a===1?"":"s"} de antigüedad en AFIP: muy reciente, sin trayectoria consolidada.`;
 }
 function explicarRechazos(d){
+  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos && r.mesesDesdeRechazo <= 24) : [];
+
+  if (sinFondos.length){
+    const peor = sinFondos.reduce((a,b) => a.mesesDesdeRechazo < b.mesesDesdeRechazo ? a : b);
+    const regularizado = peor.chequePagado && peor.multaPaga;
+    const ventana = peor.mesesDesdeRechazo <= 6 ? "en los últimos 6 meses" : peor.mesesDesdeRechazo <= 12 ? "entre 6 y 12 meses" : "entre 12 y 24 meses";
+    if (regularizado){
+      return `Rechazo de cheque por falta de fondos ${ventana}, pero ya está regularizado (cheque y multa pagados) — resta menos que uno sin resolver.`;
+    }
+    return peor.mesesDesdeRechazo <= 6
+      ? "Rechazo de cheque por falta de fondos en los últimos 6 meses, todavía sin regularizar: la cuenta pasa directamente a C2, sin importar el resto del puntaje."
+      : `Rechazo de cheque por falta de fondos ${ventana}, todavía sin regularizar.`;
+  }
+
+  // Sin detalle completo: mensajes genéricos como antes.
   if (d.rechazosSinFondos6m > 0) return "Rechazo de cheque por falta de fondos en los últimos 6 meses: la cuenta pasa directamente a C2, sin importar el resto del puntaje.";
   if (d.rechazosSinFondos6a12m > 0) return "Rechazo de cheque por falta de fondos entre 6 y 12 meses: todavía reciente, resta la mayor parte del puntaje de esta variable.";
   if (d.rechazosSinFondos12a24m > 0) return "Rechazo de cheque por falta de fondos entre 12 y 24 meses: ya superado, resta solo una parte menor.";
@@ -1319,14 +1357,15 @@ function calcularScore(d){
   let forzadoC2 = false;
   let motivo = null;
 
-  if (d.rechazosSinFondos6m > 0){
+  if (hayRechazoSinFondosSinRegularizar(d)){
     // Un rechazo por falta de fondos tan reciente sigue siendo un corte
-    // duro, no se diluye sumándolo como puntos: fuerza C2 directo, igual
-    // que antes. Los rechazos por defectos formales NO fuerzan C2 — no son
-    // una señal de insolvencia.
+    // duro si NO está regularizado — no se diluye sumándolo como puntos:
+    // fuerza C2 directo. Si ya se pagó el cheque y la multa, no fuerza
+    // C2 (solo resta puntos, ver scoreRechazos). Los rechazos por
+    // defectos formales NUNCA fuerzan C2 — no son una señal de insolvencia.
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
-    motivo = "Rechazo de cheque por falta de fondos en los últimos 6 meses. Cuenta no operable.";
+    motivo = "Rechazo de cheque por falta de fondos en los últimos 6 meses, todavía sin regularizar. Cuenta no operable.";
   } else if (atrasos.tipo === "C2"){
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
