@@ -1394,10 +1394,20 @@ function calcularScore(d){
     if (factorRecurrencia > 0) partes.push(`${Math.round(factorRecurrencia*100)}% por recurrencia (${Math.round(recurrencia.proporcion*100)}% de la deuda de los últimos 24 meses estuvo en mora)`);
     if (partes.length){
       motivo = `Penalización aplicada: ${partes.join(" + ")}.`;
-    } else if (d.rechazosSinFondos6a12m > 0){
-      motivo = "Rechazo de cheque por falta de fondos entre 6 y 12 meses: descontado dentro del historial de rechazos.";
-    } else if (d.rechazosSinFondos12a24m > 0){
-      motivo = "Rechazo de cheque por falta de fondos entre 12 y 24 meses: descontado dentro del historial de rechazos, con impacto menor por ya estar superado.";
+    } else {
+      // Cubre también el caso de un rechazo "sin fondos" reciente pero YA
+      // REGULARIZADO (no fuerza C2, pero tampoco es "sin rechazos" —
+      // antes esta rama solo contemplaba 6-12m/12-24m con conteo simple,
+      // y el caso <6m regularizado se perdía, mostrando por error el
+      // mensaje genérico de "sin rechazos registrados" en el sello).
+      const sinFondosVigentes = (d.detalleRechazos || []).filter(r => r.esSinFondos && r.mesesDesdeRechazo <= 24);
+      if (sinFondosVigentes.length){
+        motivo = explicarRechazos(d);
+      } else if (d.rechazosSinFondos6a12m > 0){
+        motivo = "Rechazo de cheque por falta de fondos entre 6 y 12 meses: descontado dentro del historial de rechazos.";
+      } else if (d.rechazosSinFondos12a24m > 0){
+        motivo = "Rechazo de cheque por falta de fondos entre 12 y 24 meses: descontado dentro del historial de rechazos, con impacto menor por ya estar superado.";
+      }
     }
   }
 
