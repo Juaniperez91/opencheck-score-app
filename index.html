@@ -122,6 +122,24 @@
     line-height:1.5;
   }
 
+  .hero-registro{ margin:6px 0 26px; }
+  .hero-registro h1{
+    font-size:27px; font-weight:800; letter-spacing:-0.02em; line-height:1.18;
+    margin:0 0 10px; color:var(--green-ink);
+  }
+  .hero-registro .hero-sub{
+    font-size:14px; color:var(--ink-soft); line-height:1.5; margin:0 0 20px;
+  }
+  .hero-valores{ display:flex; flex-direction:column; gap:12px; }
+  .hero-valor{ display:flex; align-items:center; gap:12px; }
+  .hero-valor-icono{
+    width:38px; height:38px; border-radius:10px; background:var(--green-soft);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    color:var(--green-ink);
+  }
+  .hero-valor-texto{ font-size:13px; font-weight:600; color:var(--ink); line-height:1.3; }
+  .hero-valor-texto span{ display:block; font-weight:400; color:var(--ink-soft); font-size:11.5px; margin-top:1px; }
+
   label.field-label{
     display:block;
     font-size:12px;
@@ -321,6 +339,7 @@
     font-size:12.5px;
     line-height:1.5;
   }
+  .alert-block > span{ flex-shrink:0; margin-top:1px; }
   .alert-block.danger{background:var(--brick-soft); color:#7A2C2C;}
   .alert-block.ok{background:var(--green-soft); color:var(--green-ink);}
   .alert-block b{display:block; font-size:13px; margin-bottom:2px;}
@@ -639,9 +658,32 @@
       </div>
     </div>
     <div class="content">
-      <h1 class="page-title">Creá tu cuenta</h1>
-      <p class="page-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA. Sin Nosis, sin vueltas.</p>
+      <div class="hero-registro">
+        <h1>Sabé con quién estás por cobrar, en segundos</h1>
+        <p class="hero-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA.</p>
+        <div class="hero-valores">
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Dato oficial del BCRA<span>Central de Deudores, cheques rechazados y denunciados</span></div>
+          </div>
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Sin Nosis, sin costos ocultos<span>Solo fuentes públicas y gratuitas</span></div>
+          </div>
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Respuesta instantánea<span>Consultá un CUIT o sacá una foto del cheque</span></div>
+          </div>
+        </div>
+      </div>
 
+      <div class="divider-label">Creá tu cuenta</div>
       <div class="segmented">
         <div class="seg-opt active" id="seg-fisica" onclick="setTipoPersona('fisica')">Persona física</div>
         <div class="seg-opt" id="seg-juridica" onclick="setTipoPersona('juridica')">Persona jurídica</div>
@@ -3062,6 +3104,12 @@ function toggleDetalleMensual(id, el){
   el.querySelector(".dm-arrow").textContent = abierta ? "▸" : "▾";
 }
 
+// Íconos en línea con la marca (no emojis del sistema) para el bloque de
+// alertas del resultado.
+const ICONO_ALERTA_OK = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 12.5l2.5 2.5 5.5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICONO_ALERTA_WARN = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3.5L2.5 20h19L12 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.3" r="0.9" fill="currentColor"/></svg>`;
+const ICONO_ALERTA_BLOCK = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.8"/><path d="M6 6l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+
 function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   // Guardado para poder auditar el cálculo exacto desde la consola:
   // copy(JSON.stringify(window.ultimoResultado.detalle.deudaVsInflacion.detalleMensual))
@@ -3090,18 +3138,18 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   const alertaBox = document.getElementById("res-alerta");
   let alertaHtml = "";
   if (resultado.forzadoC2){
-    alertaHtml += `<div class="alert-block danger"><span>⛔</span><div><b>No operable</b>${resultado.motivo}</div></div>`;
+    alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_BLOCK}</span><div><b>No operable</b>${resultado.motivo}</div></div>`;
   } else if (resultado.motivo){
-    alertaHtml += `<div class="alert-block danger"><span>⚠️</span><div><b>Penalización aplicada</b>${resultado.motivo}</div></div>`;
+    alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_WARN}</span><div><b>Penalización aplicada</b>${resultado.motivo}</div></div>`;
   } else {
-    alertaHtml += `<div class="alert-block ok"><span>✓</span><div><b>Sin rechazos registrados</b>El librador no presenta rechazos de cheques en los últimos 24 meses.</div></div>`;
+    alertaHtml += `<div class="alert-block ok"><span>${ICONO_ALERTA_OK}</span><div><b>Sin rechazos registrados</b>El librador no presenta rechazos de cheques en los últimos 24 meses.</div></div>`;
   }
 
   if (numeroCheque){
     if (chequeInfo && chequeInfo.denunciado){
-      alertaHtml += `<div class="alert-block danger"><span>⛔</span><div><b>Cheque N° ${numeroCheque} denunciado</b>${chequeInfo.motivo}</div></div>`;
+      alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_BLOCK}</span><div><b>Cheque N° ${numeroCheque} denunciado</b>${chequeInfo.motivo}</div></div>`;
     } else {
-      alertaHtml += `<div class="alert-block ok"><span>✓</span><div><b>Cheque N° ${numeroCheque} sin denuncias</b>No registra extravío, robo ni oposición al pago en BCRA.</div></div>`;
+      alertaHtml += `<div class="alert-block ok"><span>${ICONO_ALERTA_OK}</span><div><b>Cheque N° ${numeroCheque} sin denuncias</b>No registra extravío, robo ni oposición al pago en BCRA.</div></div>`;
     }
   }
   alertaBox.innerHTML = alertaHtml;
