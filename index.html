@@ -1297,6 +1297,12 @@ function calcularPenalizacionRechazos(d){
 // 0-600+ dividiendo por 10 (600->60, 400->40). Los montos siguen en
 // pesos NOMINALES de cuando se diseñó esto originalmente — pendiente
 // indexar por inflación como paso aparte (no lo pisamos todavía).
+// Los montos de la matriz de atrasos están calibrados en pesos de este
+// período (confirmado por Juan Ignacio: febrero 2026). Un monto nominal
+// futuro se ajusta a pesos de este mes antes de comparar, igual que ya
+// hacemos con endeudamiento.
+const MATRIZ_ATRASOS_PERIODO_BASE = "202602";
+
 const MATRIZ_ATRASOS_ORIGINAL = [
   { scoreMin:60, scoreMax:Infinity, montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:0 },
   { scoreMin:60, scoreMax:Infinity, montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:0 },
@@ -1316,12 +1322,14 @@ const MATRIZ_ATRASOS_ORIGINAL = [
   { scoreMin:0,  scoreMax:Infinity, montoMin:500001, montoMax:Infinity, diasMin:60, diasMax:Infinity, pen:"C2" } // regla 16: SIEMPRE C2, cualquier score
 ];
 
-function calcularMatrizAtrasos(puntosBaseGeneral, montoEnMoraPesos, diasAtrasoMax){
+function calcularMatrizAtrasos(puntosBaseGeneral, montoEnMoraPesos, diasAtrasoMax, factorAjuste = 1){
   if (diasAtrasoMax <= 0 || montoEnMoraPesos <= 0) return { tipo:"ninguna", factor:0 };
+
+  const montoAjustado = montoEnMoraPesos / factorAjuste; // a pesos "de calibración" (feb 2026)
 
   for (const regla of MATRIZ_ATRASOS_ORIGINAL){
     const scoreOk = puntosBaseGeneral >= regla.scoreMin && puntosBaseGeneral <= regla.scoreMax;
-    const montoOk = montoEnMoraPesos >= regla.montoMin && montoEnMoraPesos <= regla.montoMax;
+    const montoOk = montoAjustado >= regla.montoMin && montoAjustado <= regla.montoMax;
     const diasOk = diasAtrasoMax >= regla.diasMin && diasAtrasoMax <= regla.diasMax;
     if (scoreOk && montoOk && diasOk){
       if (regla.pen === "C2") return { tipo:"C2", factor:null };
@@ -1455,7 +1463,7 @@ function calcularScore(d){
   const entidadesEnMora = (d.entidades || []).filter(e => e.situacion > 1);
   const montoEnMoraPesos = entidadesEnMora.reduce((s,e) => s + e.monto, 0);
   const diasAtrasoMax = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.diasAtraso || 0)) : 0;
-  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraPesos, diasAtrasoMax);
+  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraPesos, diasAtrasoMax, d.factorAjusteAtrasos || 1);
 
   // ---- Matriz de recurrencia: qué proporción de la deuda estuvo en mora ----
   const recurrencia = calcularMatrizRecurrencia(d.historialMontoEnMora, d.historialDeuda);
@@ -1650,12 +1658,12 @@ const BCRA_DB_RAW = {
 
 // Deriva situación / endeudamiento / cantidad de bancos a partir del detalle
 // por entidad, para que el desglose y el puntaje nunca queden desalineados.
-function calcularFactorAjusteEndeudamientoDemo(){
+function calcularFactorAjusteDesdePeriodoDemo(periodoBase){
   const hoy = new Date();
   const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
-  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
-  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
-  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10);
+  if (periodoHoy <= periodoBase) return 1;
+  let anio = parseInt(periodoBase.slice(0,4), 10);
+  let mes = parseInt(periodoBase.slice(4,6), 10);
   let meses = 0;
   while (true){
     const periodoStr = String(anio) + String(mes).padStart(2,"0");
@@ -1666,18 +1674,24 @@ function calcularFactorAjusteEndeudamientoDemo(){
   return Math.pow(1 + INFLACION_MENSUAL_DEMO_APROX, meses);
 }
 
+function calcularFactorAjusteEndeudamientoDemo(){
+  return calcularFactorAjusteDesdePeriodoDemo(ENDEUDAMIENTO_PERIODO_BASE);
+}
+
 function prepararDatos(raw){
   const situacionVigente = Math.max(...raw.entidades.map(e => e.situacion));
   const endeudamientoMillones = Math.round(raw.entidades.reduce((s,e) => s + e.monto, 0) / 1e6);
   const deudaVsInflacion = raw.deudaVsInflacion || calcularDeudaVsInflacionDemo(raw.historialDeuda || []);
   const factorAjusteEndeudamiento = raw.factorAjusteEndeudamiento || calcularFactorAjusteEndeudamientoDemo();
+  const factorAjusteAtrasos = raw.factorAjusteAtrasos || calcularFactorAjusteDesdePeriodoDemo(MATRIZ_ATRASOS_PERIODO_BASE);
   return {
     ...raw,
     situacion: situacionVigente,
     endeudamientoMillones,
     cantidadBancos: raw.entidades.length,
     deudaVsInflacion,
-    factorAjusteEndeudamiento
+    factorAjusteEndeudamiento,
+    factorAjusteAtrasos
   };
 }
 
@@ -1835,6 +1849,7 @@ async function construirDatosLibradorReal(cuit){
   // y redistribuye el peso de esta variable en vez de romper la consulta.
   let deudaVsInflacion = { disponible:false };
   let factorAjusteEndeudamiento = 1;
+  let factorAjusteAtrasos = 1;
   try {
     const inflacionPorPeriodo = await obtenerInflacionMensualBCRA();
     deudaVsInflacion = calcularDeudaRealVsInflacion(historial.historialDeuda, historial.historialPeriodos, inflacionPorPeriodo);
@@ -1842,6 +1857,7 @@ async function construirDatosLibradorReal(cuit){
       console.warn("[OpenCheck Score] Inflación OK pero no se pudo alinear con historialPeriodos:", historial.historialPeriodos, "vs mapa:", inflacionPorPeriodo);
     }
     factorAjusteEndeudamiento = calcularFactorAjusteEndeudamiento(inflacionPorPeriodo);
+    factorAjusteAtrasos = calcularFactorAjusteDesdePeriodo(MATRIZ_ATRASOS_PERIODO_BASE, inflacionPorPeriodo);
   } catch (e) {
     console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", e.message);
   }
@@ -1861,7 +1877,8 @@ async function construirDatosLibradorReal(cuit){
     historialDeuda: historial.historialDeuda,
     historialMontoEnMora: historial.historialMontoEnMora,
     deudaVsInflacion,
-    factorAjusteEndeudamiento
+    factorAjusteEndeudamiento,
+    factorAjusteAtrasos
   });
 }
 
@@ -2068,14 +2085,17 @@ async function obtenerInflacionMensualBCRA(){
 // Cuánto acumuló la inflación desde ENDEUDAMIENTO_PERIODO_BASE hasta hoy,
 // usando la misma serie mensual que ya usamos para "deuda vs. inflación".
 // Reutilizamos ese mapa en vez de pedirlo de nuevo.
-function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
+// Genérica: cuánto acumuló la inflación desde un período base ("AAAAMM")
+// hasta hoy, usando la serie mensual del BCRA. La reutilizamos tanto para
+// los umbrales de endeudamiento como para los de la matriz de atrasos.
+function calcularFactorAjusteDesdePeriodo(periodoBase, inflacionPorPeriodo){
   const hoy = new Date();
   const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
-  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
+  if (periodoHoy <= periodoBase) return 1;
 
   let factor = 1;
-  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
-  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10); // 1-12
+  let anio = parseInt(periodoBase.slice(0,4), 10);
+  let mes = parseInt(periodoBase.slice(4,6), 10); // 1-12
   while (true){
     const periodoStr = String(anio) + String(mes).padStart(2,"0");
     if (periodoStr >= periodoHoy) break;
@@ -2085,6 +2105,10 @@ function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
     if (mes > 12){ mes = 1; anio++; }
   }
   return factor;
+}
+
+function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
+  return calcularFactorAjusteDesdePeriodo(ENDEUDAMIENTO_PERIODO_BASE, inflacionPorPeriodo);
 }
 
 function calcularDeudaRealVsInflacion(historialDeuda, historialPeriodos, inflacionPorPeriodo){
