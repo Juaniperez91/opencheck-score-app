@@ -348,6 +348,7 @@
     flex-shrink:0;
   }
   .br-bar-fill{height:100%; background:var(--green);}
+  .br-bar-fill-penalizacion{background:var(--brick);}
   .br-val{font-family:'DM Mono',monospace; font-size:11.5px; width:36px; text-align:right; flex-shrink:0;}
   .br-desc{font-size:12px; color:var(--ink-soft); line-height:1.5;}
 
@@ -1187,27 +1188,95 @@ function hayRechazoSinFondosSinRegularizar(d){
   return (d.rechazosSinFondos6m || 0) > 0;
 }
 
-function scoreRechazos(d){
-  // 20 pts: variable propia, no solo ausencia de penalización.
-  // "Sin fondos" es la única causal que resta acá. Si tenemos el detalle
-  // completo, un rechazo YA regularizado (cheque y multa pagados) pesa
-  // bastante menos que uno idéntico que sigue sin resolverse — la
-  // situación real de riesgo no es la misma.
-  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos && r.mesesDesdeRechazo <= 24) : [];
+function calcularDiasEntreFechas(fechaInicio, fechaFin){
+  if (!fechaInicio || !fechaFin) return null;
+  const ms = new Date(fechaFin) - new Date(fechaInicio);
+  if (isNaN(ms)) return null;
+  return Math.floor(ms / 86400000);
+}
+
+// Cuántos días tardó en regularizarse (cheque Y multa pagados) desde la
+// fecha de rechazo. Null si todavía no está regularizado o faltan fechas.
+function calcularDiasParaRegularizar(rechazo){
+  if (!rechazo.chequePagado || !rechazo.multaPaga) return null;
+  const fechaFinal = [rechazo.fechaPago, rechazo.fechaPagoMulta].filter(Boolean).sort().pop();
+  return calcularDiasEntreFechas(rechazo.fechaRechazo, fechaFinal);
+}
+
+// La Central de Cuentacorrentistas Inhabilitados del BCRA NO es una API
+// pública (acceso restringido a bancos) — así que en vez de consultarla
+// directo, replicamos las causales reales de inhabilitación según la
+// Reglamentación de la Cuenta Corriente Bancaria del BCRA (Sección 8/9),
+// con los datos que sí tenemos de ChequesRechazados:
+//   A) 5 o más cheques "sin fondos" sin cancelar (cualquier ventana)
+//   B) 8 o más rechazos por defectos formales en los últimos 12 meses
+//   C) Multa de un rechazo "sin fondos" impaga hace más de 60 días
+function hayTriggerInhabilitacion(d, hoy = new Date()){
+  const detalle = d.detalleRechazos || [];
+  const sinFondos = detalle.filter(r => r.esSinFondos);
+  const defectosFormales12m = detalle.filter(r => !r.esSinFondos && r.mesesDesdeRechazo <= 12);
+
+  const sinFondosSinCancelar = sinFondos.filter(r => !r.chequePagado);
+  if (sinFondosSinCancelar.length >= 5){
+    return { trigger:true, motivo:`${sinFondosSinCancelar.length} cheques rechazados por falta de fondos sin cancelar (5 o más es causal de inhabilitación en el BCRA). Cuenta no operable.` };
+  }
+
+  if (defectosFormales12m.length >= 8){
+    return { trigger:true, motivo:`${defectosFormales12m.length} rechazos por defectos formales en los últimos 12 meses (8 o más es causal de inhabilitación en el BCRA). Cuenta no operable.` };
+  }
+
+  for (const r of sinFondos){
+    if (!r.multaPaga && r.fechaRechazo){
+      const dias = calcularDiasEntreFechas(r.fechaRechazo, hoy);
+      if (dias !== null && dias > 60){
+        return { trigger:true, motivo:`Multa de un cheque rechazado por falta de fondos sigue impaga hace ${dias} días (más de 60 días es causal de inhabilitación en el BCRA). Cuenta no operable.` };
+      }
+    }
+  }
+
+  return { trigger:false, motivo:null };
+}
+
+// Penalización por rechazos, importada del diseño original de OpenCheck
+// (penRechazos + penSF). Ya NO es una variable de puntos — es un
+// descuento porcentual sobre el score final, igual que atrasos y
+// recurrencia. Los cortes de C2 (sin fondos <6m sin regularizar, y los
+// 3 triggers de hayTriggerInhabilitacion) se evalúan aparte, en calcularScore.
+function calcularPenalizacionRechazos(d){
+  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos) : [];
+
+  let factorRecencia = 0;
+  let ventana = null;
 
   if (sinFondos.length){
     const peor = sinFondos.reduce((a,b) => a.mesesDesdeRechazo < b.mesesDesdeRechazo ? a : b);
-    const regularizado = peor.chequePagado && peor.multaPaga;
-    if (peor.mesesDesdeRechazo <= 6) return regularizado ? 8 : 0;
-    if (peor.mesesDesdeRechazo <= 12) return regularizado ? 14 : 4;
-    return regularizado ? 18 : 12; // 12-24m
+
+    if (peor.mesesDesdeRechazo <= 6){
+      // Si llegó hasta acá (no forzó C2 aparte) es porque está
+      // regularizado — usamos la escala graduada por días que tardó en
+      // regularizarse, no el bucket de recencia.
+      const diasReg = calcularDiasParaRegularizar(peor);
+      if (diasReg !== null){
+        if (diasReg <= 15){ factorRecencia = 0; ventana = "regularizado en 15 días o menos"; }
+        else if (diasReg <= 30){ factorRecencia = 0.10; ventana = "regularizado en 16 a 30 días"; }
+        else if (diasReg <= 60){ factorRecencia = 0.25; ventana = "regularizado en 31 a 60 días"; }
+        else { factorRecencia = 0.50; ventana = "regularizado en más de 60 días"; }
+      }
+    } else if (peor.mesesDesdeRechazo <= 12){ factorRecencia = 0.50; ventana = "6-12 meses"; }
+    else if (peor.mesesDesdeRechazo <= 24){ factorRecencia = 0.20; ventana = "12-24 meses"; }
+    else { factorRecencia = 0.10; ventana = "más de 24 meses"; }
+  } else if (d.rechazosSinFondos6a12m > 0){
+    factorRecencia = 0.50; ventana = "6-12 meses";
+  } else if (d.rechazosSinFondos12a24m > 0){
+    factorRecencia = 0.20; ventana = "12-24 meses";
   }
 
-  // Sin detalle completo: conteo simple, como antes.
-  if (d.rechazosSinFondos6m > 0) return 0;
-  if (d.rechazosSinFondos6a12m > 0) return 4;
-  if (d.rechazosSinFondos12a24m > 0) return 12;
-  return 20;
+  // penSF original: -20% adicional si hay algún "sin fondos" con multa
+  // TODAVÍA impaga (y no llegó a los 60 días, si no ya forzó C2 aparte).
+  const hayMultaImpaga = sinFondos.some(r => !r.multaPaga);
+  const factorMultaImpaga = hayMultaImpaga ? 0.20 : 0;
+
+  return { factor: Math.min(factorRecencia + factorMultaImpaga, 1), factorRecencia, factorMultaImpaga, ventana, hayMultaImpaga, cantidad: sinFondos.length };
 }
 
 /* =======================================================
@@ -1221,25 +1290,44 @@ function scoreRechazos(d){
 
 // Cruza banda de puntaje base × monto en mora × días de atraso.
 // Devuelve { tipo: "ninguna" | "penalizacion" | "C2", factor }
-function calcularMatrizAtrasos(puntosBaseVariable, montoEnMoraMillones, diasAtrasoMax){
-  if (diasAtrasoMax <= 0) return { tipo:"ninguna", factor:0 };
+// Matriz de atrasos ORIGINAL de OpenCheck (16 combinaciones), importada
+// tal cual del diseño previo (opencheck.pro). La columna "Score Nosis"
+// (que no tenemos, OpenCheck Score no usa Nosis) se reemplaza por
+// nuestro propio puntosBase de 0-100, reescalado de la escala original
+// 0-600+ dividiendo por 10 (600->60, 400->40). Los montos siguen en
+// pesos NOMINALES de cuando se diseñó esto originalmente — pendiente
+// indexar por inflación como paso aparte (no lo pisamos todavía).
+const MATRIZ_ATRASOS_ORIGINAL = [
+  { scoreMin:60, scoreMax:Infinity, montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:0 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:0 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:5 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:0 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:10 },
+  { scoreMin:40, scoreMax:59,       montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:0 },
+  { scoreMin:40, scoreMax:59,       montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:0 },
+  { scoreMin:40, scoreMax:59,       montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:10 },
+  { scoreMin:40, scoreMax:59,       montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:0 },
+  { scoreMin:40, scoreMax:59,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:15 },
+  { scoreMin:0,  scoreMax:39,       montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:5 },
+  { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:10 },
+  { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:"C2" },
+  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:10 },
+  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:"C2" },
+  { scoreMin:0,  scoreMax:Infinity, montoMin:500001, montoMax:Infinity, diasMin:60, diasMax:Infinity, pen:"C2" } // regla 16: SIEMPRE C2, cualquier score
+];
 
-  const bandaBaja = puntosBaseVariable < 35;
-  const montoAlto = montoEnMoraMillones > 25;
-  const montoMedio = montoEnMoraMillones > 5 && montoEnMoraMillones <= 25;
-  const diasMuyGraves = diasAtrasoMax > 180;
-  const diasGraves = diasAtrasoMax > 60 && diasAtrasoMax <= 180;
-  const diasLeves = diasAtrasoMax > 0 && diasAtrasoMax <= 60;
+function calcularMatrizAtrasos(puntosBaseGeneral, montoEnMoraPesos, diasAtrasoMax){
+  if (diasAtrasoMax <= 0 || montoEnMoraPesos <= 0) return { tipo:"ninguna", factor:0 };
 
-  // C2 directo: mora grande y sostenida, o mora grave con puntaje ya débil
-  if (montoAlto && diasMuyGraves) return { tipo:"C2", factor:null };
-  if (bandaBaja && montoAlto && diasGraves) return { tipo:"C2", factor:null };
-
-  // Penalizaciones graduales
-  if (diasMuyGraves) return { tipo:"penalizacion", factor:0.15 };
-  if (diasGraves && (montoMedio || montoAlto)) return { tipo:"penalizacion", factor:0.10 };
-  if (diasGraves) return { tipo:"penalizacion", factor:0.05 };
-  if (diasLeves && montoAlto) return { tipo:"penalizacion", factor:0.05 };
+  for (const regla of MATRIZ_ATRASOS_ORIGINAL){
+    const scoreOk = puntosBaseGeneral >= regla.scoreMin && puntosBaseGeneral <= regla.scoreMax;
+    const montoOk = montoEnMoraPesos >= regla.montoMin && montoEnMoraPesos <= regla.montoMax;
+    const diasOk = diasAtrasoMax >= regla.diasMin && diasAtrasoMax <= regla.diasMax;
+    if (scoreOk && montoOk && diasOk){
+      if (regla.pen === "C2") return { tipo:"C2", factor:null };
+      return { tipo: regla.pen > 0 ? "penalizacion" : "ninguna", factor: regla.pen/100 };
+    }
+  }
   return { tipo:"ninguna", factor:0 };
 }
 
@@ -1314,28 +1402,23 @@ function explicarAntiguedad(a){
   if (a >= 3) return `CUIT con ${a} años de antigüedad en AFIP: historia todavía limitada.`;
   return `CUIT con ${a} año${a===1?"":"s"} de antigüedad en AFIP: muy reciente, sin trayectoria consolidada.`;
 }
-function explicarRechazos(d){
-  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos && r.mesesDesdeRechazo <= 24) : [];
+function explicarRechazos(d, penalizacion){
+  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos) : [];
 
-  if (sinFondos.length){
-    const peor = sinFondos.reduce((a,b) => a.mesesDesdeRechazo < b.mesesDesdeRechazo ? a : b);
-    const regularizado = peor.chequePagado && peor.multaPaga;
-    const ventana = peor.mesesDesdeRechazo <= 6 ? "en los últimos 6 meses" : peor.mesesDesdeRechazo <= 12 ? "entre 6 y 12 meses" : "entre 12 y 24 meses";
-    if (regularizado){
-      return `Rechazo de cheque por falta de fondos ${ventana}, pero ya está regularizado (cheque y multa pagados) — resta menos que uno sin resolver.`;
-    }
-    return peor.mesesDesdeRechazo <= 6
-      ? "Rechazo de cheque por falta de fondos en los últimos 6 meses, todavía sin regularizar: la cuenta pasa directamente a C2, sin importar el resto del puntaje."
-      : `Rechazo de cheque por falta de fondos ${ventana}, todavía sin regularizar.`;
+  if (!penalizacion || penalizacion.factor === 0){
+    if (d.rechazosDefectosFormales6m > 0 || d.rechazosDefectosFormales6a12m > 0 || d.rechazosDefectosFormales12a24m > 0)
+      return "Hubo algún rechazo por defectos formales (firma, datos mal puestos) en los últimos 24 meses, pero no por falta de fondos — es un error administrativo, no una señal de insolvencia, así que no resta nada.";
+    return "Sin rechazos de cheques por falta de fondos informados por BCRA: sin descuento por este concepto.";
   }
 
-  // Sin detalle completo: mensajes genéricos como antes.
-  if (d.rechazosSinFondos6m > 0) return "Rechazo de cheque por falta de fondos en los últimos 6 meses: la cuenta pasa directamente a C2, sin importar el resto del puntaje.";
-  if (d.rechazosSinFondos6a12m > 0) return "Rechazo de cheque por falta de fondos entre 6 y 12 meses: todavía reciente, resta la mayor parte del puntaje de esta variable.";
-  if (d.rechazosSinFondos12a24m > 0) return "Rechazo de cheque por falta de fondos entre 12 y 24 meses: ya superado, resta solo una parte menor.";
-  if (d.rechazosDefectosFormales6m > 0 || d.rechazosDefectosFormales6a12m > 0 || d.rechazosDefectosFormales12a24m > 0)
-    return "Hubo algún rechazo por defectos formales (firma, datos mal puestos) en los últimos 24 meses, pero no por falta de fondos — es un error administrativo, no una señal de insolvencia, así que no resta nada acá.";
-  return "Sin rechazos de cheques informados por BCRA en los últimos 24 meses: puntaje máximo en esta variable.";
+  const partes = [];
+  if (penalizacion.ventana) partes.push(`rechazo por falta de fondos (${penalizacion.ventana}): -${Math.round(penalizacion.factorRecencia*100)}%`);
+  if (penalizacion.hayMultaImpaga) partes.push(`multa todavía impaga: -20% adicional`);
+
+  const peor = sinFondos.length ? sinFondos.reduce((a,b) => a.mesesDesdeRechazo < b.mesesDesdeRechazo ? a : b) : null;
+  const detalleRegularizacion = peor && peor.chequePagado && peor.multaPaga ? " (cheque y multa ya pagados)" : "";
+
+  return `Descuento por rechazos: ${Math.round(penalizacion.factor*100)}% sobre el score${detalleRegularizacion} — ${partes.join(" + ")}.`;
 }
 
 function calcularScore(d){
@@ -1347,67 +1430,81 @@ function calcularScore(d){
   const pSituacion24m = scoreSituacion24m(peorSituacion24m);
   const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1);
   const pBancos = scoreBancos(d.cantidadBancos);
-  const pRechazos = scoreRechazos(d);
 
-  // ---- Deuda real vs. inflación: 10 pts, redistribuidos si no está disponible ----
+  // ---- Deuda real vs. inflación: 10 pts, redistribuida si no está disponible ----
   const inflacionDisponible = d.deudaVsInflacion && d.deudaVsInflacion.disponible;
   const pDeudaVsInflacion = inflacionDisponible ? scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) : null;
 
-  let puntosBase = inflacionDisponible
-    ? pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos + pDeudaVsInflacion
-    : Math.round((pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos) * (100/90));
+  // Rechazos ya NO es una variable de puntos (era 20/100) — pasó a ser un
+  // % de descuento sobre el score final, como atrasos y recurrencia (así
+  // lo tenía diseñado el motor original de OpenCheck). Por eso las 5
+  // variables que quedan como puntos (30+20+10+10+10=80, u 70 sin deuda
+  // vs. inflación) se reescalan a 100 — si no, nadie podría llegar a A1.
+  const variables = [
+    { pts: pSituacion, max: 30 },
+    { pts: pSituacion24m, max: 20 },
+    { pts: pEndeudamiento, max: 10 },
+    { pts: pBancos, max: 10 }
+  ];
+  if (inflacionDisponible) variables.push({ pts: pDeudaVsInflacion, max: 10 });
+  const sumaPts = variables.reduce((s,v) => s+v.pts, 0);
+  const sumaMax = variables.reduce((s,v) => s+v.max, 0);
+  let puntosBase = Math.round(sumaPts * (100/sumaMax));
 
-  // ---- Matriz de atrasos: monto en mora vigente × días de atraso ----
+  // ---- Matriz de atrasos original (16 combinaciones, en pesos reales) ----
   const entidadesEnMora = (d.entidades || []).filter(e => e.situacion > 1);
-  const montoEnMoraMillones = entidadesEnMora.reduce((s,e) => s + e.monto, 0) / 1e6;
+  const montoEnMoraPesos = entidadesEnMora.reduce((s,e) => s + e.monto, 0);
   const diasAtrasoMax = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.diasAtraso || 0)) : 0;
-  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraMillones, diasAtrasoMax);
+  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraPesos, diasAtrasoMax);
 
   // ---- Matriz de recurrencia: qué proporción de la deuda estuvo en mora ----
   const recurrencia = calcularMatrizRecurrencia(d.historialMontoEnMora, d.historialDeuda);
   const factorRecurrencia = recurrencia.factor;
 
+  // ---- Penalización por rechazos (% sobre el score, no puntos) ----
+  const penalizacionRechazos = calcularPenalizacionRechazos(d);
+
   let puntosFinales = puntosBase;
   let forzadoC2 = false;
   let motivo = null;
 
+  const inhabilitacion = hayTriggerInhabilitacion(d);
+
   if (hayRechazoSinFondosSinRegularizar(d)){
     // Un rechazo por falta de fondos tan reciente sigue siendo un corte
-    // duro si NO está regularizado — no se diluye sumándolo como puntos:
+    // duro si NO está regularizado — no se diluye como % de descuento:
     // fuerza C2 directo. Si ya se pagó el cheque y la multa, no fuerza
-    // C2 (solo resta puntos, ver scoreRechazos). Los rechazos por
-    // defectos formales NUNCA fuerzan C2 — no son una señal de insolvencia.
+    // C2 (solo resta % vía calcularPenalizacionRechazos). Los rechazos
+    // por defectos formales NUNCA fuerzan C2 por sí solos (salvo que
+    // lleguen a 8 en 12 meses, ver hayTriggerInhabilitacion abajo).
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
     motivo = "Rechazo de cheque por falta de fondos en los últimos 6 meses, todavía sin regularizar. Cuenta no operable.";
+  } else if (inhabilitacion.trigger){
+    // Causales reales de inhabilitación según la Reglamentación de la
+    // Cuenta Corriente Bancaria del BCRA (no consultamos la Central de
+    // Inhabilitados en sí — no es una API pública — las replicamos con
+    // los datos que sí tenemos de ChequesRechazados).
+    forzadoC2 = true;
+    puntosFinales = Math.min(puntosBase, 20);
+    motivo = inhabilitacion.motivo;
   } else if (atrasos.tipo === "C2"){
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
-    motivo = `Matriz de atrasos: mora vigente de $${montoEnMoraMillones.toFixed(1)}M con ${diasAtrasoMax} días de atraso. Cuenta no operable.`;
+    motivo = montoEnMoraPesos > 500000 && diasAtrasoMax >= 60
+      ? `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} (>$500.000) con ${diasAtrasoMax} días de atraso. Cuenta no operable.`
+      : `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} con ${diasAtrasoMax} días de atraso, sobre un perfil ya débil. Cuenta no operable.`;
   } else {
     const factorAtrasos = atrasos.factor || 0;
-    const factorTotal = Math.min(factorAtrasos + factorRecurrencia, 1);
+    const factorTotal = Math.min(factorAtrasos + factorRecurrencia + penalizacionRechazos.factor, 1);
     puntosFinales = Math.round(puntosBase * (1 - factorTotal));
 
     const partes = [];
-    if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraMillones.toFixed(1)}M, ${diasAtrasoMax} días de atraso)`);
+    if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraPesos.toLocaleString("es-AR")}, ${diasAtrasoMax} días de atraso)`);
     if (factorRecurrencia > 0) partes.push(`${Math.round(factorRecurrencia*100)}% por recurrencia (${Math.round(recurrencia.proporcion*100)}% de la deuda de los últimos 24 meses estuvo en mora)`);
+    if (penalizacionRechazos.factor > 0) partes.push(`${Math.round(penalizacionRechazos.factor*100)}% por rechazos de cheques`);
     if (partes.length){
       motivo = `Penalización aplicada: ${partes.join(" + ")}.`;
-    } else {
-      // Cubre también el caso de un rechazo "sin fondos" reciente pero YA
-      // REGULARIZADO (no fuerza C2, pero tampoco es "sin rechazos" —
-      // antes esta rama solo contemplaba 6-12m/12-24m con conteo simple,
-      // y el caso <6m regularizado se perdía, mostrando por error el
-      // mensaje genérico de "sin rechazos registrados" en el sello).
-      const sinFondosVigentes = (d.detalleRechazos || []).filter(r => r.esSinFondos && r.mesesDesdeRechazo <= 24);
-      if (sinFondosVigentes.length){
-        motivo = explicarRechazos(d);
-      } else if (d.rechazosSinFondos6a12m > 0){
-        motivo = "Rechazo de cheque por falta de fondos entre 6 y 12 meses: descontado dentro del historial de rechazos.";
-      } else if (d.rechazosSinFondos12a24m > 0){
-        motivo = "Rechazo de cheque por falta de fondos entre 12 y 24 meses: descontado dentro del historial de rechazos, con impacto menor por ya estar superado.";
-      }
     }
   }
 
@@ -1416,7 +1513,7 @@ function calcularScore(d){
   const detalle = {
     situacion: {puntos:pSituacion, max:30, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
     situacion24m: {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
-    rechazos: {puntos:pRechazos, max:20, label:"Historial de rechazos (24 meses)", desc: explicarRechazos(d), detalleRechazos: d.detalleRechazos || []},
+    rechazos: {puntos:null, factorPenalizacion:penalizacionRechazos.factor, label:"Rechazos de cheques (penalización)", desc: explicarRechazos(d, penalizacionRechazos), detalleRechazos: d.detalleRechazos || []},
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
     deudaVsInflacion: inflacionDisponible
@@ -1427,8 +1524,9 @@ function calcularScore(d){
 
   return {
     puntosBase, puntosFinales, categoria, forzadoC2, motivo, detalle,
-    matrizAtrasos: { montoEnMoraMillones, diasAtrasoMax, tipo: atrasos.tipo, factor: atrasos.factor },
+    matrizAtrasos: { montoEnMoraPesos, diasAtrasoMax, tipo: atrasos.tipo, factor: atrasos.factor },
     matrizRecurrencia: { proporcionEnMora: recurrencia.proporcion, factor: factorRecurrencia },
+    penalizacionRechazos,
     narrativa: construirNarrativa(categoria, puntosFinales, detalle, forzadoC2, motivo)
   };
 }
@@ -1674,7 +1772,9 @@ async function consultarRechazadosBCRA(cuit, ahora = new Date()){
           causal: causalGrupo.causal,
           esSinFondos,
           chequePagado: !!cheque.fechaPago,
+          fechaPago: cheque.fechaPago || null,
           multaPaga: !!cheque.fechaPagoMulta,
+          fechaPagoMulta: cheque.fechaPagoMulta || null,
           enRevision: !!cheque.enRevision,
           procesoJudicial: !!cheque.procesoJud,
           mesesDesdeRechazo: meses
@@ -2988,18 +3088,24 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   `;
 
   const filas = Object.values(resultado.detalle);
-  document.getElementById("res-breakdown").innerHTML = filas.map((v, idx) => `
+  document.getElementById("res-breakdown").innerHTML = filas.map((v, idx) => {
+    const esPenalizacion = v.factorPenalizacion !== undefined;
+    const barraAncho = v.noDisponible ? 0 : esPenalizacion ? Math.round(v.factorPenalizacion*100) : (v.puntos/v.max*100).toFixed(0);
+    const valorTexto = v.noDisponible ? "N/D" : esPenalizacion ? `-${Math.round(v.factorPenalizacion*100)}%` : v.puntos + "/" + v.max;
+    const claseBarra = esPenalizacion && v.factorPenalizacion > 0 ? "br-bar-fill-penalizacion" : "";
+    return `
     <div class="breakdown-row${v.noDisponible ? " breakdown-row-nd" : ""}">
       <div class="br-top">
         <div class="br-label">${v.label}</div>
-        <div class="br-bar"><div class="br-bar-fill" style="width:${v.noDisponible ? 0 : (v.puntos/v.max*100).toFixed(0)}%"></div></div>
-        <div class="br-val">${v.noDisponible ? "N/D" : v.puntos + "/" + v.max}</div>
+        <div class="br-bar"><div class="br-bar-fill ${claseBarra}" style="width:${barraAncho}%"></div></div>
+        <div class="br-val">${valorTexto}</div>
       </div>
       <div class="br-desc">${v.desc}</div>
       ${v.detalleMensual ? construirDetalleMensualToggle(v.detalleMensual, idx) : ""}
       ${v.detalleRechazos && v.detalleRechazos.length ? construirDetalleRechazosToggle(v.detalleRechazos, idx) : ""}
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   /* ---- Detalle por entidad bancaria ---- */
   const concentracion = calcularConcentracionBancaria(datos.entidades);
