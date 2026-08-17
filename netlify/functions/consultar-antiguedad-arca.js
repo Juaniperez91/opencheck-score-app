@@ -1,22 +1,29 @@
-// Consulta la antigüedad del CUIT vía ARCA (ex AFIP) — Padrón Alcance 13
-// (ws_sr_padron_a13). La Central de Inhabilitados NO es una API pública
-// (ver netlify/functions/README de este mismo directorio), pero el
-// padrón de personas sí lo es, autenticado vía WSAA con certificado.
+// Consulta la antigüedad del CUIT vía ARCA (ex AFIP) — Consulta a Padrón
+// Constancia de Inscripción (ws_sr_constancia_inscripcion). Reemplaza al
+// intento anterior con Padrón Alcance 13, que no se puede autoautorizar
+// sin un acuerdo especial con ARCA. Este servicio SÍ se autoriza libre.
 //
-// OJO — limitación real, no un dato garantizado: A13 no tiene un campo
-// genérico "fecha de inscripción en AFIP". Usamos:
-//   - fechaContratoSocial (personas jurídicas: fecha de constitución)
-//   - fechaNacimiento (personas físicas, como proxy débil — no es
-//     realmente "antigüedad del CUIT", es la edad de la persona)
-// Para personas físicas esto probablemente no sirva como antigüedad real
-// del CUIT — lo dejamos explícito en la respuesta (fuenteAntiguedad) para
-// que el motor de scoring decida si lo usa o no.
+// Habla DIRECTO con los servidores de ARCA — no pasa por ningún tercero
+// (ni AfipSDK ni ningún otro intermediario). Usamos afip-apis solo para
+// la autenticación WSAA (ya la teníamos funcionando), y armamos el SOAP
+// de esta consulta a mano, porque afip-apis no trae un wrapper para este
+// servicio específico.
+//
+// OJO — limitación real, confirmada contra el manual oficial (v3.7): el
+// campo de antigüedad solo existe para personas JURÍDICAS
+// (fechaContratoSocial). Para personas físicas este servicio no informa
+// fecha de nacimiento ni fecha de inscripción — no hay antigüedad real
+// disponible por acá para ese caso, se deja explícito en la respuesta.
 
-import { LoginTicket, PersonaServiceA13, LoginCmsSoap } from "afip-apis";
+import { LoginTicket, LoginCmsSoap } from "afip-apis";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
+
+const SERVICE_ID = "ws_sr_constancia_inscripcion";
+const WS_URL_PRODUCCION = "https://aws.arca.gov.ar/sr-padron/webservices/personaServiceA5";
+const WS_NAMESPACE = "http://a5.soap.ws.server.puc.sr/";
 
 function calcularAniosDesde(fechaISO){
   if (!fechaISO) return null;
@@ -25,6 +32,28 @@ function calcularAniosDesde(fechaISO){
   const ms = Date.now() - fecha.getTime();
   if (ms < 0) return null;
   return ms / (365.25 * 86400000);
+}
+
+// Extracción simple por regex — la respuesta de ARCA es XML predecible y
+// no vale la pena traer una dependencia de parseo XML completa para esto.
+function extraerTagXML(xml, tag){
+  const m = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`, "i"));
+  return m ? m[1].trim() : null;
+}
+
+function construirSoapGetPersonaV2(token, sign, cuitRepresentada, idPersona){
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:a5="${WS_NAMESPACE}">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <a5:getPersona_v2>
+      <token>${token}</token>
+      <sign>${sign}</sign>
+      <cuitRepresentada>${cuitRepresentada}</cuitRepresentada>
+      <idPersona>${idPersona}</idPersona>
+    </a5:getPersona_v2>
+  </soapenv:Body>
+</soapenv:Envelope>`;
 }
 
 export default async (req) => {
@@ -42,8 +71,6 @@ export default async (req) => {
     return new Response(JSON.stringify({ ok:false, error:"Faltan variables de entorno: ARCA_CERT_BASE64, ARCA_KEY_BASE64, ARCA_CUIT_REPRESENTADA" }), { status:500 });
   }
 
-  // afip-apis pide rutas de archivo, no el contenido en memoria — los
-  // escribimos a /tmp (efímero, propio de esta invocación puntual).
   const sufijo = crypto.randomUUID();
   const certPath = path.join(os.tmpdir(), `arca-${sufijo}.crt`);
   const keyPath = path.join(os.tmpdir(), `arca-${sufijo}.key`);
@@ -52,47 +79,76 @@ export default async (req) => {
     fs.writeFileSync(certPath, Buffer.from(CERT_B64, "base64"));
     fs.writeFileSync(keyPath, Buffer.from(KEY_B64, "base64"));
 
+    // Paso 1: autenticación WSAA (directo a ARCA, misma infraestructura
+    // que ya teníamos funcionando).
     const loginTicket = new LoginTicket();
     const ticket = await loginTicket.wsaaLogin(
-      PersonaServiceA13.serviceId,
+      SERVICE_ID,
       LoginCmsSoap.produccionWSDL,
       certPath,
       keyPath
     );
 
-    const a13 = new PersonaServiceA13(PersonaServiceA13.produccionWSDL);
-    const resultado = await a13.getPersona({
-      token: ticket.credentials.token,
-      sign: ticket.credentials.sign,
-      cuitRepresentada: Number(CUIT_REPRESENTADA),
-      idPersona: cuitConsultar
+    // Paso 2: la consulta en sí, armada a mano (afip-apis no trae un
+    // wrapper para este servicio específico).
+    const soapBody = construirSoapGetPersonaV2(
+      ticket.credentials.token,
+      ticket.credentials.sign,
+      CUIT_REPRESENTADA,
+      cuitConsultar
+    );
+
+    const respuesta = await fetch(WS_URL_PRODUCCION, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/xml; charset=utf-8",
+        "SOAPAction": ""
+      },
+      body: soapBody
     });
 
-    const persona = resultado && resultado.personaReturn && resultado.personaReturn.persona;
-    if (!persona){
-      return new Response(JSON.stringify({ ok:true, encontrado:false }), { status:200, headers:{ "Content-Type":"application/json" } });
+    const xmlTexto = await respuesta.text();
+    if (!respuesta.ok){
+      console.error("[consultar-antiguedad-arca] Respuesta no-OK de ARCA:", respuesta.status, xmlTexto.slice(0, 500));
+      return new Response(JSON.stringify({ ok:false, error:`ARCA respondió ${respuesta.status}`, detalle: xmlTexto.slice(0,500) }), { status:502 });
     }
 
-    const esJuridica = (persona.tipoPersona || "").toUpperCase().includes("JURID");
-    const fechaBase = esJuridica ? persona.fechaContratoSocial : persona.fechaNacimiento;
-    const aniosAntiguedad = calcularAniosDesde(fechaBase);
+    // Si hay error de constancia (ej. CUIT inexistente), ARCA lo informa
+    // dentro de <errorConstancia>, no como fallo HTTP.
+    const errorConstancia = extraerTagXML(xmlTexto, "error");
+    if (errorConstancia){
+      return new Response(JSON.stringify({ ok:true, encontrado:false, motivo: errorConstancia }), { status:200, headers:{ "Content-Type":"application/json" } });
+    }
+
+    const tipoPersona = extraerTagXML(xmlTexto, "tipoPersona");
+    const razonSocial = extraerTagXML(xmlTexto, "razonSocial");
+    const nombre = extraerTagXML(xmlTexto, "nombre");
+    const apellido = extraerTagXML(xmlTexto, "apellido");
+    const estadoClave = extraerTagXML(xmlTexto, "estadoClave");
+    const fechaContratoSocial = extraerTagXML(xmlTexto, "fechaContratoSocial");
+
+    const esJuridica = (tipoPersona || "").toUpperCase() === "JURIDICA";
+    const aniosAntiguedad = esJuridica ? calcularAniosDesde(fechaContratoSocial) : null;
 
     return new Response(JSON.stringify({
       ok: true,
       encontrado: true,
-      tipoPersona: persona.tipoPersona || null,
-      razonSocial: persona.razonSocial || null,
-      fechaContratoSocial: persona.fechaContratoSocial || null,
-      fechaNacimiento: persona.fechaNacimiento || null,
+      tipoPersona,
+      razonSocial,
+      nombre,
+      apellido,
+      estadoClave,
+      fechaContratoSocial,
       aniosAntiguedad: aniosAntiguedad !== null ? Math.round(aniosAntiguedad * 10) / 10 : null,
-      fuenteAntiguedad: esJuridica ? "fecha_contrato_social" : "fecha_nacimiento_no_es_antiguedad_real"
+      fuenteAntiguedad: esJuridica
+        ? (fechaContratoSocial ? "fecha_contrato_social" : "juridica_sin_fecha_contrato_social")
+        : "persona_fisica_sin_dato_de_antiguedad_disponible"
     }), { status:200, headers:{ "Content-Type":"application/json" } });
 
   } catch (e){
     console.error("[consultar-antiguedad-arca] Error:", e.message);
     return new Response(JSON.stringify({ ok:false, error: e.message }), { status:500 });
   } finally {
-    // Limpieza: nunca dejar la clave privada en /tmp más de lo necesario.
     try { fs.unlinkSync(certPath); } catch(e){}
     try { fs.unlinkSync(keyPath); } catch(e){}
   }
