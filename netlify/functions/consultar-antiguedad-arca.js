@@ -146,8 +146,9 @@ export default async (req) => {
     }), { status:200, headers:{ "Content-Type":"application/json" } });
 
   } catch (e){
-    console.error("[consultar-antiguedad-arca] Error:", e.message);
-    return new Response(JSON.stringify({ ok:false, error: e.message }), { status:500 });
+    const detalleCausa = e.cause ? (e.cause.code || e.cause.message || String(e.cause)) : null;
+    console.error("[consultar-antiguedad-arca] Error:", e.message, "| causa:", detalleCausa);
+    return new Response(JSON.stringify({ ok:false, error: e.message, causa: detalleCausa }), { status:500 });
   } finally {
     try { fs.unlinkSync(certPath); } catch(e){}
     try { fs.unlinkSync(keyPath); } catch(e){}
