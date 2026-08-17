@@ -22,7 +22,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 const SERVICE_ID = "ws_sr_constancia_inscripcion";
-const WS_URL_PRODUCCION = "https://aws.arca.gov.ar/sr-padron/webservices/personaServiceA5";
+const WS_URL_PRODUCCION = "https://aws.afip.gov.ar/sr-padron/webservices/personaServiceA5";
 const WS_NAMESPACE = "http://a5.soap.ws.server.puc.sr/";
 
 function calcularAniosDesde(fechaISO){
