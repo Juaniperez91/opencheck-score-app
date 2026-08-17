@@ -1300,6 +1300,21 @@ function hayTriggerInhabilitacion(d, hoy = new Date()){
 // descuento porcentual sobre el score final, igual que atrasos y
 // recurrencia. Los cortes de C2 (sin fondos <6m sin regularizar, y los
 // 3 triggers de hayTriggerInhabilitacion) se evalúan aparte, en calcularScore.
+// Matriz de antigüedad del CUIT, importada del diseño original de
+// OpenCheck. Solo se puede calcular para personas jurídicas (vía
+// fechaContratoSocial de ARCA) — para personas físicas no hay un dato
+// equivalente disponible, así que no se penaliza por esto (factor 0,
+// no "falta de datos" tratada como riesgo).
+function calcularPenalizacionAntiguedad(antiguedadCuitAnios){
+  if (antiguedadCuitAnios === null || antiguedadCuitAnios === undefined) return { factor:0, ventana:null };
+  const meses = antiguedadCuitAnios * 12;
+  if (meses <= 3) return { factor:0.20, ventana:"0-3 meses" };
+  if (meses <= 6) return { factor:0.15, ventana:"3-6 meses" };
+  if (meses <= 12) return { factor:0.10, ventana:"6-12 meses" };
+  if (meses <= 24) return { factor:0.05, ventana:"12-24 meses" };
+  return { factor:0, ventana:null };
+}
+
 function calcularPenalizacionRechazos(d){
   const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos) : [];
 
@@ -1529,6 +1544,7 @@ function calcularScore(d){
 
   // ---- Penalización por rechazos (% sobre el score, no puntos) ----
   const penalizacionRechazos = calcularPenalizacionRechazos(d);
+  const penalizacionAntiguedad = calcularPenalizacionAntiguedad(d.antiguedadCuitAnios);
 
   let puntosFinales = puntosBase;
   let forzadoC2 = false;
@@ -1562,13 +1578,14 @@ function calcularScore(d){
       : `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} con ${diasAtrasoMax} días de atraso, sobre un perfil ya débil. Cuenta no operable.`;
   } else {
     const factorAtrasos = atrasos.factor || 0;
-    const factorTotal = Math.min(factorAtrasos + factorRecurrencia + penalizacionRechazos.factor, 1);
+    const factorTotal = Math.min(factorAtrasos + factorRecurrencia + penalizacionRechazos.factor + penalizacionAntiguedad.factor, 1);
     puntosFinales = Math.round(puntosBase * (1 - factorTotal));
 
     const partes = [];
     if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraPesos.toLocaleString("es-AR")}, ${diasAtrasoMax} días de atraso)`);
     if (factorRecurrencia > 0) partes.push(`${Math.round(factorRecurrencia*100)}% por recurrencia (${Math.round(recurrencia.proporcion*100)}% de la deuda de los últimos 24 meses estuvo en mora)`);
     if (penalizacionRechazos.factor > 0) partes.push(`${Math.round(penalizacionRechazos.factor*100)}% por rechazos de cheques`);
+    if (penalizacionAntiguedad.factor > 0) partes.push(`${Math.round(penalizacionAntiguedad.factor*100)}% por CUIT muy reciente (${penalizacionAntiguedad.ventana})`);
     if (partes.length){
       motivo = `Penalización aplicada: ${partes.join(" + ")}.`;
     }
@@ -1588,11 +1605,25 @@ function calcularScore(d){
          desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
   };
 
+  // Antigüedad del CUIT: solo se agrega como fila visible si hay dato
+  // real (persona jurídica, vía ARCA). Para personas físicas no
+  // aparece — no es que "falte", es que no corre para ese caso.
+  if (d.antiguedadCuitAnios !== null && d.antiguedadCuitAnios !== undefined){
+    detalle.antiguedad = {
+      puntos:null, factorPenalizacion:penalizacionAntiguedad.factor,
+      label:"Antigüedad del CUIT (ARCA)",
+      desc: penalizacionAntiguedad.factor > 0
+        ? `Persona jurídica constituida hace ${d.antiguedadCuitAnios} años — CUIT todavía reciente, resta ${Math.round(penalizacionAntiguedad.factor*100)}% (${penalizacionAntiguedad.ventana}).`
+        : `Persona jurídica constituida hace ${d.antiguedadCuitAnios} años — antigüedad suficiente, sin descuento por este concepto.`
+    };
+  }
+
   return {
     puntosBase, puntosFinales, categoria, forzadoC2, motivo, detalle,
     matrizAtrasos: { montoEnMoraPesos, diasAtrasoMax, tipo: atrasos.tipo, factor: atrasos.factor },
     matrizRecurrencia: { proporcionEnMora: recurrencia.proporcion, factor: factorRecurrencia },
     penalizacionRechazos,
+    penalizacionAntiguedad,
     narrativa: construirNarrativa(categoria, puntosFinales, detalle, forzadoC2, motivo)
   };
 }
@@ -1920,9 +1951,26 @@ async function construirDatosLibradorReal(cuit){
     console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", e.message);
   }
 
+  // Antigüedad del CUIT vía ARCA: best-effort, igual que el resto de los
+  // datos complementarios — si falla (ARCA caída, CUIT no encontrado,
+  // persona física sin dato disponible) seguimos con null, sin cortar
+  // toda la consulta por esto.
+  let antiguedadCuitAnios = null;
+  try {
+    const respArca = await fetch(`/.netlify/functions/consultar-antiguedad-arca?cuit=${cuit}`);
+    if (respArca.ok){
+      const dataArca = await respArca.json();
+      if (dataArca.ok && dataArca.encontrado && dataArca.aniosAntiguedad !== null && dataArca.aniosAntiguedad !== undefined){
+        antiguedadCuitAnios = dataArca.aniosAntiguedad;
+      }
+    }
+  } catch (e) {
+    console.warn("[OpenCheck Score] Falló consultar-antiguedad-arca:", e.message);
+  }
+
   return prepararDatos({
     empresa: deuda.denominacion || ("Librador " + cuit),
-    antiguedadCuitAnios: null, // no disponible en las APIs del BCRA — pendiente AFIP/ARCA
+    antiguedadCuitAnios, // vía ARCA (Constancia de Inscripción), best-effort — null si no está disponible
     rechazosSinFondos6m: rechazos.rechazosSinFondos6m,
     rechazosSinFondos6a12m: rechazos.rechazosSinFondos6a12m,
     rechazosSinFondos12a24m: rechazos.rechazosSinFondos12a24m,
