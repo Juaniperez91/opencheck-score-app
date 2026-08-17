@@ -4,6 +4,6 @@
   "private": true,
   "dependencies": {
     "web-push": "^3.6.7",
-    "afip-apis": "^1.0.0"
+    "afip-apis": "^0.5.5"
   }
 }
