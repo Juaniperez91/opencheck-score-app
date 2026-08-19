@@ -1305,6 +1305,21 @@ function hayTriggerInhabilitacion(d, hoy = new Date()){
 // fechaContratoSocial de ARCA) — para personas físicas no hay un dato
 // equivalente disponible, así que no se penaliza por esto (factor 0,
 // no "falta de datos" tratada como riesgo).
+//
+// DECISIÓN DE DISEÑO (confirmada con Juan Ignacio): en el diseño
+// original, antigüedad era un "compartimento analítico" propio —una
+// variable de puntos más, como situación o endeudamiento— no una
+// penalización porcentual. La implementamos como penalización acá
+// PORQUE hoy no tenemos el dato para todos los tipos de persona (falta
+// para físicas), y una variable de puntos con cobertura parcial
+// distorsionaría el puntaje base para la mayoría de las consultas
+// reales (la mayoría de los libradores son personas físicas).
+//
+// Si en el futuro conseguimos una fuente de antigüedad que cubra TAMBIÉN
+// a personas físicas, esto debería promoverse a variable de puntos
+// propia (con su propio peso dentro de los 100, como las demás),
+// replicando el patrón de "redistribuir si no está disponible" que ya
+// usamos en deuda vs. inflación — no dejarlo como penalización.
 function calcularPenalizacionAntiguedad(antiguedadCuitAnios){
   if (antiguedadCuitAnios === null || antiguedadCuitAnios === undefined) return { factor:0, ventana:null };
   const meses = antiguedadCuitAnios * 12;
