@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2472B8">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OpenCheck">
+<meta name="mobile-web-app-capable" content="yes">
 <title>OpenCheck Score</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -113,6 +121,40 @@
     margin:0 0 22px;
     line-height:1.5;
   }
+
+  .hero-registro{
+    margin:-22px -20px 26px; padding:26px 20px 24px;
+    background:linear-gradient(150deg, #2472B8 0%, #123A5C 100%);
+    border-radius:0 0 24px 24px;
+  }
+  .hero-registro h1{
+    font-size:26px; font-weight:800; letter-spacing:-0.02em; line-height:1.2;
+    margin:0 0 10px; color:#fff;
+  }
+  .hero-registro .hero-sub{
+    font-size:13.5px; color:rgba(255,255,255,.78); line-height:1.5; margin:0 0 22px;
+  }
+  .hero-valores{ display:flex; flex-direction:column; gap:11px; }
+  .hero-valor{
+    display:flex; align-items:center; gap:12px;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14);
+    border-radius:12px; padding:11px 13px;
+    opacity:0; transform:translateY(10px);
+    animation:heroValorEntra .5s ease forwards;
+  }
+  .hero-valor:nth-child(1){ animation-delay:.05s; }
+  .hero-valor:nth-child(2){ animation-delay:.16s; }
+  .hero-valor:nth-child(3){ animation-delay:.27s; }
+  @keyframes heroValorEntra{
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .hero-valor-icono{
+    width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,.14);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    color:#fff;
+  }
+  .hero-valor-texto{ font-size:12.5px; font-weight:600; color:#fff; line-height:1.3; }
+  .hero-valor-texto span{ display:block; font-weight:400; color:rgba(255,255,255,.65); font-size:11px; margin-top:1px; }
 
   label.field-label{
     display:block;
@@ -313,6 +355,7 @@
     font-size:12.5px;
     line-height:1.5;
   }
+  .alert-block > span{ flex-shrink:0; margin-top:1px; }
   .alert-block.danger{background:var(--brick-soft); color:#7A2C2C;}
   .alert-block.ok{background:var(--green-soft); color:var(--green-ink);}
   .alert-block b{display:block; font-size:13px; margin-bottom:2px;}
@@ -340,6 +383,7 @@
     flex-shrink:0;
   }
   .br-bar-fill{height:100%; background:var(--green);}
+  .br-bar-fill-penalizacion{background:var(--brick);}
   .br-val{font-family:'DM Mono',monospace; font-size:11.5px; width:36px; text-align:right; flex-shrink:0;}
   .br-desc{font-size:12px; color:var(--ink-soft); line-height:1.5;}
 
@@ -593,6 +637,10 @@
     cursor:pointer; flex-shrink:0;
   }
   .camara-btn-capturar:active{background:var(--paper-2);}
+  .camara-btn-usar{
+    background:var(--green); color:#fff; border:none; padding:12px 22px;
+    border-radius:10px; font-family:'DM Sans',sans-serif; font-weight:700; font-size:14px; cursor:pointer;
+  }
 
   .confirmacion-banner{
     position:fixed; left:16px; right:16px; bottom:16px; z-index:150;
@@ -626,9 +674,32 @@
       </div>
     </div>
     <div class="content">
-      <h1 class="page-title">Creá tu cuenta</h1>
-      <p class="page-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA. Sin Nosis, sin vueltas.</p>
+      <div class="hero-registro">
+        <h1>Sabé con quién estás por cobrar, en segundos</h1>
+        <p class="hero-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA.</p>
+        <div class="hero-valores">
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Dato oficial del BCRA<span>Central de Deudores, cheques rechazados y denunciados</span></div>
+          </div>
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Sin Nosis, sin costos ocultos<span>Solo fuentes públicas y gratuitas</span></div>
+          </div>
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Respuesta instantánea<span>Consultá un CUIT o sacá una foto del cheque</span></div>
+          </div>
+        </div>
+      </div>
 
+      <div class="divider-label">Creá tu cuenta</div>
       <div class="segmented">
         <div class="seg-opt active" id="seg-fisica" onclick="setTipoPersona('fisica')">Persona física</div>
         <div class="seg-opt" id="seg-juridica" onclick="setTipoPersona('juridica')">Persona jurídica</div>
@@ -721,7 +792,7 @@
         </div>
         <div class="ocr-text">
           <b id="ocr-btn-label">Sacar foto del cheque</b>
-          <span>Intentamos leer el CUIT y el número automáticamente</span>
+          <span>Encuadrá el cheque completo dentro del marco</span>
         </div>
       </button>
 
@@ -892,13 +963,23 @@
     <video id="camara-video" autoplay playsinline muted></video>
     <div class="camara-overlay">
       <div class="camara-marco"></div>
-      <div class="camara-instrucciones">Girá el teléfono en horizontal y encuadrá el cheque completo, bien apoyado y con buena luz</div>
+      <div class="camara-instrucciones">Sostené el teléfono normal (vertical), acercate bien al cheque, y encuadrá el cheque completo dentro del marco, con buena luz</div>
     </div>
     <div class="camara-controles">
       <button class="camara-btn-cancelar" onclick="cerrarCamaraCheque()">Cancelar</button>
       <button class="camara-btn-capturar" onclick="capturarFotoCheque()" aria-label="Capturar foto"></button>
       <div style="width:64px;"></div>
     </div>
+
+    <div id="camara-preview" style="display:none; position:absolute; inset:0; background:#000; flex-direction:column;">
+      <img id="camara-preview-img" style="flex:1; width:100%; object-fit:contain; background:#000;">
+      <div class="camara-controles">
+        <button class="camara-btn-cancelar" onclick="volverASacarFoto()">Volver a sacar</button>
+        <div style="flex:1;"></div>
+        <button class="camara-btn-usar" onclick="usarFotoCapturada()">Usar esta foto</button>
+      </div>
+    </div>
+
     <canvas id="camara-canvas" style="display:none"></canvas>
   </div>
 </div>
@@ -919,6 +1000,34 @@ if ("serviceWorker" in navigator){
   navigator.serviceWorker.register("/service-worker.js")
     .catch(e => console.warn("[OpenCheck Score] No se pudo registrar el service worker:", e.message));
 }
+
+// Capturamos el evento de instalación para poder mostrar nuestro propio
+// botón "Instalar app" en vez de depender de que el usuario lo encuentre
+// solo en el menú del navegador. Solo dispara en navegadores compatibles
+// (Chrome/Edge en Android; iOS no lo soporta — ahí se instala manual
+// desde "Compartir → Agregar a inicio", ya cubierto por las meta tags).
+let eventoInstalacionDiferido = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  eventoInstalacionDiferido = e;
+  const btn = document.getElementById("btn-instalar-app");
+  if (btn) btn.style.display = "flex";
+});
+
+async function instalarApp(){
+  if (!eventoInstalacionDiferido) return;
+  eventoInstalacionDiferido.prompt();
+  const { outcome } = await eventoInstalacionDiferido.userChoice;
+  if (outcome === "accepted") mostrarToast("¡Listo! Ya tenés OpenCheck Score instalada.");
+  eventoInstalacionDiferido = null;
+  const btn = document.getElementById("btn-instalar-app");
+  if (btn) btn.style.display = "none";
+}
+
+window.addEventListener("appinstalled", () => {
+  const btn = document.getElementById("btn-instalar-app");
+  if (btn) btn.style.display = "none";
+});
 
 function urlBase64ToUint8Array(base64String){
   const padding = "=".repeat((4 - base64String.length % 4) % 4);
@@ -1125,16 +1234,137 @@ function scoreBancos(n){
   if (n === 1) return 2;
   return 0;
 }
-function scoreRechazos(d){
-  // 20 pts: variable propia, no solo ausencia de penalización.
-  // "Sin fondos" es la señal real de insolvencia y es lo único que resta
-  // acá. "Defectos formales" (firma, datos mal puestos) es un error
-  // administrativo, no financiero — no penaliza nada. Un "sin fondos" en
-  // los últimos 6 meses fuerza C2 directo aparte (ver calcularScore).
-  if (d.rechazosSinFondos6m > 0) return 0;
-  if (d.rechazosSinFondos6a12m > 0) return 4;
-  if (d.rechazosSinFondos12a24m > 0) return 12;
-  return 20;
+// Determina si hay algún rechazo "sin fondos" en los últimos 6 meses que
+// TODAVÍA no está regularizado (cheque y multa pagados). Con el detalle
+// completo (detalleRechazos) lo miramos caso por caso; sin él (demo, o
+// BCRA sin ese detalle) usamos el conteo simple, asumiendo sin
+// regularizar por precaución — no queremos suavizar sin evidencia.
+function hayRechazoSinFondosSinRegularizar(d){
+  if (d.detalleRechazos && d.detalleRechazos.length){
+    return d.detalleRechazos.some(r => r.esSinFondos && r.mesesDesdeRechazo <= 6 && !(r.chequePagado && r.multaPaga));
+  }
+  return (d.rechazosSinFondos6m || 0) > 0;
+}
+
+function calcularDiasEntreFechas(fechaInicio, fechaFin){
+  if (!fechaInicio || !fechaFin) return null;
+  const ms = new Date(fechaFin) - new Date(fechaInicio);
+  if (isNaN(ms)) return null;
+  return Math.floor(ms / 86400000);
+}
+
+// Cuántos días tardó en regularizarse (cheque Y multa pagados) desde la
+// fecha de rechazo. Null si todavía no está regularizado o faltan fechas.
+function calcularDiasParaRegularizar(rechazo){
+  if (!rechazo.chequePagado || !rechazo.multaPaga) return null;
+  const fechaFinal = [rechazo.fechaPago, rechazo.fechaPagoMulta].filter(Boolean).sort().pop();
+  return calcularDiasEntreFechas(rechazo.fechaRechazo, fechaFinal);
+}
+
+// La Central de Cuentacorrentistas Inhabilitados del BCRA NO es una API
+// pública (acceso restringido a bancos) — así que en vez de consultarla
+// directo, replicamos las causales reales de inhabilitación según la
+// Reglamentación de la Cuenta Corriente Bancaria del BCRA (Sección 8/9),
+// con los datos que sí tenemos de ChequesRechazados:
+//   A) 5 o más cheques "sin fondos" sin cancelar (cualquier ventana)
+//   B) 8 o más rechazos por defectos formales en los últimos 12 meses
+//   C) Multa de un rechazo "sin fondos" impaga hace más de 60 días
+function hayTriggerInhabilitacion(d, hoy = new Date()){
+  const detalle = d.detalleRechazos || [];
+  const sinFondos = detalle.filter(r => r.esSinFondos);
+  const defectosFormales12m = detalle.filter(r => !r.esSinFondos && r.mesesDesdeRechazo <= 12);
+
+  const sinFondosSinCancelar = sinFondos.filter(r => !r.chequePagado);
+  if (sinFondosSinCancelar.length >= 5){
+    return { trigger:true, motivo:`${sinFondosSinCancelar.length} cheques rechazados por falta de fondos sin cancelar (5 o más es causal de inhabilitación en el BCRA). Cuenta no operable.` };
+  }
+
+  if (defectosFormales12m.length >= 8){
+    return { trigger:true, motivo:`${defectosFormales12m.length} rechazos por defectos formales en los últimos 12 meses (8 o más es causal de inhabilitación en el BCRA). Cuenta no operable.` };
+  }
+
+  for (const r of sinFondos){
+    if (!r.multaPaga && r.fechaRechazo){
+      const dias = calcularDiasEntreFechas(r.fechaRechazo, hoy);
+      if (dias !== null && dias > 60){
+        return { trigger:true, motivo:`Multa de un cheque rechazado por falta de fondos sigue impaga hace ${dias} días (más de 60 días es causal de inhabilitación en el BCRA). Cuenta no operable.` };
+      }
+    }
+  }
+
+  return { trigger:false, motivo:null };
+}
+
+// Penalización por rechazos, importada del diseño original de OpenCheck
+// (penRechazos + penSF). Ya NO es una variable de puntos — es un
+// descuento porcentual sobre el score final, igual que atrasos y
+// recurrencia. Los cortes de C2 (sin fondos <6m sin regularizar, y los
+// 3 triggers de hayTriggerInhabilitacion) se evalúan aparte, en calcularScore.
+// Matriz de antigüedad del CUIT, importada del diseño original de
+// OpenCheck. Solo se puede calcular para personas jurídicas (vía
+// fechaContratoSocial de ARCA) — para personas físicas no hay un dato
+// equivalente disponible, así que no se penaliza por esto (factor 0,
+// no "falta de datos" tratada como riesgo).
+//
+// DECISIÓN DE DISEÑO (confirmada con Juan Ignacio): en el diseño
+// original, antigüedad era un "compartimento analítico" propio —una
+// variable de puntos más, como situación o endeudamiento— no una
+// penalización porcentual. La implementamos como penalización acá
+// PORQUE hoy no tenemos el dato para todos los tipos de persona (falta
+// para físicas), y una variable de puntos con cobertura parcial
+// distorsionaría el puntaje base para la mayoría de las consultas
+// reales (la mayoría de los libradores son personas físicas).
+//
+// Si en el futuro conseguimos una fuente de antigüedad que cubra TAMBIÉN
+// a personas físicas, esto debería promoverse a variable de puntos
+// propia (con su propio peso dentro de los 100, como las demás),
+// replicando el patrón de "redistribuir si no está disponible" que ya
+// usamos en deuda vs. inflación — no dejarlo como penalización.
+function calcularPenalizacionAntiguedad(antiguedadCuitAnios){
+  if (antiguedadCuitAnios === null || antiguedadCuitAnios === undefined) return { factor:0, ventana:null };
+  const meses = antiguedadCuitAnios * 12;
+  if (meses <= 3) return { factor:0.20, ventana:"0-3 meses" };
+  if (meses <= 6) return { factor:0.15, ventana:"3-6 meses" };
+  if (meses <= 12) return { factor:0.10, ventana:"6-12 meses" };
+  if (meses <= 24) return { factor:0.05, ventana:"12-24 meses" };
+  return { factor:0, ventana:null };
+}
+
+function calcularPenalizacionRechazos(d){
+  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos) : [];
+
+  let factorRecencia = 0;
+  let ventana = null;
+
+  if (sinFondos.length){
+    const peor = sinFondos.reduce((a,b) => a.mesesDesdeRechazo < b.mesesDesdeRechazo ? a : b);
+
+    if (peor.mesesDesdeRechazo <= 6){
+      // Si llegó hasta acá (no forzó C2 aparte) es porque está
+      // regularizado — usamos la escala graduada por días que tardó en
+      // regularizarse, no el bucket de recencia.
+      const diasReg = calcularDiasParaRegularizar(peor);
+      if (diasReg !== null){
+        if (diasReg <= 15){ factorRecencia = 0; ventana = "regularizado en 15 días o menos"; }
+        else if (diasReg <= 30){ factorRecencia = 0.10; ventana = "regularizado en 16 a 30 días"; }
+        else if (diasReg <= 60){ factorRecencia = 0.25; ventana = "regularizado en 31 a 60 días"; }
+        else { factorRecencia = 0.50; ventana = "regularizado en más de 60 días"; }
+      }
+    } else if (peor.mesesDesdeRechazo <= 12){ factorRecencia = 0.50; ventana = "6-12 meses"; }
+    else if (peor.mesesDesdeRechazo <= 24){ factorRecencia = 0.20; ventana = "12-24 meses"; }
+    else { factorRecencia = 0.10; ventana = "más de 24 meses"; }
+  } else if (d.rechazosSinFondos6a12m > 0){
+    factorRecencia = 0.50; ventana = "6-12 meses";
+  } else if (d.rechazosSinFondos12a24m > 0){
+    factorRecencia = 0.20; ventana = "12-24 meses";
+  }
+
+  // penSF original: -20% adicional si hay algún "sin fondos" con multa
+  // TODAVÍA impaga (y no llegó a los 60 días, si no ya forzó C2 aparte).
+  const hayMultaImpaga = sinFondos.some(r => !r.multaPaga);
+  const factorMultaImpaga = hayMultaImpaga ? 0.20 : 0;
+
+  return { factor: Math.min(factorRecencia + factorMultaImpaga, 1), factorRecencia, factorMultaImpaga, ventana, hayMultaImpaga, cantidad: sinFondos.length };
 }
 
 /* =======================================================
@@ -1148,25 +1378,52 @@ function scoreRechazos(d){
 
 // Cruza banda de puntaje base × monto en mora × días de atraso.
 // Devuelve { tipo: "ninguna" | "penalizacion" | "C2", factor }
-function calcularMatrizAtrasos(puntosBaseVariable, montoEnMoraMillones, diasAtrasoMax){
-  if (diasAtrasoMax <= 0) return { tipo:"ninguna", factor:0 };
+// Matriz de atrasos ORIGINAL de OpenCheck (16 combinaciones), importada
+// tal cual del diseño previo (opencheck.pro). La columna "Score Nosis"
+// (que no tenemos, OpenCheck Score no usa Nosis) se reemplaza por
+// nuestro propio puntosBase de 0-100, reescalado de la escala original
+// 0-600+ dividiendo por 10 (600->60, 400->40). Los montos siguen en
+// pesos NOMINALES de cuando se diseñó esto originalmente — pendiente
+// indexar por inflación como paso aparte (no lo pisamos todavía).
+// Los montos de la matriz de atrasos están calibrados en pesos de este
+// período (confirmado por Juan Ignacio: febrero 2026). Un monto nominal
+// futuro se ajusta a pesos de este mes antes de comparar, igual que ya
+// hacemos con endeudamiento.
+const MATRIZ_ATRASOS_PERIODO_BASE = "202603";
 
-  const bandaBaja = puntosBaseVariable < 35;
-  const montoAlto = montoEnMoraMillones > 25;
-  const montoMedio = montoEnMoraMillones > 5 && montoEnMoraMillones <= 25;
-  const diasMuyGraves = diasAtrasoMax > 180;
-  const diasGraves = diasAtrasoMax > 60 && diasAtrasoMax <= 180;
-  const diasLeves = diasAtrasoMax > 0 && diasAtrasoMax <= 60;
+const MATRIZ_ATRASOS_ORIGINAL = [
+  { scoreMin:60, scoreMax:Infinity, montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:0 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:0 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:5 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:0 },
+  { scoreMin:60, scoreMax:Infinity, montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:10 },
+  { scoreMin:40, scoreMax:59,       montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:0 },
+  { scoreMin:40, scoreMax:59,       montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:0 },
+  { scoreMin:40, scoreMax:59,       montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:10 },
+  { scoreMin:40, scoreMax:59,       montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:0 },
+  { scoreMin:40, scoreMax:59,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:15 },
+  { scoreMin:0,  scoreMax:39,       montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:5 },
+  { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:10 },
+  { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:"C2" },
+  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:10 },
+  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:"C2" },
+  { scoreMin:0,  scoreMax:Infinity, montoMin:500001, montoMax:Infinity, diasMin:60, diasMax:Infinity, pen:"C2" } // regla 16: SIEMPRE C2, cualquier score
+];
 
-  // C2 directo: mora grande y sostenida, o mora grave con puntaje ya débil
-  if (montoAlto && diasMuyGraves) return { tipo:"C2", factor:null };
-  if (bandaBaja && montoAlto && diasGraves) return { tipo:"C2", factor:null };
+function calcularMatrizAtrasos(puntosBaseGeneral, montoEnMoraPesos, diasAtrasoMax, factorAjuste = 1){
+  if (diasAtrasoMax <= 0 || montoEnMoraPesos <= 0) return { tipo:"ninguna", factor:0 };
 
-  // Penalizaciones graduales
-  if (diasMuyGraves) return { tipo:"penalizacion", factor:0.15 };
-  if (diasGraves && (montoMedio || montoAlto)) return { tipo:"penalizacion", factor:0.10 };
-  if (diasGraves) return { tipo:"penalizacion", factor:0.05 };
-  if (diasLeves && montoAlto) return { tipo:"penalizacion", factor:0.05 };
+  const montoAjustado = montoEnMoraPesos / factorAjuste; // a pesos "de calibración" (feb 2026)
+
+  for (const regla of MATRIZ_ATRASOS_ORIGINAL){
+    const scoreOk = puntosBaseGeneral >= regla.scoreMin && puntosBaseGeneral <= regla.scoreMax;
+    const montoOk = montoAjustado >= regla.montoMin && montoAjustado <= regla.montoMax;
+    const diasOk = diasAtrasoMax >= regla.diasMin && diasAtrasoMax <= regla.diasMax;
+    if (scoreOk && montoOk && diasOk){
+      if (regla.pen === "C2") return { tipo:"C2", factor:null };
+      return { tipo: regla.pen > 0 ? "penalizacion" : "ninguna", factor: regla.pen/100 };
+    }
+  }
   return { tipo:"ninguna", factor:0 };
 }
 
@@ -1241,13 +1498,23 @@ function explicarAntiguedad(a){
   if (a >= 3) return `CUIT con ${a} años de antigüedad en AFIP: historia todavía limitada.`;
   return `CUIT con ${a} año${a===1?"":"s"} de antigüedad en AFIP: muy reciente, sin trayectoria consolidada.`;
 }
-function explicarRechazos(d){
-  if (d.rechazosSinFondos6m > 0) return "Rechazo de cheque por falta de fondos en los últimos 6 meses: la cuenta pasa directamente a C2, sin importar el resto del puntaje.";
-  if (d.rechazosSinFondos6a12m > 0) return "Rechazo de cheque por falta de fondos entre 6 y 12 meses: todavía reciente, resta la mayor parte del puntaje de esta variable.";
-  if (d.rechazosSinFondos12a24m > 0) return "Rechazo de cheque por falta de fondos entre 12 y 24 meses: ya superado, resta solo una parte menor.";
-  if (d.rechazosDefectosFormales6m > 0 || d.rechazosDefectosFormales6a12m > 0 || d.rechazosDefectosFormales12a24m > 0)
-    return "Hubo algún rechazo por defectos formales (firma, datos mal puestos) en los últimos 24 meses, pero no por falta de fondos — es un error administrativo, no una señal de insolvencia, así que no resta nada acá.";
-  return "Sin rechazos de cheques informados por BCRA en los últimos 24 meses: puntaje máximo en esta variable.";
+function explicarRechazos(d, penalizacion){
+  const sinFondos = d.detalleRechazos ? d.detalleRechazos.filter(r => r.esSinFondos) : [];
+
+  if (!penalizacion || penalizacion.factor === 0){
+    if (d.rechazosDefectosFormales6m > 0 || d.rechazosDefectosFormales6a12m > 0 || d.rechazosDefectosFormales12a24m > 0)
+      return "Hubo algún rechazo por defectos formales (firma, datos mal puestos) en los últimos 24 meses, pero no por falta de fondos — es un error administrativo, no una señal de insolvencia, así que no resta nada.";
+    return "Sin rechazos de cheques por falta de fondos informados por BCRA: sin descuento por este concepto.";
+  }
+
+  const partes = [];
+  if (penalizacion.ventana) partes.push(`rechazo por falta de fondos (${penalizacion.ventana}): -${Math.round(penalizacion.factorRecencia*100)}%`);
+  if (penalizacion.hayMultaImpaga) partes.push(`multa todavía impaga: -20% adicional`);
+
+  const peor = sinFondos.length ? sinFondos.reduce((a,b) => a.mesesDesdeRechazo < b.mesesDesdeRechazo ? a : b) : null;
+  const detalleRegularizacion = peor && peor.chequePagado && peor.multaPaga ? " (cheque y multa ya pagados)" : "";
+
+  return `Descuento por rechazos: ${Math.round(penalizacion.factor*100)}% sobre el score${detalleRegularizacion} — ${partes.join(" + ")}.`;
 }
 
 function calcularScore(d){
@@ -1259,56 +1526,83 @@ function calcularScore(d){
   const pSituacion24m = scoreSituacion24m(peorSituacion24m);
   const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1);
   const pBancos = scoreBancos(d.cantidadBancos);
-  const pRechazos = scoreRechazos(d);
 
-  // ---- Deuda real vs. inflación: 10 pts, redistribuidos si no está disponible ----
+  // ---- Deuda real vs. inflación: 10 pts, redistribuida si no está disponible ----
   const inflacionDisponible = d.deudaVsInflacion && d.deudaVsInflacion.disponible;
   const pDeudaVsInflacion = inflacionDisponible ? scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) : null;
 
-  let puntosBase = inflacionDisponible
-    ? pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos + pDeudaVsInflacion
-    : Math.round((pSituacion + pSituacion24m + pEndeudamiento + pBancos + pRechazos) * (100/90));
+  // Rechazos ya NO es una variable de puntos (era 20/100) — pasó a ser un
+  // % de descuento sobre el score final, como atrasos y recurrencia (así
+  // lo tenía diseñado el motor original de OpenCheck). Por eso las 5
+  // variables que quedan como puntos (30+20+10+10+10=80, u 70 sin deuda
+  // vs. inflación) se reescalan a 100 — si no, nadie podría llegar a A1.
+  const variables = [
+    { pts: pSituacion, max: 30 },
+    { pts: pSituacion24m, max: 20 },
+    { pts: pEndeudamiento, max: 10 },
+    { pts: pBancos, max: 10 }
+  ];
+  if (inflacionDisponible) variables.push({ pts: pDeudaVsInflacion, max: 10 });
+  const sumaPts = variables.reduce((s,v) => s+v.pts, 0);
+  const sumaMax = variables.reduce((s,v) => s+v.max, 0);
+  let puntosBase = Math.round(sumaPts * (100/sumaMax));
 
-  // ---- Matriz de atrasos: monto en mora vigente × días de atraso ----
+  // ---- Matriz de atrasos original (16 combinaciones, en pesos reales) ----
   const entidadesEnMora = (d.entidades || []).filter(e => e.situacion > 1);
-  const montoEnMoraMillones = entidadesEnMora.reduce((s,e) => s + e.monto, 0) / 1e6;
+  const montoEnMoraPesos = entidadesEnMora.reduce((s,e) => s + e.monto, 0);
   const diasAtrasoMax = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.diasAtraso || 0)) : 0;
-  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraMillones, diasAtrasoMax);
+  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraPesos, diasAtrasoMax, d.factorAjusteAtrasos || 1);
 
   // ---- Matriz de recurrencia: qué proporción de la deuda estuvo en mora ----
   const recurrencia = calcularMatrizRecurrencia(d.historialMontoEnMora, d.historialDeuda);
   const factorRecurrencia = recurrencia.factor;
 
+  // ---- Penalización por rechazos (% sobre el score, no puntos) ----
+  const penalizacionRechazos = calcularPenalizacionRechazos(d);
+  const penalizacionAntiguedad = calcularPenalizacionAntiguedad(d.antiguedadCuitAnios);
+
   let puntosFinales = puntosBase;
   let forzadoC2 = false;
   let motivo = null;
 
-  if (d.rechazosSinFondos6m > 0){
+  const inhabilitacion = hayTriggerInhabilitacion(d);
+
+  if (hayRechazoSinFondosSinRegularizar(d)){
     // Un rechazo por falta de fondos tan reciente sigue siendo un corte
-    // duro, no se diluye sumándolo como puntos: fuerza C2 directo, igual
-    // que antes. Los rechazos por defectos formales NO fuerzan C2 — no son
-    // una señal de insolvencia.
+    // duro si NO está regularizado — no se diluye como % de descuento:
+    // fuerza C2 directo. Si ya se pagó el cheque y la multa, no fuerza
+    // C2 (solo resta % vía calcularPenalizacionRechazos). Los rechazos
+    // por defectos formales NUNCA fuerzan C2 por sí solos (salvo que
+    // lleguen a 8 en 12 meses, ver hayTriggerInhabilitacion abajo).
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
-    motivo = "Rechazo de cheque por falta de fondos en los últimos 6 meses. Cuenta no operable.";
+    motivo = "Rechazo de cheque por falta de fondos en los últimos 6 meses, todavía sin regularizar. Cuenta no operable.";
+  } else if (inhabilitacion.trigger){
+    // Causales reales de inhabilitación según la Reglamentación de la
+    // Cuenta Corriente Bancaria del BCRA (no consultamos la Central de
+    // Inhabilitados en sí — no es una API pública — las replicamos con
+    // los datos que sí tenemos de ChequesRechazados).
+    forzadoC2 = true;
+    puntosFinales = Math.min(puntosBase, 20);
+    motivo = inhabilitacion.motivo;
   } else if (atrasos.tipo === "C2"){
     forzadoC2 = true;
     puntosFinales = Math.min(puntosBase, 20);
-    motivo = `Matriz de atrasos: mora vigente de $${montoEnMoraMillones.toFixed(1)}M con ${diasAtrasoMax} días de atraso. Cuenta no operable.`;
+    motivo = montoEnMoraPesos > 500000 && diasAtrasoMax >= 60
+      ? `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} (>$500.000) con ${diasAtrasoMax} días de atraso. Cuenta no operable.`
+      : `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} con ${diasAtrasoMax} días de atraso, sobre un perfil ya débil. Cuenta no operable.`;
   } else {
     const factorAtrasos = atrasos.factor || 0;
-    const factorTotal = Math.min(factorAtrasos + factorRecurrencia, 1);
+    const factorTotal = Math.min(factorAtrasos + factorRecurrencia + penalizacionRechazos.factor + penalizacionAntiguedad.factor, 1);
     puntosFinales = Math.round(puntosBase * (1 - factorTotal));
 
     const partes = [];
-    if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraMillones.toFixed(1)}M, ${diasAtrasoMax} días de atraso)`);
+    if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraPesos.toLocaleString("es-AR")}, ${diasAtrasoMax} días de atraso)`);
     if (factorRecurrencia > 0) partes.push(`${Math.round(factorRecurrencia*100)}% por recurrencia (${Math.round(recurrencia.proporcion*100)}% de la deuda de los últimos 24 meses estuvo en mora)`);
+    if (penalizacionRechazos.factor > 0) partes.push(`${Math.round(penalizacionRechazos.factor*100)}% por rechazos de cheques`);
+    if (penalizacionAntiguedad.factor > 0) partes.push(`${Math.round(penalizacionAntiguedad.factor*100)}% por CUIT muy reciente (${penalizacionAntiguedad.ventana})`);
     if (partes.length){
       motivo = `Penalización aplicada: ${partes.join(" + ")}.`;
-    } else if (d.rechazosSinFondos6a12m > 0){
-      motivo = "Rechazo de cheque por falta de fondos entre 6 y 12 meses: descontado dentro del historial de rechazos.";
-    } else if (d.rechazosSinFondos12a24m > 0){
-      motivo = "Rechazo de cheque por falta de fondos entre 12 y 24 meses: descontado dentro del historial de rechazos, con impacto menor por ya estar superado.";
     }
   }
 
@@ -1317,7 +1611,7 @@ function calcularScore(d){
   const detalle = {
     situacion: {puntos:pSituacion, max:30, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
     situacion24m: {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
-    rechazos: {puntos:pRechazos, max:20, label:"Historial de rechazos (24 meses)", desc: explicarRechazos(d)},
+    rechazos: {puntos:null, factorPenalizacion:penalizacionRechazos.factor, label:"Rechazos de cheques (penalización)", desc: explicarRechazos(d, penalizacionRechazos), detalleRechazos: d.detalleRechazos || []},
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
     deudaVsInflacion: inflacionDisponible
@@ -1326,10 +1620,25 @@ function calcularScore(d){
          desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
   };
 
+  // Antigüedad del CUIT: solo se agrega como fila visible si hay dato
+  // real (persona jurídica, vía ARCA). Para personas físicas no
+  // aparece — no es que "falte", es que no corre para ese caso.
+  if (d.antiguedadCuitAnios !== null && d.antiguedadCuitAnios !== undefined){
+    detalle.antiguedad = {
+      puntos:null, factorPenalizacion:penalizacionAntiguedad.factor,
+      label:"Antigüedad del CUIT (ARCA)",
+      desc: penalizacionAntiguedad.factor > 0
+        ? `Persona jurídica constituida hace ${d.antiguedadCuitAnios} años — CUIT todavía reciente, resta ${Math.round(penalizacionAntiguedad.factor*100)}% (${penalizacionAntiguedad.ventana}).`
+        : `Persona jurídica constituida hace ${d.antiguedadCuitAnios} años — antigüedad suficiente, sin descuento por este concepto.`
+    };
+  }
+
   return {
     puntosBase, puntosFinales, categoria, forzadoC2, motivo, detalle,
-    matrizAtrasos: { montoEnMoraMillones, diasAtrasoMax, tipo: atrasos.tipo, factor: atrasos.factor },
+    matrizAtrasos: { montoEnMoraPesos, diasAtrasoMax, tipo: atrasos.tipo, factor: atrasos.factor },
     matrizRecurrencia: { proporcionEnMora: recurrencia.proporcion, factor: factorRecurrencia },
+    penalizacionRechazos,
+    penalizacionAntiguedad,
     narrativa: construirNarrativa(categoria, puntosFinales, detalle, forzadoC2, motivo)
   };
 }
@@ -1453,12 +1762,12 @@ const BCRA_DB_RAW = {
 
 // Deriva situación / endeudamiento / cantidad de bancos a partir del detalle
 // por entidad, para que el desglose y el puntaje nunca queden desalineados.
-function calcularFactorAjusteEndeudamientoDemo(){
+function calcularFactorAjusteDesdePeriodoDemo(periodoBase){
   const hoy = new Date();
   const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
-  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
-  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
-  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10);
+  if (periodoHoy <= periodoBase) return 1;
+  let anio = parseInt(periodoBase.slice(0,4), 10);
+  let mes = parseInt(periodoBase.slice(4,6), 10);
   let meses = 0;
   while (true){
     const periodoStr = String(anio) + String(mes).padStart(2,"0");
@@ -1469,18 +1778,24 @@ function calcularFactorAjusteEndeudamientoDemo(){
   return Math.pow(1 + INFLACION_MENSUAL_DEMO_APROX, meses);
 }
 
+function calcularFactorAjusteEndeudamientoDemo(){
+  return calcularFactorAjusteDesdePeriodoDemo(ENDEUDAMIENTO_PERIODO_BASE);
+}
+
 function prepararDatos(raw){
   const situacionVigente = Math.max(...raw.entidades.map(e => e.situacion));
   const endeudamientoMillones = Math.round(raw.entidades.reduce((s,e) => s + e.monto, 0) / 1e6);
   const deudaVsInflacion = raw.deudaVsInflacion || calcularDeudaVsInflacionDemo(raw.historialDeuda || []);
   const factorAjusteEndeudamiento = raw.factorAjusteEndeudamiento || calcularFactorAjusteEndeudamientoDemo();
+  const factorAjusteAtrasos = raw.factorAjusteAtrasos || calcularFactorAjusteDesdePeriodoDemo(MATRIZ_ATRASOS_PERIODO_BASE);
   return {
     ...raw,
     situacion: situacionVigente,
     endeudamientoMillones,
     cantidadBancos: raw.entidades.length,
     deudaVsInflacion,
-    factorAjusteEndeudamiento
+    factorAjusteEndeudamiento,
+    factorAjusteAtrasos
   };
 }
 
@@ -1536,7 +1851,7 @@ async function consultarHistorialBCRA(cuit){
 // Cheques rechazados, agrupados por causal/entidad, con bucket de recencia.
 async function consultarRechazadosBCRA(cuit, ahora = new Date()){
   const r = await fetch(BCRA_RECHAZADOS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
-  if (r.status === 404) return { ok:true, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0 };
+  if (r.status === 404) return { ok:true, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0, detalleRechazos:[] };
   if (!r.ok) return { ok:false, error:"HTTP " + r.status };
   const data = await r.json();
   if (!data || !data.results) return { ok:false, error:"Sin results" };
@@ -1546,6 +1861,7 @@ async function consultarRechazadosBCRA(cuit, ahora = new Date()){
   // no financiera — la tratamos aparte, con mucho menos peso.
   let rechazosSinFondos6m=0, rechazosSinFondos6a12m=0, rechazosSinFondos12a24m=0;
   let rechazosDefectosFormales6m=0, rechazosDefectosFormales6a12m=0, rechazosDefectosFormales12a24m=0;
+  const detalleRechazos = [];
 
   for (const causalGrupo of data.results.causales || []){
     const esSinFondos = /sin\s*fondos/i.test(causalGrupo.causal || "");
@@ -1562,10 +1878,31 @@ async function consultarRechazadosBCRA(cuit, ahora = new Date()){
           else if (meses <= 12) rechazosDefectosFormales6a12m++;
           else if (meses <= 24) rechazosDefectosFormales12a24m++;
         }
+        // Detalle completo por cheque — el BCRA sí informa monto, si se
+        // pagó el cheque y si se pagó la multa (confirmado contra el
+        // manual oficial del BCRA). Antes lo descartábamos, solo
+        // contábamos ocurrencias.
+        detalleRechazos.push({
+          nroCheque: cheque.nroCheque,
+          entidad: entidad.entidad,
+          fechaRechazo: cheque.fechaRechazo,
+          monto: cheque.monto || 0,
+          causal: causalGrupo.causal,
+          esSinFondos,
+          chequePagado: !!cheque.fechaPago,
+          fechaPago: cheque.fechaPago || null,
+          multaPaga: !!cheque.fechaPagoMulta,
+          fechaPagoMulta: cheque.fechaPagoMulta || null,
+          enRevision: !!cheque.enRevision,
+          procesoJudicial: !!cheque.procesoJud,
+          mesesDesdeRechazo: meses
+        });
       }
     }
   }
-  return { ok:true, rechazosSinFondos6m, rechazosSinFondos6a12m, rechazosSinFondos12a24m, rechazosDefectosFormales6m, rechazosDefectosFormales6a12m, rechazosDefectosFormales12a24m };
+  detalleRechazos.sort((a,b) => new Date(b.fechaRechazo) - new Date(a.fechaRechazo));
+
+  return { ok:true, rechazosSinFondos6m, rechazosSinFondos6a12m, rechazosSinFondos12a24m, rechazosDefectosFormales6m, rechazosDefectosFormales6a12m, rechazosDefectosFormales12a24m, detalleRechazos };
 }
 
 // Cheque denunciado. IMPORTANTE (confirmado con el código real de OpenCheck):
@@ -1616,6 +1953,7 @@ async function construirDatosLibradorReal(cuit){
   // y redistribuye el peso de esta variable en vez de romper la consulta.
   let deudaVsInflacion = { disponible:false };
   let factorAjusteEndeudamiento = 1;
+  let factorAjusteAtrasos = 1;
   try {
     const inflacionPorPeriodo = await obtenerInflacionMensualBCRA();
     deudaVsInflacion = calcularDeudaRealVsInflacion(historial.historialDeuda, historial.historialPeriodos, inflacionPorPeriodo);
@@ -1623,25 +1961,45 @@ async function construirDatosLibradorReal(cuit){
       console.warn("[OpenCheck Score] Inflación OK pero no se pudo alinear con historialPeriodos:", historial.historialPeriodos, "vs mapa:", inflacionPorPeriodo);
     }
     factorAjusteEndeudamiento = calcularFactorAjusteEndeudamiento(inflacionPorPeriodo);
+    factorAjusteAtrasos = calcularFactorAjusteDesdePeriodo(MATRIZ_ATRASOS_PERIODO_BASE, inflacionPorPeriodo);
   } catch (e) {
     console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", e.message);
   }
 
+  // Antigüedad del CUIT vía ARCA: best-effort, igual que el resto de los
+  // datos complementarios — si falla (ARCA caída, CUIT no encontrado,
+  // persona física sin dato disponible) seguimos con null, sin cortar
+  // toda la consulta por esto.
+  let antiguedadCuitAnios = null;
+  try {
+    const respArca = await fetch(`/.netlify/functions/consultar-antiguedad-arca?cuit=${cuit}`);
+    if (respArca.ok){
+      const dataArca = await respArca.json();
+      if (dataArca.ok && dataArca.encontrado && dataArca.aniosAntiguedad !== null && dataArca.aniosAntiguedad !== undefined){
+        antiguedadCuitAnios = dataArca.aniosAntiguedad;
+      }
+    }
+  } catch (e) {
+    console.warn("[OpenCheck Score] Falló consultar-antiguedad-arca:", e.message);
+  }
+
   return prepararDatos({
     empresa: deuda.denominacion || ("Librador " + cuit),
-    antiguedadCuitAnios: null, // no disponible en las APIs del BCRA — pendiente AFIP/ARCA
+    antiguedadCuitAnios, // vía ARCA (Constancia de Inscripción), best-effort — null si no está disponible
     rechazosSinFondos6m: rechazos.rechazosSinFondos6m,
     rechazosSinFondos6a12m: rechazos.rechazosSinFondos6a12m,
     rechazosSinFondos12a24m: rechazos.rechazosSinFondos12a24m,
     rechazosDefectosFormales6m: rechazos.rechazosDefectosFormales6m,
     rechazosDefectosFormales6a12m: rechazos.rechazosDefectosFormales6a12m,
     rechazosDefectosFormales12a24m: rechazos.rechazosDefectosFormales12a24m,
+    detalleRechazos: rechazos.detalleRechazos || [],
     entidades: deuda.entidades,
     historialSituacion: historial.historialSituacion,
     historialDeuda: historial.historialDeuda,
     historialMontoEnMora: historial.historialMontoEnMora,
     deudaVsInflacion,
-    factorAjusteEndeudamiento
+    factorAjusteEndeudamiento,
+    factorAjusteAtrasos
   });
 }
 
@@ -1848,14 +2206,17 @@ async function obtenerInflacionMensualBCRA(){
 // Cuánto acumuló la inflación desde ENDEUDAMIENTO_PERIODO_BASE hasta hoy,
 // usando la misma serie mensual que ya usamos para "deuda vs. inflación".
 // Reutilizamos ese mapa en vez de pedirlo de nuevo.
-function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
+// Genérica: cuánto acumuló la inflación desde un período base ("AAAAMM")
+// hasta hoy, usando la serie mensual del BCRA. La reutilizamos tanto para
+// los umbrales de endeudamiento como para los de la matriz de atrasos.
+function calcularFactorAjusteDesdePeriodo(periodoBase, inflacionPorPeriodo){
   const hoy = new Date();
   const periodoHoy = hoy.toISOString().slice(0,7).replace("-","");
-  if (periodoHoy <= ENDEUDAMIENTO_PERIODO_BASE) return 1;
+  if (periodoHoy <= periodoBase) return 1;
 
   let factor = 1;
-  let anio = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(0,4), 10);
-  let mes = parseInt(ENDEUDAMIENTO_PERIODO_BASE.slice(4,6), 10); // 1-12
+  let anio = parseInt(periodoBase.slice(0,4), 10);
+  let mes = parseInt(periodoBase.slice(4,6), 10); // 1-12
   while (true){
     const periodoStr = String(anio) + String(mes).padStart(2,"0");
     if (periodoStr >= periodoHoy) break;
@@ -1865,6 +2226,10 @@ function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
     if (mes > 12){ mes = 1; anio++; }
   }
   return factor;
+}
+
+function calcularFactorAjusteEndeudamiento(inflacionPorPeriodo){
+  return calcularFactorAjusteDesdePeriodo(ENDEUDAMIENTO_PERIODO_BASE, inflacionPorPeriodo);
 }
 
 function calcularDeudaRealVsInflacion(historialDeuda, historialPeriodos, inflacionPorPeriodo){
@@ -2011,7 +2376,7 @@ function irA(pantalla){
   if (pantalla === "home" && state.user){
     const mesActual = new Date().toISOString().slice(0,7);
     const usadas = state.user.mes_actual === mesActual ? (state.user.consultas_usadas_mes || 0) : 0;
-    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - usadas);
+    document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - usadas);
   }
   window.scrollTo(0,0);
 }
@@ -2190,14 +2555,14 @@ function previsualizarRazonSocial(){
     try {
       const real = await consultarDeudorBCRA(digits);
       if (limpiarCuit(document.getElementById("consulta-cuit").value) !== digits) return;
-      if (real.ok && real.denominacion){
-        preview.className = "razon-social-preview show rs-found";
-        preview.innerHTML = `✓ ${real.denominacion} <span class="fuente-badge fuente-real">API BCRA real</span>`;
-        return;
-      }
-      if (real.ok && real.sinDatos){
-        preview.className = "razon-social-preview show rs-unknown";
-        preview.innerHTML = "No encontramos una razón social asociada en BCRA. Puede no tener antecedentes financieros informados. <span class=\"fuente-badge fuente-real\">API BCRA real</span>";
+      if (real.ok){
+        if (real.denominacion){
+          preview.className = "razon-social-preview show rs-found";
+          preview.innerHTML = `✓ ${real.denominacion} <span class="fuente-badge fuente-real">API BCRA real</span>`;
+        } else {
+          preview.className = "razon-social-preview show rs-unknown";
+          preview.innerHTML = "El BCRA no informa una razón social para este CUIT (puede ser una persona física sin antecedentes financieros registrados). <span class=\"fuente-badge fuente-real\">API BCRA real</span>";
+        }
         return;
       }
       throw new Error(real.error || "Respuesta inesperada");
@@ -2251,7 +2616,7 @@ async function consultarCuit(){
   }
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
-  if (state.user && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
+  if (state.user && !state.user.es_admin && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
     irA("cuenta");
     return;
   }
@@ -2287,7 +2652,7 @@ async function consultarCuit(){
 
   if (state.user){
     state.user = await incrementarConsultasUsadas(state.user);
-    document.getElementById("queries-left").textContent = Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
       categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
@@ -2352,6 +2717,45 @@ function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
   const candidatos = (texto || "").match(/\b\d{6,8}\b/g) || [];
   for (const c of candidatos){
     if (!cuitEncontrado || !cuitEncontrado.includes(c)) return c.padStart(8, "0");
+  }
+  return null;
+}
+
+// Busca el nombre/alias del banco impreso en el cheque (suele estar en
+// grande, arriba — el logo del banco es de lo más fácil de leer bien
+// para el OCR). Usamos alias cortos porque el OCR normalmente lee la
+// marca (ej. "BBVA"), no el nombre completo de la entidad ("BBVA Argentina").
+const ALIAS_BANCOS = [
+  { patron: /banco\s*de\s*la\s*naci[oó]n|\bbna\b/i, codigo: 11 },
+  { patron: /galicia/i, codigo: 7 },
+  { patron: /\bmacro\b/i, codigo: 285 },
+  { patron: /santander/i, codigo: 72 },
+  { patron: /credicoop/i, codigo: 191 },
+  { patron: /provincia|bapro/i, codigo: 14 },
+  { patron: /bbva/i, codigo: 17 },
+  { patron: /icbc/i, codigo: 97 },
+  { patron: /supervielle/i, codigo: 27 },
+  { patron: /patagonia/i, codigo: 338 }
+];
+
+function extraerBancoDeTexto(texto){
+  for (const alias of ALIAS_BANCOS){
+    if (alias.patron.test(texto || "")) return alias.codigo;
+  }
+  return extraerBancoPorCodigoNumerico(texto);
+}
+
+// Respaldo: el logo del banco a veces es un gráfico estilizado que el
+// OCR no lee bien como texto. Pero el código de banco (3 dígitos) suele
+// estar impreso en tipografía plana dentro del recuadro de cuenta, tipo
+// "017-149-1416 0" — mucho más fácil de leer. Si el primer grupo de 3
+// dígitos coincide con un código de banco real conocido, lo usamos.
+function extraerBancoPorCodigoNumerico(texto){
+  const codigosConocidos = new Map(ENTIDADES_CHEQUES.map(e => [String(e.codigo).padStart(3,"0"), e.codigo]));
+  const candidatos = (texto || "").match(/\b\d{3}-\d{2,4}/g) || [];
+  for (const c of candidatos){
+    const codigo3 = c.split("-")[0];
+    if (codigosConocidos.has(codigo3)) return codigosConocidos.get(codigo3);
   }
   return null;
 }
@@ -2475,7 +2879,11 @@ function cerrarCamaraCheque(){
     camaraStream = null;
   }
   document.getElementById("camara-modal").style.display = "none";
+  document.getElementById("camara-preview").style.display = "none";
+  fotoCapturadaBlob = null;
 }
+
+let fotoCapturadaBlob = null;
 
 function capturarFotoCheque(){
   const video = document.getElementById("camara-video");
@@ -2484,10 +2892,25 @@ function capturarFotoCheque(){
   canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  canvas.toBlob(async (blob) => {
-    cerrarCamaraCheque();
-    await procesarFotoCheque(blob);
+  canvas.toBlob((blob) => {
+    fotoCapturadaBlob = blob;
+    document.getElementById("camara-preview-img").src = URL.createObjectURL(blob);
+    document.getElementById("camara-preview").style.display = "flex";
   }, "image/jpeg", 0.92);
+}
+
+function volverASacarFoto(){
+  document.getElementById("camara-preview").style.display = "none";
+  fotoCapturadaBlob = null;
+  // La cámara sigue prendida (no cerramos el stream), así que volvemos
+  // directo a la vista en vivo sin tener que pedir permiso de nuevo.
+}
+
+async function usarFotoCapturada(){
+  const blob = fotoCapturadaBlob;
+  document.getElementById("camara-preview").style.display = "none";
+  cerrarCamaraCheque();
+  await procesarFotoCheque(blob);
 }
 
 async function procesarFotoCheque(archivo){
@@ -2514,14 +2937,16 @@ async function procesarFotoCheque(archivo){
     const cuit = extraerCuitDeTexto(texto);
     const numeroEncontrado = extraerNumeroChequeDeTexto(texto, cuit ? cuit.valor : null);
     const fechaEncontrada = extraerFechaDeTexto(texto);
+    const codigoBanco = extraerBancoDeTexto(texto);
 
     if (cuit) setCuit(formatearCuit(cuit.valor));
     if (numeroEncontrado) document.getElementById("consulta-numero-cheque").value = numeroEncontrado;
     if (fechaEncontrada) document.getElementById("consulta-fecha-vencimiento").value = fechaEncontrada;
+    if (codigoBanco) document.getElementById("consulta-banco-cheque").value = codigoBanco;
 
     if (cuit && !cuit.confiable){
       mostrarToast("Encontramos un CUIT parecido pero no lo pudimos confirmar del todo — revisalo antes de consultar.");
-    } else if (cuit || numeroEncontrado || fechaEncontrada){
+    } else if (cuit || numeroEncontrado || fechaEncontrada || codigoBanco){
       mostrarToast("Revisá los datos leídos antes de consultar — el OCR no siempre acierta.");
     } else {
       mostrarToast("No pudimos leer datos del cheque. Probá con más luz y bien encuadrado, o completá los campos a mano.");
@@ -2580,40 +3005,69 @@ const TRAMO_LABEL = {
   B2: "Riesgo medio-alto", C1: "Riesgo alto", C2: "No operable"
 };
 
-function construirGauge(puntos, categoria){
+function construirGauge(categoria){
   const c = TIER_COLORS[categoria];
   const cx = 110, cy = 108, r = 86;
-  const angleFor = (pct) => Math.PI - (pct * Math.PI); // 0pct=180° (izq), 100pct=0° (der)
-  const pointAt = (pct) => {
-    const a = angleFor(pct);
-    return [cx + r * Math.cos(a), cy - r * Math.sin(a)];
-  };
+  const zonas = [
+    {desde:0, hasta:0.42, color:"#D8A2A2"},
+    {desde:0.42, hasta:0.75, color:"#E4CB9C"},
+    {desde:0.75, hasta:1, color:"#A9CFC0"}
+  ];
+  const angleFor = (pct) => Math.PI - (pct * Math.PI);
   const arcPath = (pctStart, pctEnd, radius) => {
     const a0 = angleFor(pctStart), a1 = angleFor(pctEnd);
     const p0 = [cx + radius*Math.cos(a0), cy - radius*Math.sin(a0)];
     const p1 = [cx + radius*Math.cos(a1), cy - radius*Math.sin(a1)];
     return `M ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A ${radius} ${radius} 0 0 1 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}`;
   };
-  // Zonas de fondo: C (0-42) rojo, B (42-75) ámbar, A (75-100) verde
-  const zonas = [
-    {desde:0, hasta:0.42, color:"#D8A2A2"},
-    {desde:0.42, hasta:0.75, color:"#E4CB9C"},
-    {desde:0.75, hasta:1, color:"#A9CFC0"}
-  ];
-  const pct = Math.max(0, Math.min(100, puntos))/100;
-  const agujaAngulo = angleFor(pct);
-  const agujaX = cx + (r-8) * Math.cos(agujaAngulo);
-  const agujaY = cy - (r-8) * Math.sin(agujaAngulo);
-
+  // El SVG arranca en 0% — la animación (animarGauge) lo lleva al valor real.
   return `
   <svg width="220" height="130" viewBox="0 0 220 130">
     ${zonas.map(z => `<path d="${arcPath(z.desde, z.hasta, r)}" fill="none" stroke="${z.color}" stroke-width="14" stroke-linecap="butt"/>`).join("")}
-    <path d="${arcPath(0, pct, r)}" fill="none" stroke="${c.main}" stroke-width="14" stroke-linecap="round"/>
-    <line x1="${cx}" y1="${cy}" x2="${agujaX.toFixed(1)}" y2="${agujaY.toFixed(1)}" stroke="${c.ink}" stroke-width="3" stroke-linecap="round"/>
+    <path id="gauge-arco-relleno" d="${arcPath(0, 0, r)}" fill="none" stroke="${c.main}" stroke-width="14" stroke-linecap="round"/>
+    <line id="gauge-aguja" x1="${cx}" y1="${cy}" x2="${(cx-r+8).toFixed(1)}" y2="${cy}" stroke="${c.ink}" stroke-width="3" stroke-linecap="round"/>
     <circle cx="${cx}" cy="${cy}" r="5" fill="${c.ink}"/>
-    <text x="${cx}" y="${cy-24}" text-anchor="middle" font-family="DM Mono, monospace" font-size="30" font-weight="500" fill="${c.ink}">${puntos}</text>
+    <text id="gauge-numero" x="${cx}" y="${cy-24}" text-anchor="middle" font-family="DM Mono, monospace" font-size="30" font-weight="500" fill="${c.ink}">0</text>
     <text x="${cx}" y="${cy-6}" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" fill="${c.ink}" opacity="0.7">de 100 puntos</text>
   </svg>`;
+}
+
+// Anima la aguja y el número desde 0 hasta el puntaje real, con easing.
+// Se llama DESPUÉS de insertar el SVG de construirGauge() en el DOM.
+function animarGauge(puntosFinal, categoria){
+  const cx = 110, cy = 108, r = 86;
+  const angleFor = (pct) => Math.PI - (pct * Math.PI);
+  const arcPath = (pctStart, pctEnd, radius) => {
+    const a0 = angleFor(pctStart), a1 = angleFor(pctEnd);
+    const p0 = [cx + radius*Math.cos(a0), cy - radius*Math.sin(a0)];
+    const p1 = [cx + radius*Math.cos(a1), cy - radius*Math.sin(a1)];
+    return `M ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A ${radius} ${radius} 0 0 1 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}`;
+  };
+
+  const arco = document.getElementById("gauge-arco-relleno");
+  const aguja = document.getElementById("gauge-aguja");
+  const numero = document.getElementById("gauge-numero");
+  if (!arco || !aguja || !numero) return;
+
+  const pctFinal = Math.max(0, Math.min(100, puntosFinal)) / 100;
+  const duracion = 1100;
+  const inicio = performance.now();
+  const easeOutCubic = t => 1 - Math.pow(1-t, 3);
+
+  function frame(ahora){
+    const t = Math.min(1, (ahora - inicio) / duracion);
+    const tE = easeOutCubic(t);
+    const pctActual = pctFinal * tE;
+
+    arco.setAttribute("d", arcPath(0, pctActual, r));
+    const aAngulo = angleFor(pctActual);
+    aguja.setAttribute("x2", (cx + (r-8) * Math.cos(aAngulo)).toFixed(1));
+    aguja.setAttribute("y2", (cy - (r-8) * Math.sin(aAngulo)).toFixed(1));
+    numero.textContent = Math.round(puntosFinal * tE);
+
+    if (t < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 /* ---- Recomendación operativa por categoría ---- */
@@ -2718,12 +3172,51 @@ function construirDetalleMensualToggle(detalleMensual, idx){
     </div>
   `;
 }
+
+// Detalle de cada cheque rechazado informado por BCRA — causal, monto,
+// y si el cheque y la multa asociada ya fueron pagados/levantados.
+// Reutiliza el mismo toggle genérico (toggleDetalleMensual) que la tabla
+// de deuda vs. inflación, solo cambia el contenido.
+function construirDetalleRechazosToggle(detalleRechazos, idx){
+  const id = "detalle-rechazos-" + idx;
+  const filas = detalleRechazos.map(r => {
+    const fecha = new Date(r.fechaRechazo + "T00:00:00").toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric" });
+    return `
+    <tr>
+      <td>${fecha}</td>
+      <td>${r.esSinFondos ? "Sin fondos" : "Defectos formales"}</td>
+      <td>$${Number(r.monto || 0).toLocaleString("es-AR")}</td>
+      <td>${r.chequePagado ? "Pagado" : "Impago"}</td>
+      <td>${r.multaPaga ? "Paga" : "Impaga"}</td>
+    </tr>`;
+  }).join("");
+  return `
+    <div class="detalle-mensual-toggle" onclick="toggleDetalleMensual('${id}', this)">
+      Ver detalle de cheques rechazados (${detalleRechazos.length}) <span class="dm-arrow">▸</span>
+    </div>
+    <div class="detalle-mensual-tabla" id="${id}" style="display:none">
+      <div class="dm-nota">Cada cheque rechazado que informa el BCRA para este CUIT en los últimos 24 meses, con su causal, monto, y si el cheque y la multa asociada ya fueron pagados.</div>
+      <table>
+        <thead>
+          <tr><th>Fecha</th><th>Causal</th><th>Monto</th><th>Cheque</th><th>Multa</th></tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+  `;
+}
 function toggleDetalleMensual(id, el){
   const tabla = document.getElementById(id);
   const abierta = tabla.style.display !== "none";
   tabla.style.display = abierta ? "none" : "block";
   el.querySelector(".dm-arrow").textContent = abierta ? "▸" : "▾";
 }
+
+// Íconos en línea con la marca (no emojis del sistema) para el bloque de
+// alertas del resultado.
+const ICONO_ALERTA_OK = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 12.5l2.5 2.5 5.5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICONO_ALERTA_WARN = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3.5L2.5 20h19L12 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.3" r="0.9" fill="currentColor"/></svg>`;
+const ICONO_ALERTA_BLOCK = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.8"/><path d="M6 6l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 
 function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   // Guardado para poder auditar el cálculo exacto desde la consola:
@@ -2740,7 +3233,8 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
     : `<span class="fuente-badge fuente-demo">Demo — API no disponible en este momento</span>`;
   document.getElementById("res-fuente").innerHTML = fuenteBadge;
 
-  document.getElementById("res-gauge").innerHTML = construirGauge(resultado.puntosFinales, resultado.categoria);
+  document.getElementById("res-gauge").innerHTML = construirGauge(resultado.categoria);
+  requestAnimationFrame(() => animarGauge(resultado.puntosFinales, resultado.categoria));
   document.getElementById("res-tramo").textContent = TRAMO_LABEL[resultado.categoria];
 
   document.getElementById("res-recomendacion").innerHTML = `
@@ -2753,18 +3247,18 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   const alertaBox = document.getElementById("res-alerta");
   let alertaHtml = "";
   if (resultado.forzadoC2){
-    alertaHtml += `<div class="alert-block danger"><span>⛔</span><div><b>No operable</b>${resultado.motivo}</div></div>`;
+    alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_BLOCK}</span><div><b>No operable</b>${resultado.motivo}</div></div>`;
   } else if (resultado.motivo){
-    alertaHtml += `<div class="alert-block danger"><span>⚠️</span><div><b>Penalización aplicada</b>${resultado.motivo}</div></div>`;
+    alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_WARN}</span><div><b>Penalización aplicada</b>${resultado.motivo}</div></div>`;
   } else {
-    alertaHtml += `<div class="alert-block ok"><span>✓</span><div><b>Sin rechazos registrados</b>El librador no presenta rechazos de cheques en los últimos 24 meses.</div></div>`;
+    alertaHtml += `<div class="alert-block ok"><span>${ICONO_ALERTA_OK}</span><div><b>Sin rechazos registrados</b>El librador no presenta rechazos de cheques en los últimos 24 meses.</div></div>`;
   }
 
   if (numeroCheque){
     if (chequeInfo && chequeInfo.denunciado){
-      alertaHtml += `<div class="alert-block danger"><span>⛔</span><div><b>Cheque N° ${numeroCheque} denunciado</b>${chequeInfo.motivo}</div></div>`;
+      alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_BLOCK}</span><div><b>Cheque N° ${numeroCheque} denunciado</b>${chequeInfo.motivo}</div></div>`;
     } else {
-      alertaHtml += `<div class="alert-block ok"><span>✓</span><div><b>Cheque N° ${numeroCheque} sin denuncias</b>No registra extravío, robo ni oposición al pago en BCRA.</div></div>`;
+      alertaHtml += `<div class="alert-block ok"><span>${ICONO_ALERTA_OK}</span><div><b>Cheque N° ${numeroCheque} sin denuncias</b>No registra extravío, robo ni oposición al pago en BCRA.</div></div>`;
     }
   }
   alertaBox.innerHTML = alertaHtml;
@@ -2775,17 +3269,24 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   `;
 
   const filas = Object.values(resultado.detalle);
-  document.getElementById("res-breakdown").innerHTML = filas.map((v, idx) => `
+  document.getElementById("res-breakdown").innerHTML = filas.map((v, idx) => {
+    const esPenalizacion = v.factorPenalizacion !== undefined;
+    const barraAncho = v.noDisponible ? 0 : esPenalizacion ? Math.round(v.factorPenalizacion*100) : (v.puntos/v.max*100).toFixed(0);
+    const valorTexto = v.noDisponible ? "N/D" : esPenalizacion ? `-${Math.round(v.factorPenalizacion*100)}%` : v.puntos + "/" + v.max;
+    const claseBarra = esPenalizacion && v.factorPenalizacion > 0 ? "br-bar-fill-penalizacion" : "";
+    return `
     <div class="breakdown-row${v.noDisponible ? " breakdown-row-nd" : ""}">
       <div class="br-top">
         <div class="br-label">${v.label}</div>
-        <div class="br-bar"><div class="br-bar-fill" style="width:${v.noDisponible ? 0 : (v.puntos/v.max*100).toFixed(0)}%"></div></div>
-        <div class="br-val">${v.noDisponible ? "N/D" : v.puntos + "/" + v.max}</div>
+        <div class="br-bar"><div class="br-bar-fill ${claseBarra}" style="width:${barraAncho}%"></div></div>
+        <div class="br-val">${valorTexto}</div>
       </div>
       <div class="br-desc">${v.desc}</div>
       ${v.detalleMensual ? construirDetalleMensualToggle(v.detalleMensual, idx) : ""}
+      ${v.detalleRechazos && v.detalleRechazos.length ? construirDetalleRechazosToggle(v.detalleRechazos, idx) : ""}
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   /* ---- Detalle por entidad bancaria ---- */
   const concentracion = calcularConcentracionBancaria(datos.entidades);
@@ -2889,6 +3390,9 @@ function renderCuenta(){
     <p class="page-sub" style="margin-top:-4px;">Te avisamos cuando venza un cheque que consultaste, para preguntarte si se cobró.</p>
     <button class="btn btn-secondary" onclick="activarNotificacionesPush()">
       ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "Notificaciones activadas ✓" : "Activar notificaciones"}
+    </button>
+    <button class="btn btn-primary" id="btn-instalar-app" onclick="instalarApp()" style="display:none; margin-top:10px; align-items:center; justify-content:center; gap:8px;">
+      Instalar OpenCheck Score en este dispositivo
     </button>
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">
