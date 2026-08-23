@@ -1677,7 +1677,9 @@ function construirNarrativa(categoria, puntos, detalle, forzadoC2, motivo){
     return `Se asignó <b>C2 (no operable)</b> de forma directa: ${motivo.charAt(0).toLowerCase() + motivo.slice(1)} Este criterio pisa cualquier otro resultado del cálculo base, que sin este motivo hubiera dado ${puntos_texto(fortalezaSinR, debilidadSinR)}.`;
   }
 
-  let base = `Con <b>${puntos} puntos sobre 100</b>, el librador quedó en la categoría <b>${categoria}</b> (${NOMBRE_CATEGORIA[categoria]}). `;
+  const sinAntecedentesDeuda = detalle.situacion && detalle.situacion.noDisponible;
+  const nombreCategoriaTexto = sinAntecedentesDeuda ? "sin antecedentes suficientes para clasificar con precisión" : NOMBRE_CATEGORIA[categoria];
+  let base = `Con <b>${puntos} puntos sobre 100</b>, el librador quedó en la categoría <b>${categoria}</b> (${nombreCategoriaTexto}). `;
   if (detalle.situacion && detalle.situacion.noDisponible){
     base += `El BCRA no informa antecedentes de deuda bancaria para este CUIT — sin historial crediticio registrado, ni a favor ni en contra. `;
   }
@@ -3258,12 +3260,17 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
 
   document.getElementById("res-gauge").innerHTML = construirGauge(resultado.categoria);
   requestAnimationFrame(() => animarGauge(resultado.puntosFinales, resultado.categoria));
-  document.getElementById("res-tramo").textContent = TRAMO_LABEL[resultado.categoria];
+  document.getElementById("res-tramo").textContent = datos.sinAntecedentesDeuda
+    ? "Sin antecedentes suficientes"
+    : TRAMO_LABEL[resultado.categoria];
 
+  const recomendacionesTexto = datos.sinAntecedentesDeuda
+    ? ["Sin antecedentes crediticios suficientes para clasificar con precisión — no equivale a mal historial, sino a falta de datos.", "Complementá con otras referencias del librador (por ejemplo, antigüedad comercial, referencias personales) antes de decidir.", "Prestá atención igual al historial de rechazos de cheques, que sí se evaluó de forma independiente."]
+    : RECOMENDACIONES[resultado.categoria];
   document.getElementById("res-recomendacion").innerHTML = `
     <div class="narrativa-title">Cómo operar</div>
     <ul class="recomendacion-list">
-      ${RECOMENDACIONES[resultado.categoria].map(r => `<li>${r}</li>`).join("")}
+      ${recomendacionesTexto.map(r => `<li>${r}</li>`).join("")}
     </ul>
   `;
 
@@ -3271,7 +3278,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   let alertaHtml = "";
 
   if (datos.sinAntecedentesDeuda){
-    alertaHtml += `<div class="alert-block info"><span>${ICONO_ALERTA_WARN}</span><div><b>Sin antecedentes crediticios</b>El BCRA no informa relación con entidades bancarias para este CUIT — no tiene (ni tuvo) deuda bancaria registrada. Sin historial de comportamiento, es difícil emitir un análisis crítico completo, y esto impacta negativamente en el puntaje final (situación actual y situación de los últimos 24 meses no se pueden evaluar). El resto del análisis — incluidos los rechazos de cheques — sí se calculó normalmente.</div></div>`;
+    alertaHtml += `<div class="alert-block info"><span>${ICONO_ALERTA_WARN}</span><div><b>Sin antecedentes que permitan clasificar correctamente</b>El BCRA no informa relación con entidades bancarias para este CUIT — no tiene (ni tuvo) deuda bancaria registrada. Sin historial de comportamiento, es difícil emitir un análisis crítico completo, y esto impacta negativamente en el puntaje final (situación actual y situación de los últimos 24 meses no se pueden evaluar). El resto del análisis — incluidos los rechazos de cheques — sí se calculó normalmente.</div></div>`;
   }
 
   if (resultado.forzadoC2){
