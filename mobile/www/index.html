@@ -132,16 +132,52 @@
     box-shadow:0 2px 8px rgba(0,0,0,.12), 0 8px 32px rgba(0,0,0,.10);
     position:relative; z-index:2;
   }
-  .institucional-seccion{ margin-top:30px; }
-  .institucional-seccion-titulo{
-    font-size:16px; font-weight:800; color:var(--green-ink); margin-bottom:10px;
-    letter-spacing:-0.01em;
+
+  .institucional-tabs{
+    display:flex; gap:6px; padding:24px 20px 14px; overflow-x:auto;
   }
-  .institucional-seccion p{
-    font-size:13.5px; color:var(--ink); line-height:1.6; margin-bottom:10px;
+  .institucional-tab{
+    flex-shrink:0; padding:9px 14px; border-radius:20px; border:1px solid var(--hairline);
+    background:#fff; color:var(--ink-soft); font-family:'DM Sans',sans-serif; font-size:12.5px;
+    font-weight:700; cursor:pointer; white-space:nowrap;
   }
-  .institucional-seccion p:last-child{ margin-bottom:0; }
-  .institucional-seccion p b{ color:var(--green-ink); }
+  .institucional-tab.active{ background:var(--green-ink); border-color:var(--green-ink); color:#fff; }
+  .institucional-panel{ display:none; padding:6px 20px 10px; }
+  .institucional-panel.active{ display:block; }
+  .institucional-bullets{ list-style:none; padding:0; margin:0; }
+  .institucional-bullets li{
+    font-size:13.5px; color:var(--ink); line-height:1.55; padding:12px 0 12px 22px;
+    border-bottom:1px solid var(--hairline); position:relative;
+  }
+  .institucional-bullets li:last-child{ border-bottom:none; }
+  .institucional-bullets li::before{
+    content:""; position:absolute; left:0; top:18px; width:7px; height:7px;
+    border-radius:50%; background:var(--green);
+  }
+  .institucional-bullets li b{ color:var(--green-ink); }
+
+  /* En desktop, la institucional se despliega ancha y en 2 columnas —
+     el resto de la app (una vez adentro) sigue como simulador de
+     teléfono a propósito, no se toca acá. */
+  @media (min-width:900px){
+    body.pantalla-institucional .device{
+      max-width:1040px; box-shadow:none; background:transparent;
+    }
+    .institucional-layout{
+      display:flex; align-items:flex-start; gap:36px; padding:36px 24px;
+    }
+    .institucional-col-hero{ flex:1; min-width:0; }
+    .institucional-col-hero .hero-registro{ border-radius:24px; margin:0 0 20px !important; padding:36px 32px !important; }
+    .institucional-col-hero > div[style*="padding:0 20px"]{ padding:0 !important; }
+    .institucional-col-info{
+      flex:1; min-width:0; background:#fff; border-radius:20px;
+      box-shadow:0 2px 8px rgba(0,0,0,.08), 0 8px 32px rgba(0,0,0,.06);
+      align-self:stretch;
+    }
+    .institucional-tabs{ flex-direction:column; padding:24px; }
+    .institucional-tab{ text-align:left; }
+    .institucional-panel{ padding:0 28px 28px; }
+  }
   .hero-registro h1{
     font-size:26px; font-weight:800; letter-spacing:-0.02em; line-height:1.2;
     margin:0 0 10px; color:#fff;
@@ -701,7 +737,7 @@
   ::-webkit-scrollbar{width:0;}
 </style>
 </head>
-<body>
+<body class="pantalla-institucional">
 
 <div class="device">
   <div class="statusbar"></div>
@@ -709,57 +745,75 @@
   <!-- ===================== INSTITUCIONAL / LANDING ===================== -->
   <div class="screen active" id="screen-institucional">
     <div class="content" style="padding:0 0 30px;">
-      <div class="hero-registro hero-institucional" style="margin:0 0 -34px; border-radius:0 0 24px 24px; padding-bottom:58px;">
-        <div class="brand" style="margin-bottom:24px;">
-          <div class="brand-mark" style="background:rgba(255,255,255,.18); color:#fff;">OC</div>
-          <div class="brand-name" style="color:#fff;">Open<span style="color:rgba(255,255,255,.7);">Check</span> Score</div>
-        </div>
-        <h1>Sabé con quién estás por cobrar, en segundos</h1>
-        <p class="hero-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA.</p>
-        <div class="hero-valores">
-          <div class="hero-valor">
-            <div class="hero-valor-icono">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="institucional-layout">
+        <div class="institucional-col-hero">
+          <div class="hero-registro hero-institucional" style="margin:0 0 -34px; border-radius:0 0 24px 24px; padding-bottom:58px;">
+            <div class="brand" style="margin-bottom:24px;">
+              <div class="brand-mark" style="background:rgba(255,255,255,.18); color:#fff;">OC</div>
+              <div class="brand-name" style="color:#fff;">Open<span style="color:rgba(255,255,255,.7);">Check</span> Score</div>
             </div>
-            <div class="hero-valor-texto">Dato oficial del BCRA<span>Central de Deudores, cheques rechazados y denunciados</span></div>
-          </div>
-          <div class="hero-valor">
-            <div class="hero-valor-icono">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <h1>Sabé con quién estás por cobrar, en segundos</h1>
+            <p class="hero-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA.</p>
+            <div class="hero-valores">
+              <div class="hero-valor">
+                <div class="hero-valor-icono">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="hero-valor-texto">Dato oficial del BCRA<span>Central de Deudores, cheques rechazados y denunciados</span></div>
+              </div>
+              <div class="hero-valor">
+                <div class="hero-valor-icono">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="hero-valor-texto">Trazabilidad completa<span>Cada consulta queda registrada, con el detalle de en qué se basó</span></div>
+              </div>
+              <div class="hero-valor">
+                <div class="hero-valor-icono">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="hero-valor-texto">Respuesta instantánea<span>Consultá un CUIT o sacá una foto del cheque</span></div>
+              </div>
             </div>
-            <div class="hero-valor-texto">Trazabilidad completa<span>Cada consulta queda registrada, con el detalle de en qué se basó</span></div>
           </div>
-          <div class="hero-valor">
-            <div class="hero-valor-icono">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+
+          <div style="padding:0 20px;">
+            <div class="institucional-card">
+              <button class="btn btn-primary" id="btn-institucional-principal" onclick="irA('login')" style="width:100%; margin-bottom:12px;">Iniciar sesión</button>
+              <button class="btn btn-secondary" id="btn-institucional-registro" onclick="irA('registro')" style="width:100%;">Crear cuenta</button>
             </div>
-            <div class="hero-valor-texto">Respuesta instantánea<span>Consultá un CUIT o sacá una foto del cheque</span></div>
           </div>
         </div>
-      </div>
 
-      <div style="padding:0 20px;">
-        <div class="institucional-card">
-          <button class="btn btn-primary" id="btn-institucional-principal" onclick="irA('login')" style="width:100%; margin-bottom:12px;">Iniciar sesión</button>
-          <button class="btn btn-secondary" id="btn-institucional-registro" onclick="irA('registro')" style="width:100%;">Crear cuenta</button>
-        </div>
+        <div class="institucional-col-info">
+          <div class="institucional-tabs">
+            <button class="institucional-tab active" data-tab="quienes" onclick="mostrarTabInstitucional('quienes')">Quiénes somos</button>
+            <button class="institucional-tab" data-tab="funciona" onclick="mostrarTabInstitucional('funciona')">Cómo funciona</button>
+            <button class="institucional-tab" data-tab="datos" onclick="mostrarTabInstitucional('datos')">De dónde salen los datos</button>
+          </div>
 
-        <div class="institucional-seccion">
-          <div class="institucional-seccion-titulo">Quiénes somos</div>
-          <p>OpenCheck Score nace de una pregunta simple: antes de aceptar un cheque, ¿cómo sabés si vas a poder cobrarlo? Hoy esa evaluación suele depender de la intuición, de referencias de terceros, o de informes comerciales pagos a los que no todos tienen acceso fácil.</p>
-          <p>Construimos esta herramienta para que cualquier comerciante, pyme o profesional independiente pueda tomar esa decisión con la misma calidad de información que manejan las grandes empresas — pero en segundos, y sin costos ocultos.</p>
-        </div>
+          <div class="institucional-panel active" data-panel="quienes">
+            <ul class="institucional-bullets">
+              <li><b>El problema:</b> antes de aceptar un cheque, hoy se decide a ojo — intuición, referencias de terceros, o informes pagos poco accesibles.</li>
+              <li><b>La idea:</b> que cualquier comerciante, pyme o profesional pueda decidir con la misma calidad de información que las grandes empresas.</li>
+              <li><b>En segundos, no en días.</b> Sin costos ocultos.</li>
+            </ul>
+          </div>
 
-        <div class="institucional-seccion">
-          <div class="institucional-seccion-titulo">Cómo funciona</div>
-          <p>Ingresás el CUIT del librador (o directamente le sacás una foto al cheque) y analizamos su situación: historial de pagos con bancos, endeudamiento, antecedentes de cheques rechazados, y otros factores relevantes para el riesgo de cobro.</p>
-          <p>Con eso armamos un puntaje de 0 a 100 y una categoría de riesgo — de A1 (riesgo muy bajo) a C2 (no operable) — pensada para leerse de un vistazo, con la explicación de qué la formó, no como una caja negra.</p>
-        </div>
+          <div class="institucional-panel" data-panel="funciona">
+            <ul class="institucional-bullets">
+              <li>Ingresás un CUIT, o directamente <b>le sacás una foto al cheque</b>.</li>
+              <li>Analizamos historial de pagos, endeudamiento, y antecedentes de cheques rechazados.</li>
+              <li>Resultado: un <b>puntaje de 0 a 100</b> y una categoría de riesgo (A1 a C2), con la explicación de qué la formó — no una caja negra.</li>
+            </ul>
+          </div>
 
-        <div class="institucional-seccion">
-          <div class="institucional-seccion-titulo">De dónde sale la información</div>
-          <p>Toda la información que usamos es <b>pública y gratuita</b>, publicada por organismos oficiales — el Banco Central de la República Argentina (BCRA) y la Agencia de Recaudación y Control Aduanero (ARCA).</p>
-          <p>No compramos datos a terceros ni usamos informes comerciales pagos. Buscamos que evaluar el riesgo de un cheque sea tan simple y accesible como debería haber sido siempre — sin intermediarios, y con la misma información para todos.</p>
+          <div class="institucional-panel" data-panel="datos">
+            <ul class="institucional-bullets">
+              <li>Todo sale de fuentes <b>públicas y gratuitas</b>: BCRA y ARCA.</li>
+              <li>Nada de informes comerciales pagos ni datos comprados a terceros.</li>
+              <li>La misma información, accesible para todos.</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -2530,6 +2584,7 @@ function irA(pantalla){
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + pantalla).classList.add("active");
   document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.nav === pantalla));
+  document.body.classList.toggle("pantalla-institucional", pantalla === "institucional");
   if (pantalla === "historial") renderHistorial();
   if (pantalla === "cuenta") renderCuenta();
   if (pantalla === "paywall") renderPaywall();
@@ -2539,6 +2594,11 @@ function irA(pantalla){
     document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - usadas);
   }
   window.scrollTo(0,0);
+}
+
+function mostrarTabInstitucional(tab){
+  document.querySelectorAll(".institucional-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  document.querySelectorAll(".institucional-panel").forEach(p => p.classList.toggle("active", p.dataset.panel === tab));
 }
 
 /* ---- Registro ---- */
