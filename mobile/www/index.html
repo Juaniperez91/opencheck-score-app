@@ -2544,7 +2544,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-08-23-v2-diagnostico";
+const VERSION_APP = "2026-08-23-v3-alerta";
 
 const state = {
   user: null,
@@ -2848,15 +2848,17 @@ async function consultarCuit(){
   }
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
-  console.log("[OpenCheck Score] DIAGNÓSTICO paywall:", {
-    tieneUser: !!state.user,
-    esAdmin: state.user ? state.user.es_admin : null,
-    plan: state.user ? state.user.plan : null,
-    usadasEsteMes,
-    queriesLimit: state.queriesLimit,
-    vaABloquear: !!(state.user && !state.user.es_admin && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit)
-  });
-  if (state.user && !state.user.es_admin && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit){
+  const vaABloquear = !!(state.user && !state.user.es_admin && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit);
+  alert(
+    "DIAGNÓSTICO\n" +
+    "tieneUser: " + (!!state.user) + "\n" +
+    "esAdmin: " + (state.user ? state.user.es_admin : "null") + "\n" +
+    "plan: " + (state.user ? state.user.plan : "null") + "\n" +
+    "usadasEsteMes: " + usadasEsteMes + "\n" +
+    "queriesLimit: " + state.queriesLimit + "\n" +
+    "vaABloquear: " + vaABloquear
+  );
+  if (vaABloquear){
     irA("cuenta");
     return;
   }
