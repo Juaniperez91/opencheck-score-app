@@ -658,6 +658,25 @@
   .confirmacion-banner-botones .btn-si{ background:var(--green); color:#fff; }
   .confirmacion-banner-botones .btn-no{ background:var(--brick-soft); color:var(--brick); }
 
+  .hist-confirmacion{
+    margin-top:10px; padding:11px 12px; background:var(--paper-2); border-radius:9px;
+  }
+  .hist-confirmacion p{ margin:0 0 9px; font-size:12px; color:var(--ink); line-height:1.4; }
+  .hist-confirmacion-botones{ display:flex; gap:8px; }
+  .hist-confirmacion-botones button{
+    flex:1; padding:8px; border-radius:7px; border:none; font-family:'DM Sans',sans-serif;
+    font-weight:700; font-size:12.5px; cursor:pointer;
+  }
+  .hist-confirmacion-botones .btn-si{ background:var(--green); color:#fff; }
+  .hist-confirmacion-botones .btn-no{ background:var(--brick-soft); color:var(--brick); }
+  .hist-resultado-badge{
+    display:inline-flex; align-items:center; gap:4px; margin-top:8px;
+    font-size:11.5px; font-weight:700; padding:4px 9px; border-radius:20px;
+  }
+  .hist-resultado-badge.pagado{ background:var(--green-soft); color:var(--green-ink); }
+  .hist-resultado-badge.rechazado{ background:var(--brick-soft); color:var(--brick); }
+  .hist-pendiente-nota{ margin-top:8px; font-size:11.5px; color:var(--ink-soft); }
+
   ::-webkit-scrollbar{width:0;}
 </style>
 </head>
@@ -1133,6 +1152,7 @@ function mostrarBannerConfirmacion(consulta){
   if (document.querySelector(".confirmacion-banner")) return; // ya hay uno mostrado
   const banner = document.createElement("div");
   banner.className = "confirmacion-banner";
+  banner.setAttribute("data-confirmacion-widget", "");
   banner.innerHTML = `
     <p>¿Se cobró el cheque N° ${consulta.numero_cheque_consultado} de ${consulta.razon_social || consulta.cuit_consultado}?</p>
     <div class="confirmacion-banner-botones">
@@ -1144,10 +1164,12 @@ function mostrarBannerConfirmacion(consulta){
 }
 
 async function responderConfirmacion(id, token, resultado, btn){
-  btn.closest(".confirmacion-banner").remove();
+  const contenedor = btn.closest("[data-confirmacion-widget]");
+  if (contenedor) contenedor.remove();
   try {
     await fetch(`/.netlify/functions/confirmar-pago?id=${id}&token=${token}&resultado=${resultado}&fuente=usuario_app`);
     mostrarToast("¡Gracias por confirmarnos!");
+    if (document.getElementById("screen-historial").classList.contains("active")) renderHistorial();
   } catch (e){
     console.warn("[OpenCheck Score] Error confirmando:", e.message);
   }
@@ -3440,6 +3462,28 @@ async function renderHistorial(){
     const tier = h.categoria ? h.categoria[0] : "?";
     const fecha = new Date(h.creado_en);
     const fuenteLabel = h.fuente === "real" ? "API BCRA real" : "Demo";
+
+    // Estado de confirmación de pago del cheque, si esta consulta tenía
+    // número de cheque cargado — 3 estados posibles.
+    let confirmacionHtml = "";
+    if (h.numero_cheque_consultado){
+      if (h.resultado_real){
+        const esPagado = h.resultado_real === "pagado";
+        confirmacionHtml = `<div class="hist-resultado-badge ${esPagado ? "pagado" : "rechazado"}">${esPagado ? "✓ Pagado" : "⛔ Rechazado"}</div>`;
+      } else if (h.confirmacion_activada && h.token_confirmacion){
+        confirmacionHtml = `
+          <div class="hist-confirmacion" data-confirmacion-widget>
+            <p>¿Se cobró el cheque N° ${h.numero_cheque_consultado}?</p>
+            <div class="hist-confirmacion-botones">
+              <button class="btn-si" onclick="responderConfirmacion('${h.id}','${h.token_confirmacion}','pagado', this)">Sí</button>
+              <button class="btn-no" onclick="responderConfirmacion('${h.id}','${h.token_confirmacion}','rechazado', this)">No</button>
+            </div>
+          </div>`;
+      } else {
+        confirmacionHtml = `<div class="hist-pendiente-nota">Vamos a preguntarte si se cobró después del vencimiento.</div>`;
+      }
+    }
+
     return `
     <div class="hist-row">
       <div class="hist-top">
@@ -3450,6 +3494,7 @@ async function renderHistorial(){
       <div class="hist-bottom">
         <span class="hist-date">${fecha.toLocaleString("es-AR")}</span>
       </div>
+      ${confirmacionHtml}
     </div>`;
   }).join("");
 }
