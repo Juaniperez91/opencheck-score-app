@@ -127,6 +127,14 @@
     background:linear-gradient(150deg, #2472B8 0%, #123A5C 100%);
     border-radius:0 0 24px 24px;
   }
+  .hero-registro.hero-institucional{
+    background:linear-gradient(135deg, #085041 0%, #0F6E56 50%, #1D9E75 100%);
+  }
+  .institucional-card{
+    background:#fff; border-radius:16px; padding:20px;
+    box-shadow:0 2px 8px rgba(0,0,0,.12), 0 8px 32px rgba(0,0,0,.10);
+    position:relative; z-index:2;
+  }
   .hero-registro h1{
     font-size:26px; font-weight:800; letter-spacing:-0.02em; line-height:1.2;
     margin:0 0 10px; color:#fff;
@@ -694,10 +702,10 @@
   <!-- ===================== INSTITUCIONAL / LANDING ===================== -->
   <div class="screen active" id="screen-institucional">
     <div class="content" style="padding:0 0 30px;">
-      <div class="hero-registro" style="margin:0 0 26px; border-radius:0 0 24px 24px;">
+      <div class="hero-registro hero-institucional" style="margin:0 0 -34px; border-radius:0 0 24px 24px; padding-bottom:58px;">
         <div class="brand" style="margin-bottom:24px;">
-          <div class="brand-mark" style="background:rgba(255,255,255,.16); color:#fff;">OC</div>
-          <div class="brand-name" style="color:#fff;">Open<span style="color:rgba(255,255,255,.7);">Check</span> Score</div>
+          <div class="brand-mark" style="background:rgba(255,255,255,.18); color:#fff;">OC</div>
+          <div class="brand-name" style="color:#fff;">Open<span style="color:#9FE1CB;">Check</span> Score</div>
         </div>
         <h1>Sabé con quién estás por cobrar, en segundos</h1>
         <p class="hero-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA.</p>
@@ -724,8 +732,10 @@
       </div>
 
       <div style="padding:0 20px;">
-        <button class="btn btn-primary" id="btn-institucional-principal" onclick="irA('login')" style="width:100%; margin-bottom:12px;">Iniciar sesión</button>
-        <button class="btn btn-secondary" id="btn-institucional-registro" onclick="irA('registro')" style="width:100%;">Crear cuenta</button>
+        <div class="institucional-card">
+          <button class="btn" id="btn-institucional-principal" onclick="irA('login')" style="width:100%; margin-bottom:12px; background:#0F6E56; color:#fff;">Iniciar sesión</button>
+          <button class="btn btn-secondary" id="btn-institucional-registro" onclick="irA('registro')" style="width:100%;">Crear cuenta</button>
+        </div>
       </div>
     </div>
   </div>
