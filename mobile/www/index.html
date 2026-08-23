@@ -2541,6 +2541,11 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 /* =======================================================
    ESTADO DE LA APP
    ======================================================= */
+// Se actualiza a mano cada vez que se sube un cambio — sirve para
+// confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
+// en un dispositivo tiene el código más reciente o quedó desactualizada.
+const VERSION_APP = "2026-08-23-v1";
+
 const state = {
   user: null,
   queriesLimit: 10,
@@ -3676,10 +3681,11 @@ function renderCuenta(){
     <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
     ${u && u.es_admin ? `
       <div class="divider-label">Administración</div>
-      <a href="/admin.html" style="text-decoration:none;">
+      <a href="https://opencheck-app.netlify.app/admin.html" target="_blank" style="text-decoration:none;">
         <button class="btn btn-primary" style="background:var(--ink);">Panel de Admin</button>
       </a>
     ` : ""}
+    <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:24px;">Versión ${VERSION_APP}</p>
   `;
 }
 
