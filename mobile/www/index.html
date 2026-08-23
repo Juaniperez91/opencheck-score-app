@@ -358,6 +358,7 @@
   .alert-block > span{ flex-shrink:0; margin-top:1px; }
   .alert-block.danger{background:var(--brick-soft); color:#7A2C2C;}
   .alert-block.ok{background:var(--green-soft); color:var(--green-ink);}
+  .alert-block.info{background:#EAEFE9; color:var(--ink);}
   .alert-block b{display:block; font-size:13px; margin-bottom:2px;}
 
   .breakdown{
@@ -686,9 +687,9 @@
           </div>
           <div class="hero-valor">
             <div class="hero-valor-icono">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
-            <div class="hero-valor-texto">Sin Nosis, sin costos ocultos<span>Solo fuentes públicas y gratuitas</span></div>
+            <div class="hero-valor-texto">Trazabilidad completa<span>Cada consulta queda registrada, con el detalle de en qué se basó</span></div>
           </div>
           <div class="hero-valor">
             <div class="hero-valor-icono">
@@ -1518,17 +1519,18 @@ function explicarRechazos(d, penalizacion){
 }
 
 function calcularScore(d){
-  const peorSituacion24m = d.historialSituacion && d.historialSituacion.length
-    ? Math.max(...d.historialSituacion)
-    : d.situacion;
+  const sinAntecedentesDeuda = !!d.sinAntecedentesDeuda;
 
-  const pSituacion = scoreSituacion(d.situacion);
-  const pSituacion24m = scoreSituacion24m(peorSituacion24m);
+  const peorSituacion24m = sinAntecedentesDeuda ? null
+    : (d.historialSituacion && d.historialSituacion.length ? Math.max(...d.historialSituacion) : d.situacion);
+
+  const pSituacion = sinAntecedentesDeuda ? null : scoreSituacion(d.situacion);
+  const pSituacion24m = sinAntecedentesDeuda ? null : scoreSituacion24m(peorSituacion24m);
   const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1);
   const pBancos = scoreBancos(d.cantidadBancos);
 
   // ---- Deuda real vs. inflación: 10 pts, redistribuida si no está disponible ----
-  const inflacionDisponible = d.deudaVsInflacion && d.deudaVsInflacion.disponible;
+  const inflacionDisponible = !sinAntecedentesDeuda && d.deudaVsInflacion && d.deudaVsInflacion.disponible;
   const pDeudaVsInflacion = inflacionDisponible ? scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) : null;
 
   // Rechazos ya NO es una variable de puntos (era 20/100) — pasó a ser un
@@ -1536,12 +1538,14 @@ function calcularScore(d){
   // lo tenía diseñado el motor original de OpenCheck). Por eso las 5
   // variables que quedan como puntos (30+20+10+10+10=80, u 70 sin deuda
   // vs. inflación) se reescalan a 100 — si no, nadie podría llegar a A1.
-  const variables = [
-    { pts: pSituacion, max: 30 },
-    { pts: pSituacion24m, max: 20 },
-    { pts: pEndeudamiento, max: 10 },
-    { pts: pBancos, max: 10 }
-  ];
+  // Si no hay antecedentes de deuda bancaria, situación y situación24m
+  // (50 pts) tampoco entran — no hay nada que puntuar ahí, ni a favor ni
+  // en contra, y quedan solo endeudamiento (0, sin deuda) y bancos (0).
+  const variables = [];
+  if (!sinAntecedentesDeuda){
+    variables.push({ pts: pSituacion, max: 30 }, { pts: pSituacion24m, max: 20 });
+  }
+  variables.push({ pts: pEndeudamiento, max: 10 }, { pts: pBancos, max: 10 });
   if (inflacionDisponible) variables.push({ pts: pDeudaVsInflacion, max: 10 });
   const sumaPts = variables.reduce((s,v) => s+v.pts, 0);
   const sumaMax = variables.reduce((s,v) => s+v.max, 0);
@@ -1609,8 +1613,14 @@ function calcularScore(d){
   const categoria = forzadoC2 ? "C2" : categoriaDesdePuntos(puntosFinales);
 
   const detalle = {
-    situacion: {puntos:pSituacion, max:30, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
-    situacion24m: {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
+    situacion: sinAntecedentesDeuda
+      ? {puntos:null, max:30, label:"Situación crediticia actual", noDisponible:true,
+         desc: "Sin antecedentes de deuda bancaria informados por BCRA — no tiene (o no tuvo) relación crediticia con entidades financieras. No es una señal negativa: no se penaliza, redistribuimos estos 30 puntos entre las demás variables."}
+      : {puntos:pSituacion, max:30, label:"Situación crediticia actual", desc: explicarSituacion(d.situacion)},
+    situacion24m: sinAntecedentesDeuda
+      ? {puntos:null, max:20, label:"Situación — últimos 24 meses", noDisponible:true,
+         desc: "Sin antecedentes de deuda bancaria en los últimos 24 meses. Redistribuimos estos 20 puntos entre las demás variables."}
+      : {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
     rechazos: {puntos:null, factorPenalizacion:penalizacionRechazos.factor, label:"Rechazos de cheques (penalización)", desc: explicarRechazos(d, penalizacionRechazos), detalleRechazos: d.detalleRechazos || []},
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
@@ -1668,6 +1678,9 @@ function construirNarrativa(categoria, puntos, detalle, forzadoC2, motivo){
   }
 
   let base = `Con <b>${puntos} puntos sobre 100</b>, el librador quedó en la categoría <b>${categoria}</b> (${NOMBRE_CATEGORIA[categoria]}). `;
+  if (detalle.situacion && detalle.situacion.noDisponible){
+    base += `El BCRA no informa antecedentes de deuda bancaria para este CUIT — sin historial crediticio registrado, ni a favor ni en contra. `;
+  }
   if (fortaleza.pct === debilidad.pct){
     base += `Las variables analizadas rindieron de forma pareja, sin un factor que se destaque por encima del resto. `;
   } else {
@@ -1783,7 +1796,16 @@ function calcularFactorAjusteEndeudamientoDemo(){
 }
 
 function prepararDatos(raw){
-  const situacionVigente = Math.max(...raw.entidades.map(e => e.situacion));
+  // Sin antecedentes de deuda bancaria (entidades vacío) es un caso real
+  // y legítimo — significa que la persona no tiene relación crediticia
+  // informada al BCRA, no que esté en la peor situación posible. Antes,
+  // Math.max() sobre un array vacío daba -Infinity, y eso terminaba
+  // puntuando 0/30 — igual que un default total. Ahora queda explícito
+  // como "sin antecedentes", y esas dos variables (situación actual y
+  // situación 24m, 50/100 puntos) se excluyen y redistribuyen, en vez de
+  // penalizar por algo que no es una señal negativa real.
+  const sinAntecedentesDeuda = raw.entidades.length === 0;
+  const situacionVigente = sinAntecedentesDeuda ? null : Math.max(...raw.entidades.map(e => e.situacion));
   const endeudamientoMillones = Math.round(raw.entidades.reduce((s,e) => s + e.monto, 0) / 1e6);
   const deudaVsInflacion = raw.deudaVsInflacion || calcularDeudaVsInflacionDemo(raw.historialDeuda || []);
   const factorAjusteEndeudamiento = raw.factorAjusteEndeudamiento || calcularFactorAjusteEndeudamientoDemo();
@@ -1791,6 +1813,7 @@ function prepararDatos(raw){
   return {
     ...raw,
     situacion: situacionVigente,
+    sinAntecedentesDeuda,
     endeudamientoMillones,
     cantidadBancos: raw.entidades.length,
     deudaVsInflacion,
@@ -3246,6 +3269,11 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
 
   const alertaBox = document.getElementById("res-alerta");
   let alertaHtml = "";
+
+  if (datos.sinAntecedentesDeuda){
+    alertaHtml += `<div class="alert-block info"><span>${ICONO_ALERTA_WARN}</span><div><b>Sin antecedentes crediticios</b>El BCRA no informa relación con entidades bancarias para este CUIT — no tiene (ni tuvo) deuda bancaria registrada. Sin historial de comportamiento, es difícil emitir un análisis crítico completo, y esto impacta negativamente en el puntaje final (situación actual y situación de los últimos 24 meses no se pueden evaluar). El resto del análisis — incluidos los rechazos de cheques — sí se calculó normalmente.</div></div>`;
+  }
+
   if (resultado.forzadoC2){
     alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_BLOCK}</span><div><b>No operable</b>${resultado.motivo}</div></div>`;
   } else if (resultado.motivo){
