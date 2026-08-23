@@ -666,10 +666,49 @@
 <div class="device">
   <div class="statusbar"></div>
 
+  <!-- ===================== INSTITUCIONAL / LANDING ===================== -->
+  <div class="screen active" id="screen-institucional">
+    <div class="content" style="padding:0 0 30px;">
+      <div class="hero-registro" style="margin:0 0 26px; border-radius:0 0 24px 24px;">
+        <div class="brand" style="margin-bottom:24px;">
+          <div class="brand-mark" style="background:rgba(255,255,255,.16); color:#fff;">OC</div>
+          <div class="brand-name" style="color:#fff;">Open<span style="color:rgba(255,255,255,.7);">Check</span> Score</div>
+        </div>
+        <h1>Sabé con quién estás por cobrar, en segundos</h1>
+        <p class="hero-sub">Consultá el riesgo crediticio de cualquier librador con datos públicos del BCRA.</p>
+        <div class="hero-valores">
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Dato oficial del BCRA<span>Central de Deudores, cheques rechazados y denunciados</span></div>
+          </div>
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Trazabilidad completa<span>Cada consulta queda registrada, con el detalle de en qué se basó</span></div>
+          </div>
+          <div class="hero-valor">
+            <div class="hero-valor-icono">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-valor-texto">Respuesta instantánea<span>Consultá un CUIT o sacá una foto del cheque</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:0 20px;">
+        <button class="btn btn-primary" id="btn-institucional-principal" onclick="irA('login')" style="width:100%; margin-bottom:12px;">Iniciar sesión</button>
+        <button class="btn btn-secondary" id="btn-institucional-registro" onclick="irA('registro')" style="width:100%;">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== REGISTRO ===================== -->
-  <div class="screen active" id="screen-registro">
+  <div class="screen" id="screen-registro">
     <div class="topbar">
-      <div class="brand">
+      <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
         <div class="brand-name">Open<span>Check</span> Score</div>
       </div>
@@ -740,7 +779,7 @@
   <!-- ===================== LOGIN ===================== -->
   <div class="screen" id="screen-login">
     <div class="topbar">
-      <div class="brand">
+      <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
         <div class="brand-name">Open<span>Check</span> Score</div>
       </div>
@@ -768,7 +807,7 @@
   <!-- ===================== HOME / CONSULTA ===================== -->
   <div class="screen" id="screen-home">
     <div class="topbar">
-      <div class="brand">
+      <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
         <div class="brand-name">Open<span>Check</span> Score</div>
       </div>
@@ -925,7 +964,7 @@
   <!-- ===================== HISTORIAL ===================== -->
   <div class="screen" id="screen-historial">
     <div class="topbar">
-      <div class="brand">
+      <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
         <div class="brand-name">Historial</div>
       </div>
@@ -945,7 +984,7 @@
   <!-- ===================== CUENTA / PAYWALL ===================== -->
   <div class="screen" id="screen-cuenta">
     <div class="topbar">
-      <div class="brand">
+      <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
         <div class="brand-name">Cuenta</div>
       </div>
@@ -2548,7 +2587,14 @@ async function cargarSesionExistente(){
   if (perfil){
     state.user = perfil;
     document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
-    irA("home");
+    // Ya no navegamos directo a "home" — la sesión persiste (no hace
+    // falta volver a poner contraseña), pero el usuario entra a la app
+    // recién cuando toca el botón, no apenas se carga la página.
+    const btnPrincipal = document.getElementById("btn-institucional-principal");
+    if (btnPrincipal){
+      btnPrincipal.textContent = `Continuar como ${perfil.nombre.split(" ")[0]}`;
+      btnPrincipal.setAttribute("onclick", "irA('home')");
+    }
     verificarConfirmacionesPendientes();
   }
 }
