@@ -885,10 +885,15 @@
         <span>¿Un cheque fue denunciado como extraviado o robado?</span>
         <span class="arrow">→</span>
       </div>
-      <div class="link-line" onclick="irA('historial')">
-        <span>Ver historial de consultas</span>
-        <span class="arrow">→</span>
-      </div>
+      <button class="ocr-btn" style="border-style:solid; margin-top:12px;" onclick="irA('historial')">
+        <div class="ocr-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="ocr-text">
+          <b>Ver historial de consultas</b>
+          <span>Todas tus consultas, con trazabilidad completa</span>
+        </div>
+      </button>
     </div>
     <div class="navbar">
       <div class="nav-item active" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
@@ -1184,6 +1189,28 @@ async function responderConfirmacion(id, token, resultado, btn){
     verificarConfirmacionesPendientes();
   } catch (e){
     console.warn("[OpenCheck Score] Error confirmando:", e.message);
+  }
+}
+
+// Para cheques ya vencidos que todavía no llegaron al paso automático
+// (el job que activa el token corre ~2 días después del vencimiento) —
+// el usuario puede responder antes igual, directo contra su propia fila
+// (permitido por la política de RLS "consultas_update_propio_resultado").
+async function responderConfirmacionDirecta(id, resultado, btn){
+  const contenedor = btn.closest("[data-confirmacion-widget]");
+  if (contenedor) contenedor.remove();
+  try {
+    const { error } = await supabaseClient
+      .from("consultas")
+      .update({ resultado_real: resultado, resultado_real_fuente: "usuario_app" })
+      .eq("id", id)
+      .eq("usuario_id", state.user.id);
+    if (error) throw error;
+    mostrarToast("¡Gracias por confirmarnos!");
+    renderHistorial();
+  } catch (e){
+    console.warn("[OpenCheck Score] Error confirmando directo:", e.message);
+    mostrarToast("No pudimos guardar tu respuesta, probá de nuevo.");
   }
 }
 
@@ -3476,9 +3503,10 @@ async function renderHistorial(){
     const fuenteLabel = h.fuente === "real" ? "API BCRA real" : "Demo";
 
     // Estado de confirmación de pago del cheque, si esta consulta tenía
-    // número de cheque cargado — 3 estados posibles.
+    // número de cheque cargado — 4 estados posibles.
     let confirmacionHtml = "";
     if (h.numero_cheque_consultado){
+      const yaVencio = h.fecha_vencimiento_cheque && new Date(h.fecha_vencimiento_cheque + "T00:00:00") < new Date();
       if (h.resultado_real){
         const esPagado = h.resultado_real === "pagado";
         confirmacionHtml = `<div class="hist-resultado-badge ${esPagado ? "pagado" : "rechazado"}">${esPagado ? "✓ Pagado" : "⛔ Rechazado"}</div>`;
@@ -3491,7 +3519,19 @@ async function renderHistorial(){
               <button class="btn-no" onclick="responderConfirmacion('${h.id}','${h.token_confirmacion}','rechazado', this)">No</button>
             </div>
           </div>`;
-      } else {
+      } else if (yaVencio){
+        // Ya venció pero el job automático (corre ~2 días después) todavía
+        // no generó el token — igual dejamos responder directo, sin
+        // esperar a que se active solo.
+        confirmacionHtml = `
+          <div class="hist-confirmacion" data-confirmacion-widget>
+            <p>¿Fue cobrado el cheque N° ${h.numero_cheque_consultado}?</p>
+            <div class="hist-confirmacion-botones">
+              <button class="btn-si" onclick="responderConfirmacionDirecta('${h.id}','pagado', this)">Sí</button>
+              <button class="btn-no" onclick="responderConfirmacionDirecta('${h.id}','rechazado', this)">No</button>
+            </div>
+          </div>`;
+      } else if (h.fecha_vencimiento_cheque){
         confirmacionHtml = `<div class="hist-pendiente-nota">Vamos a preguntarte si se cobró después del vencimiento.</div>`;
       }
     }
