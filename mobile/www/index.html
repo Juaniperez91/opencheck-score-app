@@ -323,18 +323,24 @@
   }
   .nav-item{
     flex:1;
-    padding:11px 4px 14px;
+    padding:9px 4px 12px;
     text-align:center;
     font-size:10.5px;
     color:var(--ink-soft);
     cursor:pointer;
     font-weight:600;
     letter-spacing:.01em;
+    position:relative;
   }
   .nav-item .nav-ico{
-    display:block; margin:0 auto 4px; width:20px; height:20px;
+    display:block; margin:0 auto 3px; width:21px; height:21px;
   }
   .nav-item.active{color:var(--green-ink);}
+  .nav-badge{
+    position:absolute; top:5px; right:calc(50% - 20px);
+    width:8px; height:8px; border-radius:50%;
+    background:var(--brick); border:1.5px solid var(--paper);
+  }
 
   /* ---- Resultado / Sello ---- */
   .stamp-wrap{
@@ -885,9 +891,9 @@
       </div>
     </div>
     <div class="navbar">
-      <div class="nav-item active" data-nav="home" onclick="irA('home')">Inicio</div>
-      <div class="nav-item" data-nav="historial" onclick="irA('historial')">Historial</div>
-      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')">Cuenta</div>
+      <div class="nav-item active" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
+      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
 
@@ -994,9 +1000,9 @@
       <div id="historial-lista"></div>
     </div>
     <div class="navbar">
-      <div class="nav-item" data-nav="home" onclick="irA('home')">Inicio</div>
-      <div class="nav-item active" data-nav="historial" onclick="irA('historial')">Historial</div>
-      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')">Cuenta</div>
+      <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
+      <div class="nav-item active" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
 
@@ -1010,9 +1016,9 @@
     </div>
     <div class="content" id="cuenta-content"></div>
     <div class="navbar">
-      <div class="nav-item" data-nav="home" onclick="irA('home')">Inicio</div>
-      <div class="nav-item" data-nav="historial" onclick="irA('historial')">Historial</div>
-      <div class="nav-item active" data-nav="cuenta" onclick="irA('cuenta')">Cuenta</div>
+      <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
+      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item active" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
 
@@ -1144,7 +1150,12 @@ async function verificarConfirmacionesPendientes(){
     .is("resultado_real", null)
     .order("creado_en", { ascending: false })
     .limit(1);
-  if (error || !data || data.length === 0) return;
+  const badge = document.getElementById("nav-badge-historial");
+  if (error || !data || data.length === 0){
+    if (badge) badge.style.display = "none";
+    return;
+  }
+  if (badge) badge.style.display = "block";
   mostrarBannerConfirmacion(data[0]);
 }
 
@@ -1170,6 +1181,7 @@ async function responderConfirmacion(id, token, resultado, btn){
     await fetch(`/.netlify/functions/confirmar-pago?id=${id}&token=${token}&resultado=${resultado}&fuente=usuario_app`);
     mostrarToast("¡Gracias por confirmarnos!");
     if (document.getElementById("screen-historial").classList.contains("active")) renderHistorial();
+    verificarConfirmacionesPendientes();
   } catch (e){
     console.warn("[OpenCheck Score] Error confirmando:", e.message);
   }
