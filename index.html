@@ -2580,7 +2580,9 @@ const state = {
 function limpiarCuit(v){ return (v || "").replace(/\D/g, ""); }
 function formatearCuit(v){
   const d = limpiarCuit(v).slice(0,11);
-  if (d.length <= 2) return d;
+  // Hasta 8 dígitos podría ser un DNI: lo dejamos sin guiones.
+  // A partir del 9° dígito, asumimos que es un CUIT/CUIL y lo formateamos.
+  if (d.length <= 8) return d;
   if (d.length <= 10) return d.slice(0,2) + "-" + d.slice(2);
   return d.slice(0,2) + "-" + d.slice(2,10) + "-" + d.slice(10);
 }
@@ -2672,8 +2674,9 @@ btnRegistrar.addEventListener("click", async () => {
   const email = document.getElementById("reg-email").value.trim();
   const cuit = document.getElementById("reg-cuit").value.trim();
   const password = document.getElementById("reg-password").value;
-  if (!nombre || !email || limpiarCuit(cuit).length < 10){
-    mostrarToast("Completá todos los campos para continuar");
+  const digitosCuit = limpiarCuit(cuit).length;
+  if (!nombre || !email || digitosCuit < 7 || digitosCuit > 11){
+    mostrarToast("Ingresá un DNI (7-8 dígitos) o CUIT/CUIL (11 dígitos) válido");
     return;
   }
   if (!password || password.length < 6){
