@@ -890,6 +890,30 @@
     </div>
   </div>
 
+  <!-- ===================== VERIFICAR CÓDIGO ===================== -->
+  <div class="screen" id="screen-verificar-codigo">
+    <div class="topbar">
+      <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Open<span>Check</span> Score</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="divider-label">Confirmá tu email</div>
+      <p style="text-align:center; color:#5B655F; margin-bottom:20px;">
+        Te mandamos un código de 6 dígitos a <b id="verif-email-mostrado"></b>. Ingresalo para activar tu cuenta.
+      </p>
+      <div class="field">
+        <label class="field-label">Código de verificación</label>
+        <input type="text" class="mono" id="verif-codigo" placeholder="123456" maxlength="6" inputmode="numeric" style="text-align:center; font-size:24px; letter-spacing:6px;">
+      </div>
+      <button class="btn btn-primary" id="btn-verificar-codigo">Confirmar código</button>
+      <div class="link-line" style="justify-content:center; margin-top:14px;" id="link-reenviar-codigo">
+        <span>¿No te llegó? <b>Reenviar código</b></span>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== LOGIN ===================== -->
   <div class="screen" id="screen-login">
     <div class="topbar">
@@ -2608,6 +2632,7 @@ function mostrarTabInstitucional(tab){
 
 /* ---- Registro ---- */
 let tipoPersona = "fisica";
+let pendienteRegistro = null;
 function setTipoPersona(tipo){
   tipoPersona = tipo;
   document.getElementById("seg-fisica").classList.toggle("active", tipo === "fisica");
@@ -2678,11 +2703,12 @@ btnRegistrar.addEventListener("click", async () => {
 
     if (!authData.session){
       // El proyecto tiene "Confirm email" activado: no hay sesión todavía,
-      // hay que confirmar por mail antes de poder loguearse.
-      mostrarToast("Te mandamos un email para confirmar la cuenta. Confirmalo y volvé a iniciar sesión.");
+      // hay que confirmar el código de 6 dígitos que llegó por email.
+      pendienteRegistro = { nombre, email, cuit, tipoPersona };
+      document.getElementById("verif-email-mostrado").textContent = email;
       btnRegistrar.disabled = false;
       btnRegistrar.textContent = "Crear cuenta";
-      irA("login");
+      irA("verificar-codigo");
       return;
     }
 
@@ -2703,6 +2729,59 @@ btnRegistrar.addEventListener("click", async () => {
   } finally {
     btnRegistrar.disabled = false;
     btnRegistrar.textContent = "Crear cuenta";
+  }
+});
+
+document.getElementById("btn-verificar-codigo").addEventListener("click", async () => {
+  if (!pendienteRegistro) { irA("registro"); return; }
+  const codigo = document.getElementById("verif-codigo").value.trim();
+  if (codigo.length !== 6){
+    mostrarToast("Ingresá el código de 6 dígitos");
+    return;
+  }
+  const btn = document.getElementById("btn-verificar-codigo");
+  btn.disabled = true;
+  btn.textContent = "Verificando…";
+  try {
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      email: pendienteRegistro.email,
+      token: codigo,
+      type: "signup"
+    });
+    if (error) throw error;
+
+    let perfil = await obtenerPerfilUsuario();
+    if (!perfil){
+      perfil = await crearPerfilUsuario({
+        authUserId: data.user.id,
+        nombre: pendienteRegistro.nombre,
+        email: pendienteRegistro.email,
+        cuitDni: pendienteRegistro.cuit,
+        tipoPersona: pendienteRegistro.tipoPersona
+      });
+      await registrarAceptacionTC(perfil.id);
+    }
+
+    state.user = perfil;
+    document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
+    mostrarToast("Cuenta confirmada — bienvenido/a a OpenCheck Score");
+    pendienteRegistro = null;
+    irA("home");
+  } catch (e){
+    mostrarToast("Código incorrecto o vencido: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Confirmar código";
+  }
+});
+
+document.getElementById("link-reenviar-codigo").addEventListener("click", async () => {
+  if (!pendienteRegistro) return;
+  try {
+    await supabaseClient.auth.resend({ type: "signup", email: pendienteRegistro.email });
+    mostrarToast("Te mandamos un nuevo código");
+  } catch (e){
+    mostrarToast("No pudimos reenviar el código: " + e.message);
   }
 });
 
