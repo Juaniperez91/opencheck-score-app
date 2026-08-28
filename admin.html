@@ -122,7 +122,7 @@ async function cargarDashboard(){
   const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
 
   const [{ data: usuarios }, { data: consultas }] = await Promise.all([
-    supabaseClient.from("usuarios").select("id, creado_en"),
+    supabaseClient.from("usuarios").select("id, nombre, email, cuit_dni, creado_en, es_admin"),
     supabaseClient.from("consultas").select("id, cuit_consultado, razon_social, categoria, fuente, cheque_denunciado, creado_en, usuario_id, resultado_real, resultado_real_fuente, numero_cheque_consultado, fecha_vencimiento_cheque").order("creado_en", { ascending:false }).limit(5000)
   ]);
 
@@ -172,6 +172,18 @@ async function cargarDashboard(){
         <table>
           <thead><tr><th>Razón social</th><th>CUIT</th><th>Consultas</th></tr></thead>
           <tbody id="tabla-top-cuits"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:28px;">
+      <h2>Gestionar usuarios</h2>
+      <input type="text" id="buscador-usuarios" placeholder="Buscar por nombre, email o CUIT/DNI…"
+        style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid var(--hairline); border-radius:8px; font-family:'DM Sans',sans-serif; font-size:13px; margin-bottom:12px;">
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Nombre</th><th>Email</th><th>CUIT/DNI</th><th>Registrado</th><th></th></tr></thead>
+          <tbody id="tabla-usuarios"></tbody>
         </table>
       </div>
     </div>
@@ -247,6 +259,71 @@ async function cargarDashboard(){
       <td><span class="tag ${c.fuente}">${c.fuente === "real" ? "Real" : "Demo"}</span></td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" style="color:var(--ink-soft)">Sin consultas todavía.</td></tr>`;
+  // Gestionar usuarios: listado con búsqueda y borrado de cuentas.
+  let listaUsuarios = usuarios || [];
+
+  function renderTablaUsuarios(lista){
+    document.getElementById("tabla-usuarios").innerHTML = lista.map(u => `
+      <tr data-usuario-id="${u.id}">
+        <td>${u.nombre || "—"}</td>
+        <td>${u.email || "—"}</td>
+        <td style="font-family:'DM Mono',monospace">${u.cuit_dni || "—"}</td>
+        <td>${formatearFecha(u.creado_en)}</td>
+        <td>
+          ${u.es_admin
+            ? `<span style="font-size:11.5px; color:var(--ink-soft);">Admin</span>`
+            : `<button class="btn-eliminar-usuario" data-id="${u.id}" data-email="${u.email || ""}"
+                style="background:var(--brick-soft); color:var(--brick); border:1px solid var(--brick); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer;">
+                Eliminar
+              </button>`
+          }
+        </td>
+      </tr>
+    `).join("") || `<tr><td colspan="5" style="color:var(--ink-soft)">Sin usuarios todavía.</td></tr>`;
+
+    document.querySelectorAll(".btn-eliminar-usuario").forEach(btn => {
+      btn.addEventListener("click", () => eliminarUsuarioAdmin(btn.dataset.id, btn.dataset.email));
+    });
+  }
+
+  renderTablaUsuarios(listaUsuarios);
+
+  document.getElementById("buscador-usuarios").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const filtrada = !q ? listaUsuarios : listaUsuarios.filter(u =>
+      (u.nombre || "").toLowerCase().includes(q) ||
+      (u.email || "").toLowerCase().includes(q) ||
+      (u.cuit_dni || "").toLowerCase().includes(q)
+    );
+    renderTablaUsuarios(filtrada);
+  });
+
+  async function eliminarUsuarioAdmin(usuarioId, email){
+    const confirmado = confirm(`¿Eliminar definitivamente la cuenta de ${email || "este usuario"}?\n\nEsta acción no se puede deshacer.`);
+    if (!confirmado) return;
+
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session){
+      alert("Tu sesión expiró, volvé a iniciar sesión.");
+      return;
+    }
+
+    try {
+      const resp = await fetch("/.netlify/functions/eliminar-usuario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuarioIdAEliminar: usuarioId, tokenLlamante: session.access_token })
+      });
+      const resultado = await resp.json();
+      if (!resp.ok) throw new Error(resultado.error || "Error desconocido");
+
+      listaUsuarios = listaUsuarios.filter(u => u.id !== usuarioId);
+      renderTablaUsuarios(listaUsuarios);
+      alert(`Cuenta de ${resultado.email || email} eliminada correctamente.`);
+    } catch (e){
+      alert("No pudimos eliminar la cuenta: " + e.message);
+    }
+  }
 }
 
 async function iniciar(){
