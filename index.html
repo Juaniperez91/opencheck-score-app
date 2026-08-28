@@ -2882,10 +2882,10 @@ function previsualizarRazonSocial(){
       const datos = BCRA_DB[digits];
       if (datos){
         preview.className = "razon-social-preview show rs-found";
-        preview.innerHTML = `✓ ${datos.empresa} <span class="fuente-badge fuente-demo">Demo — sin conexión</span>`;
+        preview.innerHTML = `✓ ${datos.empresa} <span class="fuente-badge fuente-demo">BCRA no disponible — reintentá en unos minutos</span>`;
       } else {
         preview.className = "razon-social-preview show rs-unknown";
-        preview.innerHTML = "No pudimos consultar al BCRA en este momento. <span class=\"fuente-badge fuente-demo\">Demo — sin conexión</span>";
+        preview.innerHTML = "El servicio del BCRA no está disponible en este momento. Reintentá en unos minutos. <span class=\"fuente-badge fuente-demo\">BCRA no disponible</span>";
       }
     }
   }, 350);
@@ -3542,7 +3542,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
 
   const fuenteBadge = fuente === "real"
     ? `<span class="fuente-badge fuente-real">API BCRA real</span>`
-    : `<span class="fuente-badge fuente-demo">Demo — API no disponible en este momento</span>`;
+    : `<span class="fuente-badge fuente-demo">BCRA no disponible — reintentá en unos minutos</span>`;
   document.getElementById("res-fuente").innerHTML = fuenteBadge;
 
   document.getElementById("res-gauge").innerHTML = construirGauge(resultado.categoria);
@@ -3651,7 +3651,7 @@ async function verificarDenuncia(){
 
   const badge = fuente === "real"
     ? `<span class="fuente-badge fuente-real">API BCRA real</span>`
-    : `<span class="fuente-badge fuente-demo">Demo — sin conexión</span>`;
+    : `<span class="fuente-badge fuente-demo">BCRA no disponible — reintentá en unos minutos</span>`;
 
   if (info && info.denunciado){
     box.innerHTML = `<div class="alert-block danger"><span>⛔</span><div><b>Cheque denunciado ${badge}</b>${info.motivo}</div></div>`;
