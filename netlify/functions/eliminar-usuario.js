@@ -23,6 +23,18 @@ export default async (req) => {
     return new Response(JSON.stringify({ error: "Método no permitido" }), { status: 405, headers: headersJSON });
   }
 
+  try {
+    return await procesarEliminacion(req, headersJSON);
+  } catch (e) {
+    // Red de seguridad: cualquier excepción no prevista devuelve JSON
+    // válido en vez de tirar un error genérico de Netlify (que rompía el
+    // "resp.json()" del lado del cliente y mostraba "error desconocido"
+    // sin dato real para diagnosticar).
+    return new Response(JSON.stringify({ error: "Error interno inesperado.", detalle: e.message }), { status: 500, headers: headersJSON });
+  }
+};
+
+async function procesarEliminacion(req, headersJSON){
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!SUPABASE_SERVICE_ROLE_KEY){
     return new Response(JSON.stringify({ error: "Error de configuración del servidor." }), { status: 500, headers: headersJSON });
@@ -105,15 +117,26 @@ export default async (req) => {
 
   if (!rBorrarAuth.ok && rBorrarAuth.status !== 404){
     const detalle = await rBorrarAuth.text();
-    return new Response(JSON.stringify({ error: "No pudimos eliminar la cuenta de autenticación.", detalle }), { status: 500, headers: headersJSON });
+    return new Response(JSON.stringify({
+      error: "No pudimos eliminar la cuenta de autenticación.",
+      detalle,
+      statusSupabase: rBorrarAuth.status
+    }), { status: 500, headers: headersJSON });
   }
 
   // 4) Borrado de respaldo de la fila "usuarios", por si la cascada no
-  // llegó a dispararse por algún motivo (no debería hacer falta).
-  await fetch(`${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdABorrar}`, {
-    method: "DELETE",
-    headers: { ...headersServiceRole, Prefer: "return=minimal" }
-  });
+  // llegó a dispararse por algún motivo (no debería hacer falta). Va en
+  // try/catch propio: si esto falla, NO debe tirar abajo la respuesta de
+  // éxito, porque lo que de verdad importa (borrar el Auth user) ya se
+  // hizo en el paso 3.
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdABorrar}`, {
+      method: "DELETE",
+      headers: { ...headersServiceRole, Prefer: "return=minimal" }
+    });
+  } catch (e) {
+    console.warn("Borrado de respaldo de 'usuarios' falló (no crítico):", e.message);
+  }
 
   return new Response(JSON.stringify({ ok: true, email: emailABorrar }), { status: 200, headers: headersJSON });
-};
+}
