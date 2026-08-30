@@ -296,6 +296,26 @@
   .btn-primary:disabled{background:#A9C6DC; cursor:not-allowed;}
   .btn-ghost{background:transparent; color:var(--green-ink); border:1px solid var(--hairline);}
   .btn-secondary{background:var(--paper-2); color:var(--ink); border:1px solid var(--hairline);}
+  .btn-danger{background:var(--brick); color:#fff;}
+  .btn-danger:disabled{background:var(--brick-soft); color:var(--brick); cursor:not-allowed;}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(28,36,32,.55);
+    display:none; align-items:center; justify-content:center;
+    z-index:1000; padding:20px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-caja{
+    background:var(--white); border-radius:var(--radius);
+    padding:22px; max-width:340px; width:100%;
+  }
+  .modal-caja h3{margin:0 0 8px; font-size:16px; color:var(--ink);}
+  .modal-caja p{font-size:13px; line-height:1.5; color:var(--ink-soft); margin:0 0 14px;}
+  .modal-caja input{
+    width:100%; padding:12px; border-radius:10px; border:1px solid var(--hairline);
+    font-family:'DM Sans', sans-serif; font-size:14px; margin-bottom:14px; box-sizing:border-box;
+  }
+  .modal-botones{display:flex; flex-direction:column; gap:8px;}
 
   .divider-label{
     display:flex; align-items:center; gap:10px;
@@ -1137,6 +1157,30 @@
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
       <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
       <div class="nav-item active" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
+    </div>
+  </div>
+
+  <!-- ===================== ELIMINAR CUENTA (doble confirmación) ===================== -->
+  <div class="modal-overlay" id="modal-eliminar-1">
+    <div class="modal-caja">
+      <h3>¿Eliminar tu cuenta?</h3>
+      <p>Esta acción es permanente. Se borran tu perfil, tu historial de consultas y tus credenciales de acceso. No se puede deshacer.</p>
+      <div class="modal-botones">
+        <button class="btn btn-secondary" onclick="cerrarModalEliminar1()">Cancelar</button>
+        <button class="btn btn-danger" onclick="irAModalEliminar2()">Sí, continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-eliminar-2">
+    <div class="modal-caja">
+      <h3>Confirmación final</h3>
+      <p>Escribí <b>ELIMINAR</b> para confirmar el borrado definitivo de tu cuenta.</p>
+      <input type="text" id="input-confirmar-eliminar" placeholder="ELIMINAR" autocomplete="off" autocapitalize="characters" oninput="chequearConfirmacionEliminar()">
+      <div class="modal-botones">
+        <button class="btn btn-secondary" onclick="cerrarModalEliminar2()">Cancelar</button>
+        <button class="btn btn-danger" id="btn-confirmar-eliminar" disabled onclick="eliminarCuentaDefinitivamente()">Eliminar definitivamente</button>
+      </div>
     </div>
   </div>
 
@@ -2816,6 +2860,61 @@ async function iniciarSesion(){
   }
 }
 
+/* ---- Eliminar cuenta (self-service, doble confirmación) ---- */
+function abrirModalEliminar1(){
+  document.getElementById("modal-eliminar-1").classList.add("show");
+}
+function cerrarModalEliminar1(){
+  document.getElementById("modal-eliminar-1").classList.remove("show");
+}
+function irAModalEliminar2(){
+  cerrarModalEliminar1();
+  document.getElementById("input-confirmar-eliminar").value = "";
+  document.getElementById("btn-confirmar-eliminar").disabled = true;
+  document.getElementById("modal-eliminar-2").classList.add("show");
+}
+function cerrarModalEliminar2(){
+  document.getElementById("modal-eliminar-2").classList.remove("show");
+}
+function chequearConfirmacionEliminar(){
+  const val = document.getElementById("input-confirmar-eliminar").value.trim().toUpperCase();
+  document.getElementById("btn-confirmar-eliminar").disabled = (val !== "ELIMINAR");
+}
+async function eliminarCuentaDefinitivamente(){
+  const btn = document.getElementById("btn-confirmar-eliminar");
+  btn.disabled = true;
+  btn.textContent = "Eliminando…";
+  try{
+    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+    if (sessionError || !sessionData || !sessionData.session){
+      mostrarToast("Tu sesión expiró. Volvé a iniciar sesión.");
+      cerrarModalEliminar2();
+      return;
+    }
+    const resp = await fetch("/.netlify/functions/eliminar-usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokenLlamante: sessionData.session.access_token })
+    });
+    const result = await resp.json();
+    if (resp.ok && result.success){
+      cerrarModalEliminar2();
+      await supabaseClient.auth.signOut();
+      mostrarToast("Tu cuenta fue eliminada.");
+      state.user = null;
+      irA("login");
+    } else {
+      mostrarToast("No pudimos eliminar la cuenta: " + (result.error || "error desconocido"));
+      btn.disabled = false;
+      btn.textContent = "Eliminar definitivamente";
+    }
+  } catch(e){
+    mostrarToast("Error de red. Probá de nuevo.");
+    btn.disabled = false;
+    btn.textContent = "Eliminar definitivamente";
+  }
+}
+
 async function cerrarSesion(){
   await supabaseClient.auth.signOut();
   state.user = null;
@@ -3762,6 +3861,8 @@ function renderCuenta(){
       <button class="btn btn-primary" onclick="mostrarToast('Te vamos a contactar para activar el plan B2B')">Solicitar acceso</button>
     </div>
     <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
+    <div class="divider-label" style="margin-top:20px;">Zona de riesgo</div>
+    <button class="btn btn-danger" onclick="abrirModalEliminar1()">Eliminar cuenta</button>
     ${u && u.es_admin ? `
       <div class="divider-label">Administración</div>
       <a href="https://opencheck-app.netlify.app/admin.html" target="_blank" style="text-decoration:none;">
