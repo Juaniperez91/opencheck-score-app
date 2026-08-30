@@ -2616,7 +2616,7 @@ const VERSION_APP = "2026-08-23-v4-estable";
 
 const state = {
   user: null,
-  queriesLimit: 10,
+  queriesLimit: 20,
   queriesUsed: 0,
   history: []
 };
@@ -2860,6 +2860,28 @@ async function iniciarSesion(){
   }
 }
 
+/* ---- Solicitar plan Premium ---- */
+async function solicitarPlanPremium(){
+  if (!state.user){ mostrarToast("Iniciá sesión primero."); return; }
+  const btn = document.getElementById("btn-solicitar-premium");
+  if (btn){ btn.disabled = true; btn.textContent = "Enviando…"; }
+  try {
+    const { error } = await supabaseClient.from("solicitudes_premium").insert({
+      usuario_id: state.user.id,
+      nombre: state.user.nombre,
+      email: state.user.email,
+      cuit_dni: state.user.cuit_dni
+    });
+    if (error) throw error;
+    mostrarToast("¡Listo! Te vamos a contactar para activar el plan Premium.");
+    if (btn) btn.textContent = "Solicitud enviada ✓";
+  } catch (e){
+    console.warn("[OpenCheck] Error solicitando plan Premium:", e.message);
+    mostrarToast("No pudimos enviar la solicitud, probá de nuevo.");
+    if (btn){ btn.disabled = false; btn.textContent = "Solicitar acceso"; }
+  }
+}
+
 /* ---- Eliminar cuenta (self-service, doble confirmación) ---- */
 function abrirModalEliminar1(){
   document.getElementById("modal-eliminar-1").classList.add("show");
@@ -3030,7 +3052,7 @@ async function consultarCuit(){
   }
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
-  const vaABloquear = !!(state.user && !state.user.es_admin && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit);
+  const vaABloquear = !!(state.user && !state.user.es_admin && !state.user.es_tester && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit);
   if (vaABloquear){
     irA("cuenta");
     return;
@@ -3845,7 +3867,7 @@ function renderCuenta(){
     <div class="plan-row"><span>Email</span><b>${u ? u.email : "—"}</b></div>
     <div class="plan-row"><span>CUIT / DNI</span><b>${u ? u.cuit_dni : "—"}</b></div>
     <div class="plan-row"><span>Tipo</span><b>${u ? (u.tipo_persona === "juridica" ? "Persona jurídica" : "Persona física") : "—"}</b></div>
-    <div class="plan-row"><span>Plan</span><b>${u ? (u.plan === "b2b" ? "B2B" : "Gratis") : "—"}</b></div>
+    <div class="plan-row"><span>Plan</span><b>${u ? (u.plan === "premium" ? "Premium" : "Gratis") : "—"}</b></div>
     <div class="plan-row"><span>Consultas usadas este mes</span><b>${u ? (u.consultas_usadas_mes || 0) : 0}/${state.queriesLimit}</b></div>
     <div class="divider-label">Notificaciones</div>
     <p class="page-sub" style="margin-top:-4px;">Te avisamos cuando venza un cheque que consultaste, para preguntarte si se cobró.</p>
@@ -3857,9 +3879,9 @@ function renderCuenta(){
     </button>
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">
-      <h2>OpenCheck Score B2B</h2>
+      <h2>OpenCheck Premium</h2>
       <p>Consultas ilimitadas, historial exportable y acceso multiusuario para contadores, fintechs y fondos.</p>
-      <button class="btn btn-primary" onclick="mostrarToast('Te vamos a contactar para activar el plan B2B')">Solicitar acceso</button>
+      <button class="btn btn-primary" id="btn-solicitar-premium" onclick="solicitarPlanPremium()">Solicitar acceso</button>
     </div>
     <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
     <div class="divider-label" style="margin-top:20px;">Zona de riesgo</div>
