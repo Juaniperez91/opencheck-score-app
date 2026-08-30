@@ -121,9 +121,10 @@ async function cargarDashboard(){
   const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
   const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
 
-  const [{ data: usuarios }, { data: consultas }] = await Promise.all([
-    supabaseClient.from("usuarios").select("id, nombre, email, cuit_dni, creado_en, es_admin"),
-    supabaseClient.from("consultas").select("id, cuit_consultado, razon_social, categoria, fuente, cheque_denunciado, creado_en, usuario_id, resultado_real, resultado_real_fuente, numero_cheque_consultado, fecha_vencimiento_cheque").order("creado_en", { ascending:false }).limit(5000)
+  const [{ data: usuarios }, { data: consultas }, { data: solicitudesPremium }] = await Promise.all([
+    supabaseClient.from("usuarios").select("id, nombre, email, cuit_dni, creado_en, es_admin, es_tester"),
+    supabaseClient.from("consultas").select("id, cuit_consultado, razon_social, categoria, fuente, cheque_denunciado, creado_en, usuario_id, resultado_real, resultado_real_fuente, numero_cheque_consultado, fecha_vencimiento_cheque").order("creado_en", { ascending:false }).limit(5000),
+    supabaseClient.from("solicitudes_premium").select("id, nombre, email, cuit_dni, creado_en, atendida").order("creado_en", { ascending:false })
   ]);
 
   const totalUsuarios = (usuarios || []).length;
@@ -133,6 +134,7 @@ async function cargarDashboard(){
   const consultasReales = (consultas || []).filter(c => c.fuente === "real").length;
   const pctReal = totalConsultas ? Math.round((consultasReales/totalConsultas)*100) : 0;
   const denunciasEncontradas = (consultas || []).filter(c => c.cheque_denunciado === true).length;
+  const solicitudesPremiumPendientes = (solicitudesPremium || []).filter(s => !s.atendida).length;
 
   document.getElementById("dashboard").innerHTML = `
     <div class="cards-row">
@@ -142,6 +144,7 @@ async function cargarDashboard(){
       <div class="card"><div class="lbl">Consultas hoy</div><div class="val">${consultasHoy}</div></div>
       <div class="card"><div class="lbl">% con API BCRA real</div><div class="val">${pctReal}%</div><div class="sub">${consultasReales} de ${totalConsultas}</div></div>
       <div class="card"><div class="lbl">Cheques denunciados encontrados</div><div class="val">${denunciasEncontradas}</div></div>
+      <div class="card"><div class="lbl">Solicitudes Premium pendientes</div><div class="val">${solicitudesPremiumPendientes}</div></div>
     </div>
 
     <div class="grid-2">
@@ -177,12 +180,22 @@ async function cargarDashboard(){
     </div>
 
     <div class="panel" style="margin-bottom:28px;">
+      <h2>Solicitudes Premium</h2>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Nombre</th><th>Email</th><th>CUIT/DNI</th><th>Fecha</th><th>Estado</th></tr></thead>
+          <tbody id="tabla-solicitudes-premium"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:28px;">
       <h2>Gestionar usuarios</h2>
       <input type="text" id="buscador-usuarios" placeholder="Buscar por nombre, email o CUIT/DNI…"
         style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid var(--hairline); border-radius:8px; font-family:'DM Sans',sans-serif; font-size:13px; margin-bottom:12px;">
       <div class="tabla-scroll">
         <table>
-          <thead><tr><th>Nombre</th><th>Email</th><th>CUIT/DNI</th><th>Registrado</th><th></th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Email</th><th>CUIT/DNI</th><th>Registrado</th><th>Tester</th><th></th></tr></thead>
           <tbody id="tabla-usuarios"></tbody>
         </table>
       </div>
@@ -259,6 +272,42 @@ async function cargarDashboard(){
       <td><span class="tag ${c.fuente}">${c.fuente === "real" ? "Real" : "Demo"}</span></td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" style="color:var(--ink-soft)">Sin consultas todavía.</td></tr>`;
+  // Solicitudes Premium: listado con botón para marcar como atendida.
+  let listaSolicitudesPremium = solicitudesPremium || [];
+
+  function renderTablaSolicitudesPremium(){
+    document.getElementById("tabla-solicitudes-premium").innerHTML = listaSolicitudesPremium.map(s => `
+      <tr data-solicitud-id="${s.id}">
+        <td>${s.nombre || "—"}</td>
+        <td>${s.email || "—"}</td>
+        <td style="font-family:'DM Mono',monospace">${s.cuit_dni || "—"}</td>
+        <td>${formatearFecha(s.creado_en)}</td>
+        <td>
+          ${s.atendida
+            ? `<span style="font-size:11.5px; color:var(--ink-soft);">Atendida ✓</span>`
+            : `<button class="btn-atender-solicitud" data-id="${s.id}"
+                style="background:var(--green-soft); color:var(--green-ink); border:1px solid var(--green); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer;">
+                Marcar atendida
+              </button>`
+          }
+        </td>
+      </tr>
+    `).join("") || `<tr><td colspan="5" style="color:var(--ink-soft)">Sin solicitudes todavía.</td></tr>`;
+
+    document.querySelectorAll(".btn-atender-solicitud").forEach(btn => {
+      btn.addEventListener("click", () => marcarSolicitudAtendida(btn.dataset.id));
+    });
+  }
+
+  renderTablaSolicitudesPremium();
+
+  async function marcarSolicitudAtendida(solicitudId){
+    const { error } = await supabaseClient.from("solicitudes_premium").update({ atendida: true }).eq("id", solicitudId);
+    if (error){ alert("No pudimos marcarla como atendida: " + error.message); return; }
+    listaSolicitudesPremium = listaSolicitudesPremium.map(s => s.id === solicitudId ? { ...s, atendida: true } : s);
+    renderTablaSolicitudesPremium();
+  }
+
   // Gestionar usuarios: listado con búsqueda y borrado de cuentas.
   let listaUsuarios = usuarios || [];
 
@@ -270,6 +319,9 @@ async function cargarDashboard(){
         <td style="font-family:'DM Mono',monospace">${u.cuit_dni || "—"}</td>
         <td>${formatearFecha(u.creado_en)}</td>
         <td>
+          <input type="checkbox" class="chk-tester" data-id="${u.id}" ${u.es_tester ? "checked" : ""} ${u.es_admin ? "disabled" : ""}>
+        </td>
+        <td>
           ${u.es_admin
             ? `<span style="font-size:11.5px; color:var(--ink-soft);">Admin</span>`
             : `<button class="btn-eliminar-usuario" data-id="${u.id}" data-email="${u.email || ""}"
@@ -279,11 +331,20 @@ async function cargarDashboard(){
           }
         </td>
       </tr>
-    `).join("") || `<tr><td colspan="5" style="color:var(--ink-soft)">Sin usuarios todavía.</td></tr>`;
+    `).join("") || `<tr><td colspan="6" style="color:var(--ink-soft)">Sin usuarios todavía.</td></tr>`;
 
     document.querySelectorAll(".btn-eliminar-usuario").forEach(btn => {
       btn.addEventListener("click", () => eliminarUsuarioAdmin(btn.dataset.id, btn.dataset.email));
     });
+    document.querySelectorAll(".chk-tester").forEach(chk => {
+      chk.addEventListener("change", () => marcarTester(chk.dataset.id, chk.checked));
+    });
+  }
+
+  async function marcarTester(usuarioId, esTester){
+    const { error } = await supabaseClient.from("usuarios").update({ es_tester: esTester }).eq("id", usuarioId);
+    if (error){ alert("No pudimos actualizar el estado de tester: " + error.message); return; }
+    listaUsuarios = listaUsuarios.map(u => u.id === usuarioId ? { ...u, es_tester: esTester } : u);
   }
 
   renderTablaUsuarios(listaUsuarios);
