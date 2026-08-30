@@ -1,7 +1,17 @@
 // Netlify Function: elimina la cuenta de un usuario (Supabase Auth + tabla
-// "usuarios"). Solo puede ser invocada por un usuario admin autenticado
-// (es_admin = true en su perfil). Usa el service role key, que NUNCA debe
-// exponerse en el código del cliente — por eso vive acá, del lado servidor.
+// "usuarios"). Dos modos:
+//
+// 1) ADMIN (existente): se manda { usuarioIdAEliminar, tokenLlamante }.
+//    Solo funciona si quien llama tiene es_admin = true. usuarioIdAEliminar
+//    es el "id" de la tabla usuarios (no el auth_user_id).
+//
+// 2) SELF-SERVICE (nuevo): se manda solo { tokenLlamante }, sin
+//    usuarioIdAEliminar. El usuario se borra a sí mismo — no hace falta
+//    ser admin. Se identifica exclusivamente por su propio token de sesión.
+//
+// Gracias a "on delete cascade" en el esquema (usuarios -> auth.users,
+// y consultas/aceptaciones_tc/push_subscriptions -> usuarios), borrar la
+// cuenta de Supabase Auth alcanza para que todo lo demás se borre solo.
 
 const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_MZNmdrBaRx6HwGtgmd0VHQ_uRPQj_Zx";
@@ -26,8 +36,8 @@ export default async (req) => {
   }
 
   const { usuarioIdAEliminar, tokenLlamante } = body;
-  if (!usuarioIdAEliminar || !tokenLlamante){
-    return new Response(JSON.stringify({ error: "Faltan datos." }), { status: 400, headers: headersJSON });
+  if (!tokenLlamante){
+    return new Response(JSON.stringify({ error: "Falta el token de sesión." }), { status: 400, headers: headersJSON });
   }
 
   // 1) Identificar quién está llamando, a partir de su token de sesión.
@@ -41,35 +51,54 @@ export default async (req) => {
 
   const headersServiceRole = { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` };
 
-  // 2) Confirmar que quien llama es administrador. Sin esto, cualquier
-  // usuario logueado podría intentar borrar cuentas ajenas.
+  // 2) Traer el perfil propio de quien llama (id en usuarios + es_admin).
   const rPerfilLlamante = await fetch(
-    `${SUPABASE_URL}/rest/v1/usuarios?auth_user_id=eq.${quienLlama.id}&select=es_admin`,
+    `${SUPABASE_URL}/rest/v1/usuarios?auth_user_id=eq.${quienLlama.id}&select=id,es_admin,email`,
     { headers: headersServiceRole }
   );
   const perfilesLlamante = await rPerfilLlamante.json();
-  const esAdmin = Array.isArray(perfilesLlamante) && perfilesLlamante[0] && perfilesLlamante[0].es_admin === true;
+  const perfilLlamante = Array.isArray(perfilesLlamante) && perfilesLlamante[0];
+  const esAdmin = perfilLlamante && perfilLlamante.es_admin === true;
 
-  if (!esAdmin){
-    return new Response(JSON.stringify({ error: "No tenés permisos para realizar esta acción." }), { status: 403, headers: headersJSON });
+  let authUserIdABorrar;
+  let usuarioIdABorrar;
+  let emailABorrar;
+
+  if (usuarioIdAEliminar){
+    // ---- Modo admin: borrar la cuenta de un tercero ----
+    if (!esAdmin){
+      return new Response(JSON.stringify({ error: "No tenés permisos para realizar esta acción." }), { status: 403, headers: headersJSON });
+    }
+
+    const rPerfilABorrar = await fetch(
+      `${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdAEliminar}&select=auth_user_id,email`,
+      { headers: headersServiceRole }
+    );
+    const perfilesABorrar = await rPerfilABorrar.json();
+    const perfilABorrar = Array.isArray(perfilesABorrar) && perfilesABorrar[0];
+
+    if (!perfilABorrar){
+      return new Response(JSON.stringify({ error: "No encontramos ese usuario." }), { status: 404, headers: headersJSON });
+    }
+
+    authUserIdABorrar = perfilABorrar.auth_user_id;
+    usuarioIdABorrar = usuarioIdAEliminar;
+    emailABorrar = perfilABorrar.email;
+  } else {
+    // ---- Modo self-service: el usuario se borra a sí mismo ----
+    if (!perfilLlamante){
+      return new Response(JSON.stringify({ error: "No encontramos tu perfil." }), { status: 404, headers: headersJSON });
+    }
+
+    authUserIdABorrar = quienLlama.id;
+    usuarioIdABorrar = perfilLlamante.id;
+    emailABorrar = perfilLlamante.email || quienLlama.email;
   }
 
-  // 3) Buscar el auth_user_id real correspondiente a la fila de "usuarios"
-  // que se quiere eliminar (usuarioIdAEliminar es el id de esa fila, no el
-  // id de Supabase Auth).
-  const rPerfilABorrar = await fetch(
-    `${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdAEliminar}&select=auth_user_id,email`,
-    { headers: headersServiceRole }
-  );
-  const perfilesABorrar = await rPerfilABorrar.json();
-  const perfilABorrar = Array.isArray(perfilesABorrar) && perfilesABorrar[0];
-
-  if (!perfilABorrar){
-    return new Response(JSON.stringify({ error: "No encontramos ese usuario." }), { status: 404, headers: headersJSON });
-  }
-
-  // 4) Borrar la cuenta de Supabase Auth.
-  const rBorrarAuth = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${perfilABorrar.auth_user_id}`, {
+  // 3) Borrar la cuenta de Supabase Auth. Por la cascada configurada en la
+  // base, esto ya se lleva puesta la fila de "usuarios" y todo lo que
+  // depende de ella (consultas, aceptaciones_tc, push_subscriptions).
+  const rBorrarAuth = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${authUserIdABorrar}`, {
     method: "DELETE",
     headers: headersServiceRole
   });
@@ -79,12 +108,12 @@ export default async (req) => {
     return new Response(JSON.stringify({ error: "No pudimos eliminar la cuenta de autenticación.", detalle }), { status: 500, headers: headersJSON });
   }
 
-  // 5) Borrar también la fila de la tabla "usuarios", por si no hay
-  // eliminación en cascada configurada en la base.
-  await fetch(`${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdAEliminar}`, {
+  // 4) Borrado de respaldo de la fila "usuarios", por si la cascada no
+  // llegó a dispararse por algún motivo (no debería hacer falta).
+  await fetch(`${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdABorrar}`, {
     method: "DELETE",
     headers: { ...headersServiceRole, Prefer: "return=minimal" }
   });
 
-  return new Response(JSON.stringify({ ok: true, email: perfilABorrar.email }), { status: 200, headers: headersJSON });
+  return new Response(JSON.stringify({ ok: true, email: emailABorrar }), { status: 200, headers: headersJSON });
 };
