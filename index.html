@@ -2897,7 +2897,7 @@ async function eliminarCuentaDefinitivamente(){
       body: JSON.stringify({ tokenLlamante: sessionData.session.access_token })
     });
     const result = await resp.json();
-    if (resp.ok && result.success){
+    if (resp.ok && result.ok){
       cerrarModalEliminar2();
       await supabaseClient.auth.signOut();
       mostrarToast("Tu cuenta fue eliminada.");
