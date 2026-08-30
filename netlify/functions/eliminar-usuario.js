@@ -65,7 +65,7 @@ async function procesarEliminacion(req, headersJSON){
 
   // 2) Traer el perfil propio de quien llama (id en usuarios + es_admin).
   const rPerfilLlamante = await fetch(
-    `${SUPABASE_URL}/rest/v1/usuarios?auth_user_id=eq.${quienLlama.id}&select=id,es_admin,email`,
+    `${SUPABASE_URL}/rest/v1/usuarios?auth_user_id=eq.${quienLlama.id}&select=id,es_admin,email,cuit_dni,consultas_usadas_mes,mes_actual`,
     { headers: headersServiceRole }
   );
   const perfilesLlamante = await rPerfilLlamante.json();
@@ -75,6 +75,9 @@ async function procesarEliminacion(req, headersJSON){
   let authUserIdABorrar;
   let usuarioIdABorrar;
   let emailABorrar;
+  let cuitDniABorrar;
+  let consultasUsadasABorrar;
+  let mesActualABorrar;
 
   if (usuarioIdAEliminar){
     // ---- Modo admin: borrar la cuenta de un tercero ----
@@ -83,7 +86,7 @@ async function procesarEliminacion(req, headersJSON){
     }
 
     const rPerfilABorrar = await fetch(
-      `${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdAEliminar}&select=auth_user_id,email`,
+      `${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdAEliminar}&select=auth_user_id,email,cuit_dni,consultas_usadas_mes,mes_actual`,
       { headers: headersServiceRole }
     );
     const perfilesABorrar = await rPerfilABorrar.json();
@@ -96,6 +99,9 @@ async function procesarEliminacion(req, headersJSON){
     authUserIdABorrar = perfilABorrar.auth_user_id;
     usuarioIdABorrar = usuarioIdAEliminar;
     emailABorrar = perfilABorrar.email;
+    cuitDniABorrar = perfilABorrar.cuit_dni;
+    consultasUsadasABorrar = perfilABorrar.consultas_usadas_mes;
+    mesActualABorrar = perfilABorrar.mes_actual;
   } else {
     // ---- Modo self-service: el usuario se borra a sí mismo ----
     if (!perfilLlamante){
@@ -105,9 +111,31 @@ async function procesarEliminacion(req, headersJSON){
     authUserIdABorrar = quienLlama.id;
     usuarioIdABorrar = perfilLlamante.id;
     emailABorrar = perfilLlamante.email || quienLlama.email;
+    cuitDniABorrar = perfilLlamante.cuit_dni;
+    consultasUsadasABorrar = perfilLlamante.consultas_usadas_mes;
+    mesActualABorrar = perfilLlamante.mes_actual;
   }
 
-  // 3) Borrar la cuenta de Supabase Auth. Por la cascada configurada en la
+  // 3) Registrar en el historial permanente ANTES de borrar, para el
+  // control anti-abuso (evitar borrar cuenta + re-registrarse y resetear
+  // el cupo gratis). Se controla por email — ver comentario en la
+  // migración SQL sobre por qué no se usa cuit_dni para esto.
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/historial_eliminaciones`, {
+      method: "POST",
+      headers: { ...headersServiceRole, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({
+        cuit_dni: cuitDniABorrar,
+        email: emailABorrar,
+        consultas_usadas_mes: consultasUsadasABorrar,
+        mes_actual: mesActualABorrar
+      })
+    });
+  } catch (e) {
+    console.warn("No se pudo registrar en historial_eliminaciones (no crítico):", e.message);
+  }
+
+  // 4) Borrar la cuenta de Supabase Auth. Por la cascada configurada en la
   // base, esto ya se lleva puesta la fila de "usuarios" y todo lo que
   // depende de ella (consultas, aceptaciones_tc, push_subscriptions).
   const rBorrarAuth = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${authUserIdABorrar}`, {
@@ -124,11 +152,11 @@ async function procesarEliminacion(req, headersJSON){
     }), { status: 500, headers: headersJSON });
   }
 
-  // 4) Borrado de respaldo de la fila "usuarios", por si la cascada no
+  // 5) Borrado de respaldo de la fila "usuarios", por si la cascada no
   // llegó a dispararse por algún motivo (no debería hacer falta). Va en
   // try/catch propio: si esto falla, NO debe tirar abajo la respuesta de
   // éxito, porque lo que de verdad importa (borrar el Auth user) ya se
-  // hizo en el paso 3.
+  // hizo en el paso 4.
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/usuarios?id=eq.${usuarioIdABorrar}`, {
       method: "DELETE",
