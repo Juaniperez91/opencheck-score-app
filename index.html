@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="OpenCheck">
 <meta name="mobile-web-app-capable" content="yes">
-<title>OpenCheck Score</title>
+<title>OpenCheck</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -844,7 +844,7 @@
     <div class="topbar">
       <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
-        <div class="brand-name">Open<span>Check</span> Score</div>
+        <div class="brand-name">Open<span>Check</span></div>
       </div>
     </div>
     <div class="content">
@@ -899,7 +899,7 @@
 
       <div class="checkbox-row">
         <input type="checkbox" id="reg-tc">
-        <p>Acepto los <a href="#">Términos y Condiciones</a> y la <a href="#">Política de Privacidad</a> de OpenCheck Score, conforme a la Ley 25.326 de Protección de Datos Personales.</p>
+        <p>Acepto los <a href="#">Términos y Condiciones</a> y la <a href="#">Política de Privacidad</a> de OpenCheck, conforme a la Ley 25.326 de Protección de Datos Personales.</p>
       </div>
       <div class="tc-meta" id="tc-meta">Documento v1.0 · registrado</div>
 
@@ -915,7 +915,7 @@
     <div class="topbar">
       <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
-        <div class="brand-name">Open<span>Check</span> Score</div>
+        <div class="brand-name">Open<span>Check</span></div>
       </div>
     </div>
     <div class="content">
@@ -939,7 +939,7 @@
     <div class="topbar">
       <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
-        <div class="brand-name">Open<span>Check</span> Score</div>
+        <div class="brand-name">Open<span>Check</span></div>
       </div>
     </div>
     <div class="content">
@@ -967,7 +967,7 @@
     <div class="topbar">
       <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
-        <div class="brand-name">Open<span>Check</span> Score</div>
+        <div class="brand-name">Open<span>Check</span></div>
       </div>
       <div class="topbar-sub" id="user-chip">—</div>
     </div>
@@ -1245,7 +1245,7 @@ async function instalarApp(){
   if (!eventoInstalacionDiferido) return;
   eventoInstalacionDiferido.prompt();
   const { outcome } = await eventoInstalacionDiferido.userChoice;
-  if (outcome === "accepted") mostrarToast("¡Listo! Ya tenés OpenCheck Score instalada.");
+  if (outcome === "accepted") mostrarToast("¡Listo! Ya tenés OpenCheck instalada.");
   eventoInstalacionDiferido = null;
   const btn = document.getElementById("btn-instalar-app");
   if (btn) btn.style.display = "none";
@@ -1638,7 +1638,7 @@ function calcularPenalizacionRechazos(d){
 // Devuelve { tipo: "ninguna" | "penalizacion" | "C2", factor }
 // Matriz de atrasos ORIGINAL de OpenCheck (16 combinaciones), importada
 // tal cual del diseño previo (opencheck.pro). La columna "Score Nosis"
-// (que no tenemos, OpenCheck Score no usa Nosis) se reemplaza por
+// (que no tenemos, OpenCheck no usa Nosis) se reemplaza por
 // nuestro propio puntosBase de 0-100, reescalado de la escala original
 // 0-600+ dividiendo por 10 (600->60, 400->40). Los montos siguen en
 // pesos NOMINALES de cuando se diseñó esto originalmente — pendiente
@@ -2769,7 +2769,7 @@ btnRegistrar.addEventListener("click", async () => {
 
     state.user = perfil;
     document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
-    mostrarToast("Cuenta creada — bienvenido/a a OpenCheck Score");
+    mostrarToast("Cuenta creada — bienvenido/a a OpenCheck");
     irA("home");
   } catch (e){
     mostrarToast("No pudimos crear la cuenta: " + e.message);
@@ -2811,7 +2811,7 @@ document.getElementById("btn-verificar-codigo").addEventListener("click", async 
 
     state.user = perfil;
     document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
-    mostrarToast("Cuenta confirmada — bienvenido/a a OpenCheck Score");
+    mostrarToast("Cuenta confirmada — bienvenido/a a OpenCheck");
     pendienteRegistro = null;
     irA("home");
   } catch (e){
@@ -3509,12 +3509,12 @@ function animarGauge(puntosFinal, categoria){
 
 /* ---- Recomendación operativa por categoría ---- */
 const RECOMENDACIONES = {
-  A1: ["Podés operar sin restricciones especiales.", "Es el perfil de menor riesgo dentro de la escala de OpenCheck Score."],
+  A1: ["Podés operar sin restricciones especiales.", "Es el perfil de menor riesgo dentro de la escala de OpenCheck."],
   A2: ["Perfil de riesgo bajo. Operar en condiciones habituales.", "No hacen falta resguardos adicionales para montos estándar."],
   B1: ["Riesgo medio-bajo. Podés operar en condiciones estándar.", "Conviene seguir de cerca la evolución de su endeudamiento en las próximas consultas."],
   B2: ["Riesgo medio-alto. Operar con resguardos.", "Recomendamos plazos cortos, montos moderados o pago anticipado parcial."],
   C1: ["Riesgo alto. Reforzar el análisis antes de operar.", "Pedí garantías adicionales y limitá la exposición total con este librador."],
-  C2: ["No operable según los criterios de OpenCheck Score.", "Evitá la operación o exigí garantías totales y verificación adicional."]
+  C2: ["No operable según los criterios de OpenCheck.", "Evitá la operación o exigí garantías totales y verificación adicional."]
 };
 
 /* ---- Detalle por entidad bancaria (BCRA, gratuito) ---- */
@@ -3875,7 +3875,7 @@ function renderCuenta(){
       ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "Notificaciones activadas ✓" : "Activar notificaciones"}
     </button>
     <button class="btn btn-primary" id="btn-instalar-app" onclick="instalarApp()" style="display:none; margin-top:10px; align-items:center; justify-content:center; gap:8px;">
-      Instalar OpenCheck Score en este dispositivo
+      Instalar OpenCheck en este dispositivo
     </button>
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">
