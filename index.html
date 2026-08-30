@@ -2904,7 +2904,8 @@ async function eliminarCuentaDefinitivamente(){
       state.user = null;
       irA("login");
     } else {
-      mostrarToast("No pudimos eliminar la cuenta: " + (result.error || "error desconocido"));
+      console.error("[OpenCheck] Fallo al eliminar cuenta:", resp.status, result);
+      mostrarToast("No pudimos eliminar la cuenta (" + resp.status + "): " + (result.detalle || result.error || "error desconocido"));
       btn.disabled = false;
       btn.textContent = "Eliminar definitivamente";
     }
