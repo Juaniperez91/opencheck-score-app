@@ -3864,10 +3864,10 @@ async function renderHistorial(){
 }
 
 // Escapa un valor para que sea seguro dentro de un campo CSV (comillas,
-// comas o saltos de línea en el propio texto no rompan las columnas).
+// punto y coma o saltos de línea en el propio texto no rompan las columnas).
 function escaparCSV(valor){
   const texto = (valor === null || valor === undefined) ? "" : String(valor);
-  if (/[",\n]/.test(texto)){
+  if (/[";\n]/.test(texto)){
     return `"${texto.replace(/"/g, '""')}"`;
   }
   return texto;
@@ -3899,10 +3899,10 @@ function exportarHistorialCSV(){
       h.numero_cheque_consultado || "",
       h.fecha_vencimiento_cheque || "",
       resultado
-    ].map(escaparCSV).join(",");
+    ].map(escaparCSV).join(";");
   });
 
-  const csv = "\uFEFF" + [encabezados.join(","), ...filas].join("\r\n"); // \uFEFF: BOM para que Excel abra los acentos bien
+  const csv = "\uFEFF" + [encabezados.join(";"), ...filas].join("\r\n"); // \uFEFF: BOM para que Excel abra los acentos bien; ";" porque Excel AR usa ese separador por defecto
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
