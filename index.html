@@ -1137,6 +1137,7 @@
     <div class="content">
       <h1 class="page-title">Trazabilidad</h1>
       <p class="page-sub">Cada consulta queda registrada con usuario, CUIT, fecha y resultado.</p>
+      <button class="btn btn-secondary" id="btn-exportar-historial" onclick="exportarHistorialCSV()" style="margin-bottom:14px;" disabled>Exportar a CSV</button>
       <div id="historial-lista"></div>
     </div>
     <div class="navbar">
@@ -2618,7 +2619,7 @@ const VERSION_APP = "2026-08-30-v5-estable";
 
 const state = {
   user: null,
-  queriesLimit: 20,
+  queriesLimit: 10,
   queriesUsed: 0,
   history: []
 };
@@ -3798,6 +3799,10 @@ async function renderHistorial(){
 
   cont.innerHTML = `<div class="empty-state"><p>Cargando historial…</p></div>`;
   const historial = await obtenerHistorialUsuario(state.user.id);
+  state.ultimoHistorial = historial; // guardado para exportar a CSV sin re-consultar
+
+  const btnExportar = document.getElementById("btn-exportar-historial");
+  if (btnExportar) btnExportar.disabled = historial.length === 0;
 
   if (historial.length === 0){
     cont.innerHTML = `<div class="empty-state"><div class="ico">📄</div><p>Todavía no hiciste ninguna consulta.<br>Cuando consultes un CUIT, va a quedar registrado acá.</p></div>`;
@@ -3856,6 +3861,58 @@ async function renderHistorial(){
       ${confirmacionHtml}
     </div>`;
   }).join("");
+}
+
+// Escapa un valor para que sea seguro dentro de un campo CSV (comillas,
+// comas o saltos de línea en el propio texto no rompan las columnas).
+function escaparCSV(valor){
+  const texto = (valor === null || valor === undefined) ? "" : String(valor);
+  if (/[",\n]/.test(texto)){
+    return `"${texto.replace(/"/g, '""')}"`;
+  }
+  return texto;
+}
+
+function exportarHistorialCSV(){
+  const historial = state.ultimoHistorial || [];
+  if (historial.length === 0){
+    mostrarToast("No hay consultas para exportar todavía.");
+    return;
+  }
+
+  const encabezados = ["Fecha", "CUIT consultado", "Razón social", "Categoría", "Fuente", "N° de cheque", "Fecha de vencimiento", "Resultado"];
+  const filas = historial.map(h => {
+    let resultado = "";
+    if (h.numero_cheque_consultado){
+      if (h.resultado_real){
+        resultado = h.resultado_real === "pagado" ? "Pagado" : "Rechazado";
+      } else {
+        resultado = "Pendiente";
+      }
+    }
+    return [
+      new Date(h.creado_en).toLocaleString("es-AR"),
+      h.cuit_consultado || "",
+      h.razon_social || "",
+      h.categoria || "",
+      h.fuente === "real" ? "API BCRA real" : "Demo",
+      h.numero_cheque_consultado || "",
+      h.fecha_vencimiento_cheque || "",
+      resultado
+    ].map(escaparCSV).join(",");
+  });
+
+  const csv = "\uFEFF" + [encabezados.join(","), ...filas].join("\r\n"); // \uFEFF: BOM para que Excel abra los acentos bien
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const fecha = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `opencheck-historial-${fecha}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /* ---- Cuenta ---- */
