@@ -668,6 +668,7 @@
     text-align:right; overflow:hidden; text-overflow:ellipsis;
   }
   .detalle-mensual-tabla tr:last-child td{border-bottom:none;}
+  .dm-fila-mora td{color:#B23A3A; font-weight:600;}
   .breakdown-row-nd .br-desc{font-style:italic;}
 
   .camara-modal{
@@ -1711,28 +1712,36 @@ function calcularPenalizacionMora(montoEnMoraPesos, montoTotalPesos, diasAtrasoM
 // categoría BCRA (basada en días de atraso) y la proporción de monto miden
 // cosas distintas, y las dos juntas son más precisas que cualquiera de las
 // dos solas (confirmado con Juan Ignacio).
-function calcularPenalizacionMora24m(historialMontoEnMora, historialDeuda){
+function calcularPenalizacionMora24m(historialMontoEnMora, historialDeuda, historialSituacion, historialPeriodos){
   const n = (historialDeuda || []).length;
-  const vacio = { factor:0, severidad:0, agravante:0, frecuenciaMeses:0, proporcionPeorMes:0, mesesAtras:null };
+  const vacio = { factor:0, severidad:0, agravante:0, frecuenciaMeses:0, proporcionPeorMes:0, mesesAtras:null, detalleMensual24m:[] };
   if (!n || !historialMontoEnMora || historialMontoEnMora.length !== n) return vacio;
 
   let proporcionPeorMes = 0;
   let indicePeorMes = -1;
   let frecuenciaMeses = 0;
+  const detalleMensual24m = [];
 
   for (let i = 0; i < n; i++){
     const deudaMes = historialDeuda[i];
-    if (!deudaMes || deudaMes <= 0) continue;
     const moraMes = historialMontoEnMora[i] || 0;
-    const proporcionMes = moraMes / deudaMes;
+    const proporcionMes = (deudaMes && deudaMes > 0) ? moraMes / deudaMes : 0;
     if (proporcionMes > 0) frecuenciaMeses++;
     if (proporcionMes > proporcionPeorMes){
       proporcionPeorMes = proporcionMes;
       indicePeorMes = i;
     }
+    detalleMensual24m.push({
+      periodo: (historialPeriodos && historialPeriodos[i]) || null,
+      mesesAtras: n - 1 - i,
+      situacion: (historialSituacion && historialSituacion[i]) ?? null,
+      montoEnMora: moraMes,
+      montoTotal: deudaMes || 0,
+      proporcion: proporcionMes
+    });
   }
 
-  if (frecuenciaMeses === 0) return vacio;
+  if (frecuenciaMeses === 0) return { ...vacio, detalleMensual24m };
 
   // Severidad: mismos cortes que calcularPenalizacionMora (mora vigente).
   let severidad;
@@ -1754,7 +1763,7 @@ function calcularPenalizacionMora24m(historialMontoEnMora, historialDeuda){
   const factor = Math.min(severidad + agravante, 1);
   const mesesAtras = indicePeorMes === -1 ? null : (n - 1 - indicePeorMes);
 
-  return { factor, severidad, agravante, frecuenciaMeses, proporcionPeorMes, mesesAtras };
+  return { factor, severidad, agravante, frecuenciaMeses, proporcionPeorMes, mesesAtras, detalleMensual24m };
 }
 
 function categoriaDesdePuntos(p){
@@ -1851,8 +1860,8 @@ function calcularScore(d){
 
   const pSituacion = sinAntecedentesDeuda ? null : scoreSituacion(d.situacion);
   const penalizacion24m = sinAntecedentesDeuda
-    ? { factor:0, severidad:0, agravante:0, frecuenciaMeses:0, proporcionPeorMes:0, mesesAtras:null }
-    : calcularPenalizacionMora24m(d.historialMontoEnMora, d.historialDeuda);
+    ? { factor:0, severidad:0, agravante:0, frecuenciaMeses:0, proporcionPeorMes:0, mesesAtras:null, detalleMensual24m:[] }
+    : calcularPenalizacionMora24m(d.historialMontoEnMora, d.historialDeuda, d.historialSituacion, d.historialPeriodos);
   const pSituacion24mBase = sinAntecedentesDeuda ? null : scoreSituacion24m(peorSituacion24m);
   const pSituacion24m = sinAntecedentesDeuda ? null
     : Math.max(0, pSituacion24mBase - Math.round(penalizacion24m.factor * 20));
@@ -1961,7 +1970,7 @@ function calcularScore(d){
     situacion24m: sinAntecedentesDeuda
       ? {puntos:null, max:20, label:"Situación — últimos 24 meses", noDisponible:true,
          desc: "Sin antecedentes de deuda bancaria en los últimos 24 meses. Redistribuimos estos 20 puntos entre las demás variables."}
-      : {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m, penalizacion24m)},
+      : {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m, penalizacion24m), detalleMensual24m: penalizacion24m.detalleMensual24m || []},
     rechazos: {puntos:null, factorPenalizacion:penalizacionRechazos.factor, label:"Rechazos de cheques (penalización)", desc: explicarRechazos(d, penalizacionRechazos), detalleRechazos: d.detalleRechazos || []},
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
@@ -2363,6 +2372,7 @@ async function construirDatosLibradorReal(cuit){
     historialSituacion: historial.historialSituacion,
     historialDeuda: historial.historialDeuda,
     historialMontoEnMora: historial.historialMontoEnMora,
+    historialPeriodos: historial.historialPeriodos,
     deudaVsInflacion,
     factorAjusteEndeudamiento,
     factorAjusteAtrasos
@@ -3733,6 +3743,40 @@ function toggleDetalleMensual(id, el){
   el.querySelector(".dm-arrow").textContent = abierta ? "▸" : "▾";
 }
 
+// Detalle mes a mes de la situación de los últimos 24 meses: qué situación
+// BCRA tuvo cada mes y, para los meses con mora, qué % de la deuda de ESE
+// mes representaba (la base de calcularPenalizacionMora24m). Reutiliza el
+// mismo toggle genérico que las otras dos tablas desplegables.
+function construirDetalleSituacion24mToggle(detalleMensual24m, idx){
+  if (!detalleMensual24m || !detalleMensual24m.length) return "";
+  const id = "detalle-situacion24m-" + idx;
+  const filas = detalleMensual24m.map(m => {
+    const conMora = m.situacion !== null && m.situacion > 1;
+    return `
+    <tr class="${conMora ? "dm-fila-mora" : ""}">
+      <td>${m.periodo ? formatearPeriodoLegible(m.periodo) : `hace ${m.mesesAtras} mes${m.mesesAtras === 1 ? "" : "es"}`}</td>
+      <td>${m.situacion === null ? "—" : m.situacion}</td>
+      <td>${m.montoEnMora > 0 ? "$" + m.montoEnMora.toLocaleString("es-AR") : "—"}</td>
+      <td>$${m.montoTotal.toLocaleString("es-AR")}</td>
+      <td>${m.proporcion > 0 ? (m.proporcion*100 < 1 ? "menos del 1%" : Math.round(m.proporcion*100) + "%") : "—"}</td>
+    </tr>`;
+  }).join("");
+  return `
+    <div class="detalle-mensual-toggle" onclick="toggleDetalleMensual('${id}', this)">
+      Ver situación mes a mes <span class="dm-arrow">▸</span>
+    </div>
+    <div class="detalle-mensual-tabla" id="${id}" style="display:none">
+      <div class="dm-nota">Situación BCRA informada cada mes y, cuando hubo mora, qué proporción representaba sobre la deuda total de ESE mes — la base del descuento adicional que ves arriba.</div>
+      <table>
+        <thead>
+          <tr><th>Mes</th><th>Situación</th><th>Monto en mora</th><th>Deuda total del mes</th><th>% del mes</th></tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 // Íconos en línea con la marca (no emojis del sistema) para el bloque de
 // alertas del resultado.
 const ICONO_ALERTA_OK = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 12.5l2.5 2.5 5.5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -3815,6 +3859,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
       <div class="br-desc">${v.desc}</div>
       ${v.detalleMensual ? construirDetalleMensualToggle(v.detalleMensual, idx) : ""}
       ${v.detalleRechazos && v.detalleRechazos.length ? construirDetalleRechazosToggle(v.detalleRechazos, idx) : ""}
+      ${v.detalleMensual24m && v.detalleMensual24m.length ? construirDetalleSituacion24mToggle(v.detalleMensual24m, idx) : ""}
     </div>
   `;
   }).join("");
