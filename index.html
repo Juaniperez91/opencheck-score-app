@@ -1675,14 +1675,32 @@ const MATRIZ_ATRASOS_ORIGINAL = [
   { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:10 },
   { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:"C2" },
   { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:10 },
-  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:"C2" },
-  { scoreMin:0,  scoreMax:Infinity, montoMin:500001, montoMax:Infinity, diasMin:60, diasMax:Infinity, pen:"C2" } // regla 16: SIEMPRE C2, cualquier score
+  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:"C2" }
+  // La regla 16 original ("monto>$500.000 + 60 días = SIEMPRE C2,
+  // cualquier score") se sacó de esta lista — ver calcularMatrizAtrasos:
+  // ahora ese caso se resuelve aparte, con el criterio de proporción
+  // sobre la deuda total (confirmado con Juan Ignacio), en vez de un
+  // corte en pesos absolutos que no distingue el tamaño del deudor.
 ];
 
-function calcularMatrizAtrasos(puntosBaseGeneral, montoEnMoraPesos, diasAtrasoMax, factorAjuste = 1){
+function calcularMatrizAtrasos(puntosBaseGeneral, montoEnMoraPesos, diasAtrasoMax, factorAjuste = 1, proporcionMoraTotal = 1){
   if (diasAtrasoMax <= 0 || montoEnMoraPesos <= 0) return { tipo:"ninguna", factor:0 };
 
   const montoAjustado = montoEnMoraPesos / factorAjuste; // a pesos "de calibración" (feb 2026)
+
+  // Ex-regla 16: mora > $500.000 con 60+ días de atraso. Antes forzaba
+  // C2 siempre, sin importar el score NI el tamaño del deudor — un
+  // corte en pesos absolutos castigaba igual a una empresa chica que a
+  // una con cientos de millones de deuda repartida en el sistema. Ahora
+  // aplica el mismo criterio de "efecto arrastre" que en la situación
+  // crediticia (Comunicación A 6558 del BCRA, confirmado con Juan
+  // Ignacio): solo corta a C2 si esa mora representa el 40% o más de la
+  // deuda TOTAL. Por debajo del 40%, sigue siendo grave — 50% de
+  // descuento — pero no un corte automático.
+  if (montoAjustado > 500000 && diasAtrasoMax >= 60){
+    if (proporcionMoraTotal >= 0.40) return { tipo:"C2", factor:null };
+    return { tipo:"penalizacion", factor:0.50 };
+  }
 
   for (const regla of MATRIZ_ATRASOS_ORIGINAL){
     const scoreOk = puntosBaseGeneral >= regla.scoreMin && puntosBaseGeneral <= regla.scoreMax;
@@ -1823,7 +1841,9 @@ function calcularScore(d){
   const entidadesEnMora = (d.entidades || []).filter(e => e.situacion > 1);
   const montoEnMoraPesos = entidadesEnMora.reduce((s,e) => s + e.monto, 0);
   const diasAtrasoMax = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.diasAtraso || 0)) : 0;
-  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraPesos, diasAtrasoMax, d.factorAjusteAtrasos || 1);
+  const montoTotalPesos = (d.entidades || []).reduce((s,e) => s + e.monto, 0);
+  const proporcionMoraTotal = montoTotalPesos > 0 ? montoEnMoraPesos / montoTotalPesos : 1;
+  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraPesos, diasAtrasoMax, d.factorAjusteAtrasos || 1, proporcionMoraTotal);
 
   // ---- Matriz de recurrencia: qué proporción de la deuda estuvo en mora ----
   const recurrencia = calcularMatrizRecurrencia(d.historialMontoEnMora, d.historialDeuda);
@@ -1839,15 +1859,28 @@ function calcularScore(d){
 
   const inhabilitacion = hayTriggerInhabilitacion(d);
 
+  // Factor total real, calculado SIEMPRE — incluso cuando la categoría
+  // queda forzada a C2 por alguna regla de corte duro. Antes, esos casos
+  // mostraban un puntaje inventado (Math.min(puntosBase, 20)) sin
+  // relación con la penalización real calculada; ahora el número
+  // reflejа el descuento genuino, y la categoría se fuerza aparte.
+  // Cuando la propia matriz de atrasos devuelve "C2" (regla de corte
+  // duro por monto/días), no tiene un % asociado — usamos 1 (100%) como
+  // valor conservador, ya que esa celda de la matriz representa por
+  // definición el peor escenario posible.
+  const factorAtrasosNum = (atrasos && typeof atrasos.factor === "number") ? atrasos.factor : (atrasos.tipo === "C2" ? 1 : 0);
+  const factorTotal = Math.min(factorAtrasosNum + factorRecurrencia + penalizacionRechazos.factor + penalizacionAntiguedad.factor, 1);
+  puntosFinales = Math.round(puntosBase * (1 - factorTotal));
+
   if (hayRechazoSinFondosSinRegularizar(d)){
     // Un rechazo por falta de fondos tan reciente sigue siendo un corte
-    // duro si NO está regularizado — no se diluye como % de descuento:
-    // fuerza C2 directo. Si ya se pagó el cheque y la multa, no fuerza
-    // C2 (solo resta % vía calcularPenalizacionRechazos). Los rechazos
-    // por defectos formales NUNCA fuerzan C2 por sí solos (salvo que
-    // lleguen a 8 en 12 meses, ver hayTriggerInhabilitacion abajo).
+    // duro si NO está regularizado — la categoría queda forzada a C2 de
+    // todos modos, pero el puntaje mostrado ya es el real (arriba), no
+    // uno inventado. Si ya se pagó el cheque y la multa, no fuerza C2
+    // (solo resta % vía calcularPenalizacionRechazos). Los rechazos por
+    // defectos formales NUNCA fuerzan C2 por sí solos (salvo que lleguen
+    // a 8 en 12 meses, ver hayTriggerInhabilitacion abajo).
     forzadoC2 = true;
-    puntosFinales = Math.min(puntosBase, 20);
     motivo = "Rechazo de cheque por falta de fondos en los últimos 6 meses, todavía sin regularizar. Cuenta no operable.";
   } else if (inhabilitacion.trigger){
     // Causales reales de inhabilitación según la Reglamentación de la
@@ -1855,18 +1888,14 @@ function calcularScore(d){
     // Inhabilitados en sí — no es una API pública — las replicamos con
     // los datos que sí tenemos de ChequesRechazados).
     forzadoC2 = true;
-    puntosFinales = Math.min(puntosBase, 20);
     motivo = inhabilitacion.motivo;
   } else if (atrasos.tipo === "C2"){
     forzadoC2 = true;
-    puntosFinales = Math.min(puntosBase, 20);
     motivo = montoEnMoraPesos > 500000 && diasAtrasoMax >= 60
-      ? `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} (>$500.000) con ${diasAtrasoMax} días de atraso. Cuenta no operable.`
+      ? `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} con ${diasAtrasoMax} días de atraso — representa el ${Math.round(proporcionMoraTotal*100)}% de la deuda total (40% o más dispara el corte, igual que el efecto arrastre del BCRA). Cuenta no operable.`
       : `Matriz de atrasos: mora vigente de $${montoEnMoraPesos.toLocaleString("es-AR")} con ${diasAtrasoMax} días de atraso, sobre un perfil ya débil. Cuenta no operable.`;
   } else {
-    const factorAtrasos = atrasos.factor || 0;
-    const factorTotal = Math.min(factorAtrasos + factorRecurrencia + penalizacionRechazos.factor + penalizacionAntiguedad.factor, 1);
-    puntosFinales = Math.round(puntosBase * (1 - factorTotal));
+    const factorAtrasos = factorAtrasosNum;
 
     const partes = [];
     if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraPesos.toLocaleString("es-AR")}, ${diasAtrasoMax} días de atraso)`);
