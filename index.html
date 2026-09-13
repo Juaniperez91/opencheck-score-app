@@ -2706,7 +2706,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-08-30-v5-estable";
+const VERSION_APP = "2026-09-13-v6-motor24m-y-forzar-actualizacion";
 
 const state = {
   user: null,
@@ -3122,6 +3122,59 @@ function poblarSelectoresBanco(){
 }
 poblarSelectoresBanco();
 actualizarListadoEntidadesReal();
+verificarActualizacionApp();
+
+// Fuerza actualización de la app empaquetada (APK) mientras no esté en
+// Play Store: sin Play Store no hay auto-actualización, así que un APK
+// instalado hace 3 semanas puede seguir corriendo el motor viejo para
+// siempre. Comparamos VERSION_APP (embebida en este HTML, la que quedó
+// congelada dentro del APK al momento de compilarlo) contra la que hoy
+// tiene el sitio en vivo en Netlify — ese si se actualiza solo, cada vez
+// que se sube un index.html nuevo. Ninguna configuración adicional: en
+// cuanto Juan Ignacio suba una versión con VERSION_APP distinta, todos
+// los APKs viejos instalados lo van a detectar en el próximo abrir.
+// Best-effort y solo corre en la app nativa (Capacitor) — la web en vivo
+// ya está siempre al día, no necesita chequearse a sí misma.
+async function verificarActualizacionApp(){
+  const esAppNativa = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if (!esAppNativa) return;
+
+  try {
+    const r = await fetch("https://opencheck-app.netlify.app/index.html?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const html = await r.text();
+    const m = html.match(/const VERSION_APP\s*=\s*"([^"]+)"/);
+    if (!m) return;
+    const versionRemota = m[1];
+    if (versionRemota === VERSION_APP) return; // ya está actualizada, nada que hacer
+
+    mostrarModalActualizacionObligatoria(versionRemota);
+  } catch (e) {
+    console.warn("[OpenCheck] No se pudo chequear la versión (sin conexión u otro fallo):", e.message);
+    // Best-effort: si falla la verificación, no bloqueamos el uso de la app.
+  }
+}
+
+function mostrarModalActualizacionObligatoria(versionRemota){
+  if (document.getElementById("modal-actualizar-obligatorio")) return; // no duplicar
+
+  const overlay = document.createElement("div");
+  overlay.id = "modal-actualizar-obligatorio";
+  overlay.style.cssText = "position:fixed; inset:0; background:rgba(15,23,32,0.94); z-index:99999; display:flex; align-items:center; justify-content:center; padding:24px;";
+  overlay.innerHTML = `
+    <div style="background:var(--white); border-radius:var(--radius); padding:28px 24px; max-width:340px; width:100%; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.3);">
+      <div style="font-size:17px; font-weight:700; margin-bottom:10px; color:var(--ink);">Hay una actualización disponible</div>
+      <div style="font-size:14px; color:var(--ink-soft); margin-bottom:20px; line-height:1.5;">
+        Esta versión de la app quedó desactualizada — no podés seguir usándola hasta actualizar. Se necesita descargar el nuevo instalador e instalarlo encima del actual.
+      </div>
+      <a href="/opencheck.apk" download style="display:block; text-decoration:none; background:var(--green); color:var(--white); padding:13px; border-radius:10px; font-weight:600; font-size:14.5px;">
+        Descargar actualización
+      </a>
+      <div style="font-size:11px; color:var(--ink-soft); margin-top:14px;">Versión instalada: ${VERSION_APP} · Versión disponible: ${versionRemota}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
 
 function buscarDenuncia(codigoEntidad, numero){
   if (!numero || !codigoEntidad) return null;
