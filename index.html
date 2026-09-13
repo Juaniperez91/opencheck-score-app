@@ -1471,6 +1471,13 @@ function scoreSituacion24m(peorSituacion24m){
 // desactualizados solos con el tiempo y dejan de discriminar bien.
 const ENDEUDAMIENTO_PERIODO_BASE = "202608";
 
+// Ya no la usa el cálculo del score (la penalización por mora pasó a
+// ser por proporción, no por monto fijo — no necesita reindexar por
+// inflación). Se mantiene solo para no romper el cálculo de
+// factorAjusteAtrasos en la preparación de datos, que hoy queda sin uso
+// real pero no vale la pena tocar en este cambio.
+const MATRIZ_ATRASOS_PERIODO_BASE = "202603";
+
 function scoreEndeudamiento(mNominal, factorAjuste = 1){
   // 10 pts. Más deuda bancaria informada suma, no resta (refleja acceso a
   // crédito bancario, no riesgo por sí solo). mNominal se ajusta primero
@@ -1558,8 +1565,8 @@ function hayTriggerInhabilitacion(d, hoy = new Date()){
 
 // Penalización por rechazos, importada del diseño original de OpenCheck
 // (penRechazos + penSF). Ya NO es una variable de puntos — es un
-// descuento porcentual sobre el score final, igual que atrasos y
-// recurrencia. Los cortes de C2 (sin fondos <6m sin regularizar, y los
+// descuento porcentual sobre el score final, igual que la mora vigente.
+// Los cortes de C2 (sin fondos <6m sin regularizar, y los
 // 3 triggers de hayTriggerInhabilitacion) se evalúan aparte, en calcularScore.
 // Matriz de antigüedad del CUIT, importada del diseño original de
 // OpenCheck. Solo se puede calcular para personas jurídicas (vía
@@ -1637,7 +1644,7 @@ function calcularPenalizacionRechazos(d){
 }
 
 /* =======================================================
-   MATRIZ DE ATRASOS Y RECURRENCIA
+   MATRIZ DE MORA VIGENTE Y PENALIZACIÓN 24 MESES
    Penalizaciones adicionales sobre el puntaje base, separadas del
    historial de rechazos de cheques. Usan datos que ya traemos del BCRA
    pero que hasta ahora no estábamos aprovechando: días de atraso por
@@ -1654,89 +1661,100 @@ function calcularPenalizacionRechazos(d){
 // 0-600+ dividiendo por 10 (600->60, 400->40). Los montos siguen en
 // pesos NOMINALES de cuando se diseñó esto originalmente — pendiente
 // indexar por inflación como paso aparte (no lo pisamos todavía).
-// Los montos de la matriz de atrasos están calibrados en pesos de este
-// período (confirmado por Juan Ignacio: febrero 2026). Un monto nominal
-// futuro se ajusta a pesos de este mes antes de comparar, igual que ya
-// hacemos con endeudamiento.
-const MATRIZ_ATRASOS_PERIODO_BASE = "202603";
+// Penalización por mora vigente, basada en PROPORCIÓN de la deuda total,
+// no en montos fijos en pesos ni en el puntaje general del deudor
+// (confirmado con Juan Ignacio: un corte en pesos absolutos no
+// distingue el tamaño del deudor, y mezclar el score general acá
+// castigaría dos veces la misma debilidad, ya que el score bajo por
+// endeudamiento/situación/bancos ya se refleja en sus propias
+// variables). Los días de atraso, cuando SÍ están informados por BCRA
+// (algo poco frecuente — ver nota más abajo), se usan solo como
+// agravante extra, nunca como requisito para que exista penalización.
+function calcularPenalizacionMora(montoEnMoraPesos, montoTotalPesos, diasAtrasoMax){
+  if (montoEnMoraPesos <= 0 || montoTotalPesos <= 0) return { tipo:"ninguna", factor:0, proporcion:0 };
 
-const MATRIZ_ATRASOS_ORIGINAL = [
-  { scoreMin:60, scoreMax:Infinity, montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:0 },
-  { scoreMin:60, scoreMax:Infinity, montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:0 },
-  { scoreMin:60, scoreMax:Infinity, montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:5 },
-  { scoreMin:60, scoreMax:Infinity, montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:0 },
-  { scoreMin:60, scoreMax:Infinity, montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:10 },
-  { scoreMin:40, scoreMax:59,       montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:0 },
-  { scoreMin:40, scoreMax:59,       montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:0 },
-  { scoreMin:40, scoreMax:59,       montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:10 },
-  { scoreMin:40, scoreMax:59,       montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:0 },
-  { scoreMin:40, scoreMax:59,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:15 },
-  { scoreMin:0,  scoreMax:39,       montoMin:0,      montoMax:49999,    diasMin:0,  diasMax:Infinity, pen:5 },
-  { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:0,  diasMax:59,       pen:10 },
-  { scoreMin:0,  scoreMax:39,       montoMin:50000,  montoMax:150000,   diasMin:60, diasMax:Infinity, pen:50 },
-  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:0,  diasMax:60,       pen:10 },
-  { scoreMin:0,  scoreMax:39,       montoMin:150001, montoMax:500000,   diasMin:61, diasMax:Infinity, pen:50 },
-  // Mora > $500.000 con 60+ días: penalización fuerte pero YA NO fuerza
-  // C2 por sí sola, para cualquier score. El único disparador real de
-  // C2 por mora es ahora el chequeo de "mora dominante" (≥40% de la
-  // deuda total) en calcularScore — igual que el efecto arrastre real
-  // del BCRA (Comunicación A 6558). Esta celda queda como la
-  // penalización de la tabla para cuando esa mora NO llega al 40%
-  // (confirmado con Juan Ignacio).
-  { scoreMin:0,  scoreMax:Infinity, montoMin:500001, montoMax:Infinity, diasMin:60, diasMax:Infinity, pen:50 }
-];
+  const proporcion = montoEnMoraPesos / montoTotalPesos;
 
-function calcularMatrizAtrasos(puntosBaseGeneral, montoEnMoraPesos, diasAtrasoMax, factorAjuste = 1){
-  if (montoEnMoraPesos <= 0) return { tipo:"ninguna", factor:0 };
+  // "Mora dominante": 40% o más de la deuda total en situación distinta
+  // de 1 fuerza C2 directo, sin importar los días — replica el efecto
+  // arrastre real del BCRA (Comunicación A 6558).
+  if (proporcion >= 0.40) return { tipo:"C2", factor:null, proporcion };
 
-  const montoAjustado = montoEnMoraPesos / factorAjuste; // a pesos "de calibración" (feb 2026)
+  let factorBase;
+  if (proporcion > 0.25) factorBase = 0.30;      // 25% - 40% (sin llegar)
+  else if (proporcion > 0.15) factorBase = 0.20; // 15% - 25%
+  else if (proporcion > 0.05) factorBase = 0.10; // 5% - 15%
+  else factorBase = 0.05;                        // >0% - 5%
 
-  if (diasAtrasoMax <= 0){
-    // BCRA no informó días de atraso para esta mora. Según el manual
-    // oficial de la Central de Deudores, esto pasa cuando el banco
-    // clasificó la situación por criterio propio, SIN caer en ninguna
-    // de las 4 categorías que obligan a informar el detalle
-    // (refinanciación, recategorización obligatoria, situación
-    // jurídica, irrecuperable por disposición técnica) — que es el caso
-    // más común, no la excepción. Sin días no podemos usar la matriz
-    // completa (cruza monto Y días), pero hay mora real y plata real en
-    // juego — aplicamos un descuento fijo, graduado solo por monto, en
-    // vez de dejarlo en 0% (confirmado con Juan Ignacio).
-    let factorFijo = 0;
-    if (montoAjustado > 500000) factorFijo = 0.30;
-    else if (montoAjustado > 150000) factorFijo = 0.20;
-    else if (montoAjustado > 50000) factorFijo = 0.10;
-    else factorFijo = 0.05;
-    return { tipo:"penalizacion", factor:factorFijo };
-  }
+  // Agravante: BCRA solo informa días de atraso cuando, además de la
+  // situación distinta de 1, el banco marcó alguna de estas 4
+  // condiciones especiales (refinanciación, recategorización
+  // obligatoria, situación jurídica, irrecuperable por disposición
+  // técnica) — el caso MÁS COMÚN es que este dato no venga. Por eso
+  // nunca es un requisito para penalizar, solo suma si está presente.
+  const agravante = (diasAtrasoMax >= 60) ? 0.10 : 0;
+  const factor = Math.min(factorBase + agravante, 1);
 
-  for (const regla of MATRIZ_ATRASOS_ORIGINAL){
-    const scoreOk = puntosBaseGeneral >= regla.scoreMin && puntosBaseGeneral <= regla.scoreMax;
-    const montoOk = montoAjustado >= regla.montoMin && montoAjustado <= regla.montoMax;
-    const diasOk = diasAtrasoMax >= regla.diasMin && diasAtrasoMax <= regla.diasMax;
-    if (scoreOk && montoOk && diasOk){
-      if (regla.pen === "C2") return { tipo:"C2", factor:null };
-      return { tipo: regla.pen > 0 ? "penalizacion" : "ninguna", factor: regla.pen/100 };
-    }
-  }
-  return { tipo:"ninguna", factor:0 };
+  return { tipo: "penalizacion", factor, proporcion };
 }
 
-// Pondera la recurrencia por CUÁNTO de la deuda estuvo en mora, no solo
-// CUÁNTOS meses. Un mes con el 10% de la deuda afectada no debería pesar
-// igual que un mes con el 100% afectado.
-function calcularMatrizRecurrencia(historialMontoEnMora, historialDeuda){
-  const sumaDeuda = (historialDeuda || []).reduce((s,v) => s + v, 0);
-  if (sumaDeuda <= 0) return { proporcion:0, factor:0 };
-  const sumaMora = (historialMontoEnMora || []).reduce((s,v) => s + v, 0);
-  const proporcion = sumaMora / sumaDeuda;
+// Penalización adicional sobre los 20 puntos de "situación 24 meses",
+// basada en PROPORCIÓN mes a mes (no en la suma de los 24 meses, que
+// diluye un mal mes puntual contra 24 fotos de deuda buena — hallazgo real
+// confirmado con el caso Kollman: un atraso de $582.000 sobre $8.700M
+// sumados daba 0,007%, prácticamente inerte). Para cada mes se calcula
+// montoEnMora_mes / montoTotal_mes, y se toma el peor mes para la
+// severidad — con los mismos cortes que calcularPenalizacionMora, para que
+// "hoy" y "los últimos 24 meses" penalicen con el mismo criterio — más un
+// agravante según en cuántos meses distintos hubo algo de mora. Se RESTA a
+// la tabla de categoría (scoreSituacion24m), nunca la reemplaza: la
+// categoría BCRA (basada en días de atraso) y la proporción de monto miden
+// cosas distintas, y las dos juntas son más precisas que cualquiera de las
+// dos solas (confirmado con Juan Ignacio).
+function calcularPenalizacionMora24m(historialMontoEnMora, historialDeuda){
+  const n = (historialDeuda || []).length;
+  const vacio = { factor:0, severidad:0, agravante:0, frecuenciaMeses:0, proporcionPeorMes:0, mesesAtras:null };
+  if (!n || !historialMontoEnMora || historialMontoEnMora.length !== n) return vacio;
 
-  let factor = 0;
-  if (proporcion > 0.60) factor = 0.15;
-  else if (proporcion > 0.30) factor = 0.10;
-  else if (proporcion > 0.10) factor = 0.05;
+  let proporcionPeorMes = 0;
+  let indicePeorMes = -1;
+  let frecuenciaMeses = 0;
 
-  return { proporcion, factor };
+  for (let i = 0; i < n; i++){
+    const deudaMes = historialDeuda[i];
+    if (!deudaMes || deudaMes <= 0) continue;
+    const moraMes = historialMontoEnMora[i] || 0;
+    const proporcionMes = moraMes / deudaMes;
+    if (proporcionMes > 0) frecuenciaMeses++;
+    if (proporcionMes > proporcionPeorMes){
+      proporcionPeorMes = proporcionMes;
+      indicePeorMes = i;
+    }
+  }
+
+  if (frecuenciaMeses === 0) return vacio;
+
+  // Severidad: mismos cortes que calcularPenalizacionMora (mora vigente).
+  let severidad;
+  if (proporcionPeorMes >= 0.40) severidad = 0.40;
+  else if (proporcionPeorMes > 0.25) severidad = 0.30;
+  else if (proporcionPeorMes > 0.15) severidad = 0.20;
+  else if (proporcionPeorMes > 0.05) severidad = 0.10;
+  else severidad = 0.05;
+
+  // Agravante por recurrencia: cuántos de los 24 meses tuvieron algo de mora.
+  let agravante;
+  if (frecuenciaMeses >= 16) agravante = 0.15;
+  else if (frecuenciaMeses >= 11) agravante = 0.125;
+  else if (frecuenciaMeses >= 6) agravante = 0.10;
+  else if (frecuenciaMeses >= 4) agravante = 0.075;
+  else if (frecuenciaMeses >= 2) agravante = 0.05;
+  else agravante = 0;
+
+  const factor = Math.min(severidad + agravante, 1);
+  const mesesAtras = indicePeorMes === -1 ? null : (n - 1 - indicePeorMes);
+
+  return { factor, severidad, agravante, frecuenciaMeses, proporcionPeorMes, mesesAtras };
 }
 
 function categoriaDesdePuntos(p){
@@ -1760,7 +1778,7 @@ function explicarSituacion(sit){
   };
   return textos[sit] || "Situación crediticia no informada por BCRA.";
 }
-function explicarSituacion24m(peorSituacion24m){
+function explicarSituacion24m(peorSituacion24m, penalizacion24m){
   if (peorSituacion24m <= 1) return "En los últimos 24 meses no registró ningún atraso: siempre en situación 1.";
   const textos = {
     2: "riesgo bajo (atrasos ocasionales de hasta 31 días)",
@@ -1769,7 +1787,20 @@ function explicarSituacion24m(peorSituacion24m){
     5: "cartera irrecuperable",
     6: "irrecuperable por disposición técnica"
   };
-  return `En los últimos 24 meses, la peor situación registrada fue situación ${peorSituacion24m} — ${textos[peorSituacion24m] || "sin detalle"}. Aunque hoy esté mejor, este dato queda en el historial público del BCRA.`;
+  let desc = `En los últimos 24 meses, la peor situación registrada fue situación ${peorSituacion24m} — ${textos[peorSituacion24m] || "sin detalle"}. Aunque hoy esté mejor, este dato queda en el historial público del BCRA.`;
+
+  if (penalizacion24m && penalizacion24m.factor > 0){
+    const cuando = penalizacion24m.mesesAtras === 0 ? "el mes más reciente informado"
+      : `hace ${penalizacion24m.mesesAtras} mes${penalizacion24m.mesesAtras === 1 ? "" : "es"}`;
+    const pctPeorMes = penalizacion24m.proporcionPeorMes * 100;
+    const pctPeorMesTexto = pctPeorMes > 0 && pctPeorMes < 1 ? "menos del 1%" : `${Math.round(pctPeorMes)}%`;
+    desc += ` Descuento adicional de ${Math.round(penalizacion24m.factor*100)}% sobre estos puntos: en el peor mes (${cuando}) la mora representó ${pctPeorMesTexto} de la deuda de ese mes`;
+    desc += penalizacion24m.frecuenciaMeses > 1
+      ? `, y se repitió en ${penalizacion24m.frecuenciaMeses} de los 24 meses.`
+      : `, en un único mes de los 24.`;
+  }
+
+  return desc;
 }
 function explicarEndeudamiento(m){
   if (m >= 100) return `Endeudamiento bancario informado de $${m}M: perfil muy consolidado, con amplio acceso a financiamiento bancario.`;
@@ -1819,7 +1850,12 @@ function calcularScore(d){
     : (d.historialSituacion && d.historialSituacion.length ? Math.max(...d.historialSituacion) : d.situacion);
 
   const pSituacion = sinAntecedentesDeuda ? null : scoreSituacion(d.situacion);
-  const pSituacion24m = sinAntecedentesDeuda ? null : scoreSituacion24m(peorSituacion24m);
+  const penalizacion24m = sinAntecedentesDeuda
+    ? { factor:0, severidad:0, agravante:0, frecuenciaMeses:0, proporcionPeorMes:0, mesesAtras:null }
+    : calcularPenalizacionMora24m(d.historialMontoEnMora, d.historialDeuda);
+  const pSituacion24mBase = sinAntecedentesDeuda ? null : scoreSituacion24m(peorSituacion24m);
+  const pSituacion24m = sinAntecedentesDeuda ? null
+    : Math.max(0, pSituacion24mBase - Math.round(penalizacion24m.factor * 20));
   const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1);
   const pBancos = scoreBancos(d.cantidadBancos);
 
@@ -1845,17 +1881,12 @@ function calcularScore(d){
   const sumaMax = variables.reduce((s,v) => s+v.max, 0);
   let puntosBase = Math.round(sumaPts * (100/sumaMax));
 
-  // ---- Matriz de atrasos original (16 combinaciones, en pesos reales) ----
+  // ---- Penalización por mora vigente, proporcional a la deuda total ----
   const entidadesEnMora = (d.entidades || []).filter(e => e.situacion > 1);
   const montoEnMoraPesos = entidadesEnMora.reduce((s,e) => s + e.monto, 0);
   const diasAtrasoMax = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.diasAtraso || 0)) : 0;
   const montoTotalPesos = (d.entidades || []).reduce((s,e) => s + e.monto, 0);
-  const proporcionMoraTotal = montoTotalPesos > 0 ? montoEnMoraPesos / montoTotalPesos : 1;
-  const atrasos = calcularMatrizAtrasos(puntosBase, montoEnMoraPesos, diasAtrasoMax, d.factorAjusteAtrasos || 1);
-
-  // ---- Matriz de recurrencia: qué proporción de la deuda estuvo en mora ----
-  const recurrencia = calcularMatrizRecurrencia(d.historialMontoEnMora, d.historialDeuda);
-  const factorRecurrencia = recurrencia.factor;
+  const atrasos = calcularPenalizacionMora(montoEnMoraPesos, montoTotalPesos, diasAtrasoMax);
 
   // ---- Penalización por rechazos (% sobre el score, no puntos) ----
   const penalizacionRechazos = calcularPenalizacionRechazos(d);
@@ -1872,19 +1903,14 @@ function calcularScore(d){
   // mostraban un puntaje inventado (Math.min(puntosBase, 20)) sin
   // relación con la penalización real calculada; ahora el número
   // refleja el descuento genuino, y la categoría se fuerza aparte.
-  const factorAtrasosNum = atrasos.factor || 0;
-  const factorTotal = Math.min(factorAtrasosNum + factorRecurrencia + penalizacionRechazos.factor + penalizacionAntiguedad.factor, 1);
+  // Cuando la propia penalización por mora devuelve "C2" (mora
+  // dominante, ≥40% de la deuda total), no tiene un % asociado — usamos
+  // 1 (100%) como valor conservador para el número mostrado.
+  const factorAtrasosNum = (atrasos && typeof atrasos.factor === "number") ? atrasos.factor : (atrasos.tipo === "C2" ? 1 : 0);
+  const factorTotal = Math.min(factorAtrasosNum + penalizacionRechazos.factor + penalizacionAntiguedad.factor, 1);
   puntosFinales = Math.round(puntosBase * (1 - factorTotal));
 
-  // Mora dominante: si la deuda en situación distinta de 1 representa el
-  // 40% o más de la deuda TOTAL, fuerza C2 directo — sin importar el
-  // monto absoluto ni si BCRA informó días de atraso. Es el único
-  // disparador real de C2 por el lado de mora/atrasos (reemplaza a los
-  // antiguos cortes de la matriz por monto+días, que ahora solo aplican
-  // como penalización porcentual). Replica el "efecto arrastre" real
-  // del BCRA (Comunicación A 6558) — confirmado con Juan Ignacio.
   const peorSituacionEnMora = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.situacion)) : null;
-  const hayMoraDominante = entidadesEnMora.length > 0 && proporcionMoraTotal >= 0.40;
 
   if (hayRechazoSinFondosSinRegularizar(d)){
     // Un rechazo por falta de fondos tan reciente sigue siendo un corte
@@ -1903,15 +1929,21 @@ function calcularScore(d){
     // los datos que sí tenemos de ChequesRechazados).
     forzadoC2 = true;
     motivo = inhabilitacion.motivo;
-  } else if (hayMoraDominante){
+  } else if (atrasos.tipo === "C2"){
+    // Mora dominante: 40% o más de la deuda total en situación distinta
+    // de 1 — sin importar el monto absoluto ni si BCRA informó días de
+    // atraso. Es el único disparador real de C2 por el lado de la mora
+    // (reemplaza a los antiguos cortes por monto+días+score, que ahora
+    // solo aplican como penalización porcentual). Replica el "efecto
+    // arrastre" real del BCRA (Comunicación A 6558) — confirmado con
+    // Juan Ignacio.
     forzadoC2 = true;
-    motivo = `Mora vigente en situación ${peorSituacionEnMora} que representa el ${Math.round(proporcionMoraTotal*100)}% de la deuda total (40% o más dispara el corte, igual que el efecto arrastre del BCRA — Comunicación A 6558). Cuenta no operable.`;
+    motivo = `Mora vigente en situación ${peorSituacionEnMora} que representa el ${Math.round(atrasos.proporcion*100)}% de la deuda total (40% o más dispara el corte, igual que el efecto arrastre del BCRA — Comunicación A 6558). Cuenta no operable.`;
   } else {
     const factorAtrasos = factorAtrasosNum;
 
     const partes = [];
-    if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraPesos.toLocaleString("es-AR")}${diasAtrasoMax > 0 ? `, ${diasAtrasoMax} días de atraso` : " — BCRA no informó días de atraso para esta mora"})`);
-    if (factorRecurrencia > 0) partes.push(`${Math.round(factorRecurrencia*100)}% por recurrencia (${Math.round(recurrencia.proporcion*100)}% de la deuda de los últimos 24 meses estuvo en mora)`);
+    if (factorAtrasos > 0) partes.push(`${Math.round(factorAtrasos*100)}% por mora vigente ($${montoEnMoraPesos.toLocaleString("es-AR")}, ${Math.round((atrasos.proporcion||0)*100)}% de la deuda total${diasAtrasoMax > 0 ? `, ${diasAtrasoMax} días de atraso` : ""})`);
     if (penalizacionRechazos.factor > 0) partes.push(`${Math.round(penalizacionRechazos.factor*100)}% por rechazos de cheques`);
     if (penalizacionAntiguedad.factor > 0) partes.push(`${Math.round(penalizacionAntiguedad.factor*100)}% por CUIT muy reciente (${penalizacionAntiguedad.ventana})`);
     if (partes.length){
@@ -1929,7 +1961,7 @@ function calcularScore(d){
     situacion24m: sinAntecedentesDeuda
       ? {puntos:null, max:20, label:"Situación — últimos 24 meses", noDisponible:true,
          desc: "Sin antecedentes de deuda bancaria en los últimos 24 meses. Redistribuimos estos 20 puntos entre las demás variables."}
-      : {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m)},
+      : {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m, penalizacion24m)},
     rechazos: {puntos:null, factorPenalizacion:penalizacionRechazos.factor, label:"Rechazos de cheques (penalización)", desc: explicarRechazos(d, penalizacionRechazos), detalleRechazos: d.detalleRechazos || []},
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
@@ -1955,7 +1987,7 @@ function calcularScore(d){
   return {
     puntosBase, puntosFinales, categoria, forzadoC2, motivo, detalle,
     matrizAtrasos: { montoEnMoraPesos, diasAtrasoMax, tipo: atrasos.tipo, factor: atrasos.factor },
-    matrizRecurrencia: { proporcionEnMora: recurrencia.proporcion, factor: factorRecurrencia },
+    penalizacionMora24m: penalizacion24m,
     penalizacionRechazos,
     penalizacionAntiguedad,
     narrativa: construirNarrativa(categoria, puntosFinales, detalle, forzadoC2, motivo)
