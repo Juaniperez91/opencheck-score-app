@@ -1796,7 +1796,7 @@ function explicarSituacion24m(peorSituacion24m, penalizacion24m){
     5: "cartera irrecuperable",
     6: "irrecuperable por disposición técnica"
   };
-  let desc = `En los últimos 24 meses, la peor situación registrada fue situación ${peorSituacion24m} — ${textos[peorSituacion24m] || "sin detalle"}. Aunque hoy esté mejor, este dato queda en el historial público del BCRA.`;
+  let desc = `En los últimos 24 meses, la peor situación registrada fue situación ${peorSituacion24m} — ${textos[peorSituacion24m] || "sin detalle"}.`;
 
   if (penalizacion24m && penalizacion24m.factor > 0){
     const cuando = penalizacion24m.mesesAtras === 0 ? "el mes más reciente informado"
@@ -2706,7 +2706,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-13-v6-motor24m-y-forzar-actualizacion";
+const VERSION_APP = "2026-09-13-v7-colores-situacion";
 
 const state = {
   user: null,
@@ -3665,9 +3665,20 @@ const RECOMENDACIONES = {
 };
 
 /* ---- Detalle por entidad bancaria (BCRA, gratuito) ---- */
+// Un color distinto por cada situación (no 3 grupos): así se distingue de
+// un vistazo una situación 2 de una 4, en vez de verse "iguales" solo
+// porque caen en el mismo tramo ancho.
+const COLORES_SITUACION = {
+  1: { bg:"#E3EFF9", ink:"#123A5C" }, // celeste — al día
+  2: { bg:"#EFE3D2", ink:"#7A5A2E" }, // tostado claro — riesgo bajo
+  3: { bg:"#F4E9D6", ink:"#B8862E" }, // amber — riesgo medio
+  4: { bg:"#F0D2B8", ink:"#9C5423" }, // naranja-marrón — riesgo alto
+  5: { bg:"#F3E1DF", ink:"#A63D3D" }, // rojo — irrecuperable
+  6: { bg:"#E8C9C6", ink:"#6E1F1F" }  // rojo oscuro — irrecuperable por disposición técnica
+};
 function chipSituacion(sit){
-  const tier = sit <= 2 ? "A" : (sit <= 4 ? "B" : "C");
-  return `<span class="tag ${tier}">Sit. ${sit}</span>`;
+  const c = COLORES_SITUACION[sit] || COLORES_SITUACION[6];
+  return `<span class="tag" style="background:${c.bg}; color:${c.ink};">Sit. ${sit}</span>`;
 }
 function formatearMonto(m){
   return "$" + Math.round(m).toLocaleString("es-AR");
