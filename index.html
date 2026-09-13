@@ -1610,6 +1610,14 @@ function calcularPenalizacionRechazos(d){
         else if (diasReg <= 30){ factorRecencia = 0.10; ventana = "regularizado en 16 a 30 días"; }
         else if (diasReg <= 60){ factorRecencia = 0.25; ventana = "regularizado en 31 a 60 días"; }
         else { factorRecencia = 0.50; ventana = "regularizado en más de 60 días"; }
+      } else {
+        // Todavía sin regularizar (cheque y/o multa impagos). En la
+        // práctica esto ya fuerza C2 aparte, vía
+        // hayRechazoSinFondosSinRegularizar en calcularScore — pero el
+        // desglose tiene que reflejarlo igual, no mostrar "sin
+        // descuento" sobre un rechazo activo y sin resolver.
+        factorRecencia = 0.50;
+        ventana = "todavía sin regularizar";
       }
     } else if (peor.mesesDesdeRechazo <= 12){ factorRecencia = 0.50; ventana = "6-12 meses"; }
     else if (peor.mesesDesdeRechazo <= 24){ factorRecencia = 0.20; ventana = "12-24 meses"; }
