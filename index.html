@@ -1870,7 +1870,21 @@ function calcularScore(d){
 
   // ---- Deuda real vs. inflación: 10 pts, redistribuida si no está disponible ----
   const inflacionDisponible = !sinAntecedentesDeuda && d.deudaVsInflacion && d.deudaVsInflacion.disponible;
-  const pDeudaVsInflacion = inflacionDisponible ? scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) : null;
+  // Con deudas muy chicas, el % de crecimiento real se distorsiona (pasar de
+  // casi $0 a un monto todavía bajo da un % enorme sin ser una señal de
+  // riesgo real) — el mismo problema de "base ínfima" que ya resolvimos del
+  // lado de la matriz de mora, pero en la dirección opuesta. En vez de
+  // inventar un piso nuevo, reusamos el mismo corte que ya usa
+  // scoreEndeudamiento para "poca deuda" (el tramo de $5M ajustados por
+  // inflación) — no hay dos definiciones distintas de "poco" en el motor.
+  // Por debajo de ese piso la deuda SIGUE siendo un dato disponible (no es
+  // "N/D": el monto se ve en "Endeudamiento bancario"), simplemente no
+  // puntuamos la variación porcentual porque no es confiable a ese monto.
+  const deudaActualAjustada = (d.endeudamientoMillones || 0) / (d.factorAjusteEndeudamiento || 1);
+  const deudaMaterialParaTendencia = deudaActualAjustada >= 5;
+  const pDeudaVsInflacion = !inflacionDisponible ? null
+    : !deudaMaterialParaTendencia ? 10
+    : scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo);
 
   // Rechazos ya NO es una variable de puntos (era 20/100) — pasó a ser un
   // % de descuento sobre el score final, como atrasos y recurrencia (así
@@ -1974,10 +1988,12 @@ function calcularScore(d){
     rechazos: {puntos:null, factorPenalizacion:penalizacionRechazos.factor, label:"Rechazos de cheques (penalización)", desc: explicarRechazos(d, penalizacionRechazos), detalleRechazos: d.detalleRechazos || []},
     endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
     bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
-    deudaVsInflacion: inflacionDisponible
-      ? {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación", desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo), detalleMensual: d.deudaVsInflacion.detalleMensual}
-      : {puntos:null, max:10, label:"Deuda real vs. inflación", noDisponible:true,
+    deudaVsInflacion: !inflacionDisponible
+      ? {puntos:null, max:10, label:"Deuda real vs. inflación", noDisponible:true,
          desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
+      : !deudaMaterialParaTendencia
+      ? {puntos:10, max:10, label:"Deuda real vs. inflación", desc: "El crecimiento estuvo por encima de la inflación, pero el endeudamiento actual es bajo. Sin datos de facturación no podemos juzgar qué tan relevante es ese monto para este perfil, así que no penalizamos esta variable por el crecimiento porcentual.", detalleMensual: d.deudaVsInflacion.detalleMensual}
+      : {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación", desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo), detalleMensual: d.deudaVsInflacion.detalleMensual}
   };
 
   // Antigüedad del CUIT: solo se agrega como fila visible si hay dato
@@ -2706,7 +2722,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-13-v7-colores-situacion";
+const VERSION_APP = "2026-09-13-v8-piso-deuda-vs-inflacion";
 
 const state = {
   user: null,
