@@ -1882,9 +1882,17 @@ function calcularScore(d){
   // puntuamos la variación porcentual porque no es confiable a ese monto.
   const deudaActualAjustada = (d.endeudamientoMillones || 0) / (d.factorAjusteEndeudamiento || 1);
   const deudaMaterialParaTendencia = deudaActualAjustada >= 5;
+  // Entre $5M y $30M la penalización se aplica atenuada (en tercios, según
+  // el tramo), y recién de $30M para arriba se aplica la tabla completa —
+  // reusa los mismos cortes de scoreEndeudamiento, no son un piso nuevo.
+  const factorTramoDeuda = deudaActualAjustada >= 30 ? 1
+    : deudaActualAjustada >= 15 ? 2/3
+    : 1/3;
+  const scoreDeudaVsInflacionCompleto = (inflacionDisponible && deudaMaterialParaTendencia)
+    ? scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) : null;
   const pDeudaVsInflacion = !inflacionDisponible ? null
     : !deudaMaterialParaTendencia ? 10
-    : scoreDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo);
+    : Math.round(10 - factorTramoDeuda * (10 - scoreDeudaVsInflacionCompleto));
 
   // Rechazos ya NO es una variable de puntos (era 20/100) — pasó a ser un
   // % de descuento sobre el score final, como atrasos y recurrencia (así
@@ -1993,7 +2001,12 @@ function calcularScore(d){
          desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
       : !deudaMaterialParaTendencia
       ? {puntos:10, max:10, label:"Deuda real vs. inflación", desc: "El crecimiento estuvo por encima de la inflación, pero el endeudamiento actual es bajo. Sin datos de facturación no podemos juzgar qué tan relevante es ese monto para este perfil, así que no penalizamos esta variable por el crecimiento porcentual.", detalleMensual: d.deudaVsInflacion.detalleMensual}
-      : {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación", desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo), detalleMensual: d.deudaVsInflacion.detalleMensual}
+      : {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación",
+         desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) + (
+           (scoreDeudaVsInflacionCompleto < 10 && factorTramoDeuda < 1)
+             ? ` Se aplicó el ${Math.round(factorTramoDeuda*100)}% de esa penalización.`
+             : ""
+         ), detalleMensual: d.deudaVsInflacion.detalleMensual}
   };
 
   // Antigüedad del CUIT: solo se agrega como fila visible si hay dato
@@ -2710,10 +2723,11 @@ function explicarDeudaVsInflacion(cambioRealTotal){
   const pct = Math.round(Math.max(pctReal, -100));
   if (cambioRealTotal <= -1) return `La deuda, ya descontada la inflación, se redujo a una fracción mínima en los últimos 24 meses: no está creciendo por encima de los precios.`;
   if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios.`;
-  if (cambioRealTotal <= 0.25) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: dentro de un rango normal, puede obedecer a una línea de inversión productiva.`;
-  if (cambioRealTotal <= 0.50) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: empieza a estar por encima de lo esperable, vale la pena monitorear.`;
-  if (cambioRealTotal <= 0.75) return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: bastante por encima de la inflación, señal a revisar.`;
-  return `La deuda creció ${pct}% en términos reales en los últimos 24 meses: muy por encima de la inflación, señal de alerta.`;
+  // Un solo mensaje genérico para todo crecimiento positivo (sin calificar
+  // "normal"/"alerta" por tramo): no sabemos facturación ni ingresos, así
+  // que el texto solo describe el hecho y la lógica de la penalización, sin
+  // afirmar que representa (o no) un riesgo real para ese perfil puntual.
+  return `La deuda creció ${pct}% en términos reales en los últimos 24 meses, lo cual aplica una penalización, en función del eventual riesgo que ese crecimiento podría representar.`;
 }
 
 /* =======================================================
@@ -2722,7 +2736,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-13-v8-piso-deuda-vs-inflacion";
+const VERSION_APP = "2026-09-13-v9-tramos-deuda-vs-inflacion";
 
 const state = {
   user: null,
