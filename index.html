@@ -774,6 +774,24 @@
   .dash-fila b{ font-family:'DM Mono',monospace; font-weight:500; }
   .dash-nota{ font-size:12px; color:var(--ink-soft); line-height:1.5; }
 
+  /* Estadísticas por cliente: donut + barras */
+  .dash-toggle{ display:flex; gap:8px; margin-bottom:14px; }
+  .dash-toggle button{
+    flex:1; padding:9px; border-radius:8px; border:1px solid var(--hairline);
+    background:#fff; font-family:'DM Sans',sans-serif; font-size:12.5px; font-weight:700; cursor:pointer;
+  }
+  .dash-toggle button.active{ background:var(--green); color:#fff; border-color:var(--green); }
+  .dash-donut-wrap{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .dash-legend{ font-size:12px; }
+  .dash-legend-item{ display:flex; align-items:center; gap:7px; margin-bottom:7px; }
+  .dash-legend-item .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .dash-bar-row{ margin-bottom:12px; }
+  .dash-bar-row:last-child{ margin-bottom:0; }
+  .dash-bar-label{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
+  .dash-bar-label b{ font-family:'DM Mono',monospace; font-weight:500; }
+  .dash-bar-track{ height:8px; border-radius:6px; background:var(--hairline); overflow:hidden; }
+  .dash-bar-fill{ height:100%; border-radius:6px; }
+
   ::-webkit-scrollbar{width:0;}
 </style>
 </head>
@@ -1222,10 +1240,10 @@
     </div>
   </div>
 
-  <!-- ===================== NUEVO CLIENTE (modal) ===================== -->
+  <!-- ===================== NUEVO / EDITAR CLIENTE (modal) ===================== -->
   <div class="modal-overlay" id="modal-nuevo-cliente">
     <div class="modal-caja">
-      <h3>Nuevo cliente</h3>
+      <h3 id="modal-cliente-titulo">Nuevo cliente</h3>
       <p>Es solo un nombre para agrupar los cheques que te va trayendo — no hace falta que sea una razón social exacta.</p>
       <div class="field">
         <label>Nombre del cliente</label>
@@ -1237,7 +1255,7 @@
       </div>
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="cerrarModalNuevoCliente()">Cancelar</button>
-        <button class="btn btn-primary" onclick="confirmarNuevoCliente()">Crear</button>
+        <button class="btn btn-primary" id="btn-confirmar-cliente" onclick="confirmarNuevoCliente()">Crear</button>
       </div>
     </div>
   </div>
@@ -1484,7 +1502,7 @@ async function registrarAceptacionTC(usuarioId){
   if (error) console.warn("[OpenCheck Score] No se pudo registrar aceptación de T&C:", error.message);
 }
 
-async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento }){
+async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento, clienteId }){
   const { error } = await supabaseClient
     .from("consultas")
     .insert({
@@ -1497,7 +1515,8 @@ async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, punt
       numero_cheque_consultado: numeroCheque || null,
       banco_cheque_consultado: bancoCheque || null,
       cheque_denunciado: chequeDenunciado,
-      fecha_vencimiento_cheque: fechaVencimiento || null
+      fecha_vencimiento_cheque: fechaVencimiento || null,
+      cliente_id: clienteId || null
     });
   if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
 }
@@ -1546,6 +1565,17 @@ async function crearCliente(usuarioId, nombre, cuitPrincipal){
   const { data, error } = await supabaseClient
     .from("clientes")
     .insert({ usuario_id: usuarioId, nombre, cuit_principal: cuitPrincipal || null })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function actualizarCliente(clienteId, nombre, cuitPrincipal){
+  const { data, error } = await supabaseClient
+    .from("clientes")
+    .update({ nombre, cuit_principal: cuitPrincipal || null })
+    .eq("id", clienteId)
     .select()
     .single();
   if (error) throw error;
@@ -2863,7 +2893,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-13-v10-clientes";
+const VERSION_APP = "2026-09-13-v12-ver-estado-cliente";
 
 const state = {
   user: null,
@@ -3406,6 +3436,59 @@ async function consultarCuit(){
   }
 
   mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente);
+  irA("resultado");
+}
+
+// Re-corre el motor de scoring sobre el CUIT propio de un cliente, sin
+// pasar por el formulario de Inicio — para el botón "Ver estado actual"
+// del dashboard de cliente. Consume un crédito de consulta igual que
+// cualquier otra (mismo límite de plan free), y la registra ya asignada
+// a ese cliente para que quede en su historial de una.
+async function verEstadoCliente(clienteId){
+  const cliente = state.clienteActualObj;
+  if (!cliente || !cliente.cuit_principal){
+    mostrarToast("Este cliente no tiene un CUIT propio cargado todavía.");
+    return;
+  }
+  const digits = limpiarCuit(cliente.cuit_principal);
+  if (digits.length !== 11){
+    mostrarToast("El CUIT cargado para este cliente no es válido.");
+    return;
+  }
+
+  const mesActual = new Date().toISOString().slice(0,7);
+  const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
+  const vaABloquear = !!(state.user && !state.user.es_admin && !state.user.es_tester && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit);
+  if (vaABloquear){ irA("cuenta"); return; }
+
+  const btn = document.getElementById("btn-ver-estado-cliente");
+  if (btn){ btn.disabled = true; btn.textContent = "Consultando BCRA…"; }
+
+  let datos, fuente;
+  try {
+    datos = await construirDatosLibradorReal(digits);
+    fuente = "real";
+  } catch (e){
+    datos = BCRA_DB[digits] || generarDatosSimulados(digits);
+    fuente = "demo";
+  }
+
+  const resultado = calcularScore(datos);
+
+  if (state.user){
+    state.user = await incrementarConsultasUsadas(state.user);
+    const elQueriesLeft = document.getElementById("queries-left");
+    if (elQueriesLeft) elQueriesLeft.textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    await registrarConsulta({
+      usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
+      categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
+      clienteId
+    });
+  }
+
+  if (btn){ btn.disabled = false; btn.textContent = "🔍 Ver estado actual"; }
+
+  mostrarResultado(datos, resultado, null, null, fuente);
   irA("resultado");
 }
 
@@ -4291,8 +4374,21 @@ async function renderClientes(){
 }
 
 function abrirModalNuevoCliente(){
+  state.modoModalCliente = "crear";
+  state.clienteEditandoId = null;
+  document.getElementById("modal-cliente-titulo").textContent = "Nuevo cliente";
+  document.getElementById("btn-confirmar-cliente").textContent = "Crear";
   document.getElementById("input-nuevo-cliente-nombre").value = "";
   document.getElementById("input-nuevo-cliente-cuit").value = "";
+  document.getElementById("modal-nuevo-cliente").classList.add("show");
+}
+function abrirModalEditarCliente(cliente){
+  state.modoModalCliente = "editar";
+  state.clienteEditandoId = cliente.id;
+  document.getElementById("modal-cliente-titulo").textContent = "Editar cliente";
+  document.getElementById("btn-confirmar-cliente").textContent = "Guardar";
+  document.getElementById("input-nuevo-cliente-nombre").value = cliente.nombre || "";
+  document.getElementById("input-nuevo-cliente-cuit").value = cliente.cuit_principal || "";
   document.getElementById("modal-nuevo-cliente").classList.add("show");
 }
 function cerrarModalNuevoCliente(){
@@ -4303,19 +4399,74 @@ async function confirmarNuevoCliente(){
   const cuit = document.getElementById("input-nuevo-cliente-cuit").value.trim();
   if (!nombre){ mostrarToast("Ponele un nombre al cliente."); return; }
   try {
-    await crearCliente(state.user.id, nombre, cuit);
-    cerrarModalNuevoCliente();
-    mostrarToast("Cliente creado.");
-    renderClientes();
+    if (state.modoModalCliente === "editar"){
+      await actualizarCliente(state.clienteEditandoId, nombre, cuit);
+      cerrarModalNuevoCliente();
+      mostrarToast("Cliente actualizado.");
+      renderClienteDetalle(state.clienteEditandoId);
+    } else {
+      await crearCliente(state.user.id, nombre, cuit);
+      cerrarModalNuevoCliente();
+      mostrarToast("Cliente creado.");
+      renderClientes();
+    }
   } catch (e){
-    console.warn("[OpenCheck Score] Error creando cliente:", e.message);
-    mostrarToast("No pudimos crear el cliente, probá de nuevo.");
+    console.warn("[OpenCheck Score] Error guardando cliente:", e.message);
+    mostrarToast("No pudimos guardar el cliente, probá de nuevo.");
   }
 }
 
 function abrirClienteDetalle(clienteId){
   state.clienteActualId = clienteId;
   irA("cliente-detalle");
+}
+
+// Genera un donut chart en SVG puro (sin librerías) a partir de
+// segmentos [{label, value, color}]. Vuelve vacío si no hay datos.
+function svgDonut(segments, size = 132){
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  if (!total) return `<div class="dash-nota">Todavía no hay datos suficientes para este gráfico.</div>`;
+  const r = size / 2 - 14;
+  const c = 2 * Math.PI * r;
+  let offset = 0;
+  const circles = segments.filter(s => s.value > 0).map(s => {
+    const frac = s.value / total;
+    const dash = frac * c;
+    const circle = `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${s.color}" stroke-width="16" stroke-dasharray="${dash} ${c - dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${size/2} ${size/2})"/>`;
+    offset += dash;
+    return circle;
+  }).join("");
+  const legend = segments.map(s => `
+    <div class="dash-legend-item"><span class="dot" style="background:${s.color}"></span>${s.label}: <b>${s.value}</b> (${Math.round(s.value/total*100)}%)</div>`
+  ).join("");
+  return `
+    <div class="dash-donut-wrap">
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        ${circles}
+        <circle cx="${size/2}" cy="${size/2}" r="${r-9}" fill="#fff"/>
+      </svg>
+      <div class="dash-legend">${legend}</div>
+    </div>`;
+}
+
+// Fila de barra horizontal simple, para distribuciones (ej: riesgo por categoría).
+function dashBarRow(label, value, total, color){
+  const pct = total ? Math.round(value / total * 100) : 0;
+  return `
+    <div class="dash-bar-row">
+      <div class="dash-bar-label"><span>${label}</span><b>${value} (${pct}%)</b></div>
+      <div class="dash-bar-track"><div class="dash-bar-fill" style="width:${pct}%; background:${color};"></div></div>
+    </div>`;
+}
+
+// Color por tier de categoría de riesgo (misma paleta que el tag A/B/C
+// del historial): A = --green (celeste/azul), B = --amber, C = --brick.
+function colorPorTierCategoria(categoria){
+  const tier = categoria ? categoria[0] : "?";
+  if (tier === "A") return "#2472B8";
+  if (tier === "B") return "#B8862E";
+  if (tier === "C") return "#A63D3D";
+  return "#9AA9A2";
 }
 
 async function renderClienteDetalle(clienteId){
@@ -4327,18 +4478,24 @@ async function renderClienteDetalle(clienteId){
     || (await obtenerClientesUsuario(state.user.id)).find(cl => cl.id === clienteId);
   if (!cliente){ cont.innerHTML = `<div class="empty-state"><p>No encontramos ese cliente.</p></div>`; return; }
   contTitulo.textContent = cliente.nombre;
+  state.clienteActualObj = cliente; // para poder reabrir el modal de edición sin refetch
 
   const consultas = await obtenerConsultasDeCliente(state.user.id, clienteId);
 
+  const btnEditar = `<button class="btn btn-secondary" style="margin-bottom:10px;" onclick="abrirModalEditarCliente(state.clienteActualObj)">✎ Editar cliente</button>`;
+  const btnVerEstado = cliente.cuit_principal
+    ? `<button class="btn btn-primary" id="btn-ver-estado-cliente" style="margin-bottom:14px;" onclick="verEstadoCliente('${cliente.id}')">🔍 Ver estado actual</button>`
+    : `<div class="dash-nota" style="margin-bottom:14px;">Cargale un CUIT propio a este cliente (botón "Editar cliente") para poder consultar su estado actual con un clic.</div>`;
+
   if (consultas.length === 0){
-    cont.innerHTML = `<div class="empty-state"><div class="ico">📄</div><p>Todavía no le asignaste ningún cheque a este cliente.<br>Hacelo desde una fila del Historial.</p></div>`;
+    cont.innerHTML = `${btnEditar}${btnVerEstado}<div class="empty-state"><div class="ico">📄</div><p>Todavía no le asignaste ningún cheque a este cliente.<br>Hacelo desde una fila del Historial.</p></div>`;
     return;
   }
 
   // --- Métricas del dashboard ---
   const total = consultas.length;
 
-  let propios = 0, terceros = 0, sinClasificar = 0;
+  let propios = 0, terceros = 0;
   const porCategoria = {}; // { "A1": 3, "B2": 1, ... }
   let cobrados = 0, rechazados = 0, pendientes = 0;
 
@@ -4346,13 +4503,9 @@ async function renderClienteDetalle(clienteId){
     if (cliente.cuit_principal){
       if (c.cuit_consultado === cliente.cuit_principal) propios++;
       else terceros++;
-    } else {
-      sinClasificar++;
     }
-
     const cat = c.categoria || "Sin categoría";
     porCategoria[cat] = (porCategoria[cat] || 0) + 1;
-
     if (c.resultado_real === "pagado") cobrados++;
     else if (c.resultado_real === "rechazado") rechazados++;
     else pendientes++;
@@ -4363,7 +4516,7 @@ async function renderClienteDetalle(clienteId){
   const filaClasificacion = cliente.cuit_principal
     ? `<div class="dash-fila"><span>Cheques propios</span><b>${propios} (${pct(propios)}%)</b></div>
        <div class="dash-fila"><span>Cheques de terceros</span><b>${terceros} (${pct(terceros)}%)</b></div>`
-    : `<div class="dash-nota">Cargá el CUIT propio de este cliente para ver qué % de los cheques son propios vs. de terceros.</div>`;
+    : `<div class="dash-nota">Cargá el CUIT propio de este cliente (botón "Editar cliente") para ver qué % de los cheques son propios vs. de terceros.</div>`;
 
   const filasCategoria = Object.entries(porCategoria)
     .sort((a, b) => b[1] - a[1])
@@ -4378,32 +4531,82 @@ async function renderClienteDetalle(clienteId){
     return `
       <div class="hist-row">
         <div class="hist-top">
-          <span>${c.cuit_consultado}${c.numero_cheque_consultado ? " · Cheque N° " + c.numero_cheque_consultado : ""}</span>
+          <span>${c.razon_social || c.cuit_consultado}</span>
           <span class="tag">${c.categoria || "—"}</span>
         </div>
-        <div class="hist-mid">${fecha}</div>
+        <div class="hist-mid">${c.cuit_consultado}${c.numero_cheque_consultado ? " · Cheque N° " + c.numero_cheque_consultado : ""} · ${fecha}</div>
         ${badge}
       </div>`;
   }).join("");
 
+  // --- Vista "Estadísticas": los mismos datos, en gráficos ---
+  const donutPropiosTerceros = cliente.cuit_principal
+    ? svgDonut([
+        { label: "Propios", value: propios, color: "#2472B8" },
+        { label: "Terceros", value: terceros, color: "#B8862E" }
+      ])
+    : `<div class="dash-nota">Cargá el CUIT propio del cliente (botón "Editar cliente") para ver este gráfico.</div>`;
+
+  const barrasCategoria = Object.entries(porCategoria)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, n]) => dashBarRow(`Categoría ${cat}`, n, total, colorPorTierCategoria(cat)))
+    .join("");
+
+  const donutResultado = svgDonut([
+    { label: "Cobrados", value: cobrados, color: "#2472B8" },
+    { label: "Rechazados", value: rechazados, color: "#A63D3D" },
+    { label: "Pendientes", value: pendientes, color: "#9AA9A2" }
+  ]);
+
   cont.innerHTML = `
-    <div class="dash-card">
-      <h3>Resumen</h3>
-      <div class="dash-fila"><span>Cheques recibidos</span><b>${total}</b></div>
-      ${filaClasificacion}
+    ${btnEditar}
+    ${btnVerEstado}
+    <div class="dash-toggle">
+      <button class="active" id="btn-tab-resumen" onclick="mostrarTabClienteDash('resumen')">Resumen</button>
+      <button id="btn-tab-estadisticas" onclick="mostrarTabClienteDash('estadisticas')">📊 Estadísticas</button>
     </div>
-    <div class="dash-card">
-      <h3>Riesgo de los cheques recibidos</h3>
-      ${filasCategoria}
+
+    <div id="cliente-dash-resumen">
+      <div class="dash-card">
+        <h3>Resumen</h3>
+        <div class="dash-fila"><span>Cheques recibidos</span><b>${total}</b></div>
+        ${filaClasificacion}
+      </div>
+      <div class="dash-card">
+        <h3>Riesgo de los cheques recibidos</h3>
+        ${filasCategoria}
+      </div>
+      <div class="dash-card">
+        <h3>Resultado</h3>
+        <div class="dash-fila"><span>Cobrados</span><b>${cobrados} (${pct(cobrados)}%)</b></div>
+        <div class="dash-fila"><span>Rechazados</span><b>${rechazados} (${pct(rechazados)}%)</b></div>
+        <div class="dash-fila"><span>Pendientes (dentro de los 30 días)</span><b>${pendientes} (${pct(pendientes)}%)</b></div>
+      </div>
+      <h3 style="margin:18px 0 10px;">Detalle de cheques</h3>
+      ${listaCheques}
     </div>
-    <div class="dash-card">
-      <h3>Resultado</h3>
-      <div class="dash-fila"><span>Cobrados</span><b>${cobrados} (${pct(cobrados)}%)</b></div>
-      <div class="dash-fila"><span>Rechazados</span><b>${rechazados} (${pct(rechazados)}%)</b></div>
-      <div class="dash-fila"><span>Pendientes (dentro de los 30 días)</span><b>${pendientes} (${pct(pendientes)}%)</b></div>
-    </div>
-    <h3 style="margin:18px 0 10px;">Detalle de cheques</h3>
-    ${listaCheques}`;
+
+    <div id="cliente-dash-estadisticas" style="display:none;">
+      <div class="dash-card">
+        <h3>Propios vs. terceros</h3>
+        ${donutPropiosTerceros}
+      </div>
+      <div class="dash-card">
+        <h3>Distribución de riesgo</h3>
+        ${barrasCategoria}
+      </div>
+      <div class="dash-card">
+        <h3>Resultado de los cheques</h3>
+        ${donutResultado}
+      </div>
+    </div>`;
+}
+
+function mostrarTabClienteDash(tab){
+  document.getElementById("cliente-dash-resumen").style.display = tab === "resumen" ? "" : "none";
+  document.getElementById("cliente-dash-estadisticas").style.display = tab === "estadisticas" ? "" : "none";
+  document.getElementById("btn-tab-resumen").classList.toggle("active", tab === "resumen");
+  document.getElementById("btn-tab-estadisticas").classList.toggle("active", tab === "estadisticas");
 }
 
 // Escapa un valor para que sea seguro dentro de un campo CSV (comillas,
