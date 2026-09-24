@@ -849,6 +849,7 @@
             <button class="institucional-tab active" data-tab="quienes" onclick="mostrarTabInstitucional('quienes')">Quiénes somos</button>
             <button class="institucional-tab" data-tab="funciona" onclick="mostrarTabInstitucional('funciona')">Cómo funciona</button>
             <button class="institucional-tab" data-tab="datos" onclick="mostrarTabInstitucional('datos')">De dónde salen los datos</button>
+            <button class="institucional-tab" data-tab="contacto" onclick="mostrarTabInstitucional('contacto')">Contacto</button>
           </div>
 
           <div class="institucional-panel active" data-panel="quienes">
@@ -873,6 +874,27 @@
               <li>Nada de informes comerciales de terceros — solo información oficial, verificable y trazable.</li>
               <li>La misma fuente de información para cada consulta, sin excepciones.</li>
             </ul>
+          </div>
+
+          <div class="institucional-panel" data-panel="contacto">
+            <p style="margin-bottom:16px; color:var(--ink-soft); font-size:13.5px; line-height:1.5;">Contacto con la empresa por inquietudes, consultas o sugerencias. Completá el formulario y te respondemos a la brevedad.</p>
+            <div class="field">
+              <label class="field-label">Nombre y apellido, o razón social</label>
+              <input type="text" id="contacto-nombre" placeholder="Ej: Juan Pérez">
+            </div>
+            <div class="field">
+              <label class="field-label">Email</label>
+              <input type="email" id="contacto-email" placeholder="tu@email.com">
+            </div>
+            <div class="field">
+              <label class="field-label">Celular (opcional)</label>
+              <input type="text" id="contacto-celular" placeholder="Ej: 11 2345 6789">
+            </div>
+            <div class="field">
+              <label class="field-label">Tu consulta, inquietud o sugerencia</label>
+              <textarea id="contacto-mensaje" rows="4" style="width:100%; padding:11px; border-radius:10px; border:1px solid var(--hairline); font-family:'DM Sans',sans-serif; font-size:13.5px; resize:vertical; box-sizing:border-box;" placeholder="Contanos en qué podemos ayudarte…"></textarea>
+            </div>
+            <button class="btn btn-primary" id="btn-enviar-contacto" onclick="enviarContacto()">Enviar mensaje</button>
           </div>
         </div>
       </div>
@@ -1050,6 +1072,13 @@
         <label class="field-label">Fecha de vencimiento del cheque</label>
         <input type="date" id="consulta-fecha-vencimiento">
         <div class="field-hint">Obligatoria si cargaste número de cheque — con esto podemos verificar más adelante si efectivamente se cobró.</div>
+      </div>
+      <div class="field" id="campo-consulta-cliente" style="display:none;">
+        <label class="field-label">Asignar a cliente (opcional)</label>
+        <select id="consulta-cliente-select">
+          <option value="">Sin cliente asignado</option>
+        </select>
+        <div class="field-hint">Si este cheque te lo trajo un cliente que ya tenés cargado, asignáselo de una — así queda ordenado en su historial sin tener que hacerlo después.</div>
       </div>
       <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
 
@@ -2893,7 +2922,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-13-v12-ver-estado-cliente";
+const VERSION_APP = "2026-09-13-v13-cliente-en-consulta-y-contacto";
 
 const state = {
   user: null,
@@ -2950,6 +2979,7 @@ function irA(pantalla){
     const mesActual = new Date().toISOString().slice(0,7);
     const usadas = state.user.mes_actual === mesActual ? (state.user.consultas_usadas_mes || 0) : 0;
     document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - usadas);
+    poblarSelectorClienteConsulta();
   }
   window.scrollTo(0,0);
 }
@@ -2957,6 +2987,63 @@ function irA(pantalla){
 function mostrarTabInstitucional(tab){
   document.querySelectorAll(".institucional-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   document.querySelectorAll(".institucional-panel").forEach(p => p.classList.toggle("active", p.dataset.panel === tab));
+}
+
+// Formulario de contacto (pestaña "Contacto" de la pantalla
+// institucional) — no toca la base de datos, solo dispara un mail vía
+// la función de Netlify contacto.js (Resend). Visible con o sin sesión.
+async function enviarContacto(){
+  const nombre = document.getElementById("contacto-nombre").value.trim();
+  const email = document.getElementById("contacto-email").value.trim();
+  const celular = document.getElementById("contacto-celular").value.trim();
+  const mensaje = document.getElementById("contacto-mensaje").value.trim();
+
+  if (!nombre || !email || !mensaje){
+    mostrarToast("Completá nombre, email y tu consulta antes de enviar.");
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    mostrarToast("Revisá el email, no parece válido.");
+    return;
+  }
+
+  const btn = document.getElementById("btn-enviar-contacto");
+  btn.disabled = true;
+  btn.textContent = "Enviando…";
+
+  try {
+    const r = await fetch("/.netlify/functions/contacto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre, email, celular, mensaje })
+    });
+    if (!r.ok) throw new Error("fallo");
+    mostrarToast("¡Mensaje enviado! Te vamos a responder a la brevedad.");
+    document.getElementById("contacto-nombre").value = "";
+    document.getElementById("contacto-email").value = "";
+    document.getElementById("contacto-celular").value = "";
+    document.getElementById("contacto-mensaje").value = "";
+  } catch (e){
+    mostrarToast("No pudimos enviar el mensaje, probá de nuevo en un rato.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Enviar mensaje";
+  }
+}
+
+// Puebla el desplegable "Asignar a cliente" de la pantalla de consulta —
+// Premium, igual que el resto de la gestión de clientes. Se llama cada
+// vez que se entra a Home, para reflejar clientes creados en el medio.
+async function poblarSelectorClienteConsulta(){
+  const campo = document.getElementById("campo-consulta-cliente");
+  const esPremium = state.user && (state.user.plan === "premium" || state.user.es_admin);
+  if (!esPremium){ campo.style.display = "none"; return; }
+
+  state.clientesUsuario = await obtenerClientesUsuario(state.user.id);
+  const sel = document.getElementById("consulta-cliente-select");
+  const opciones = state.clientesUsuario.map(cl => `<option value="${cl.id}">${cl.nombre}</option>`).join("");
+  sel.innerHTML = `<option value="">Sin cliente asignado</option>${opciones}`;
+  campo.style.display = "";
 }
 
 /* ---- Registro ---- */
@@ -3426,12 +3513,14 @@ async function consultarCuit(){
   if (state.user){
     state.user = await incrementarConsultasUsadas(state.user);
     document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    const clienteSelect = document.getElementById("consulta-cliente-select");
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
       categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
       numeroCheque: numeroCheque || null, bancoCheque: numeroCheque ? bancoCheque : null,
       chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null,
-      fechaVencimiento: document.getElementById("consulta-fecha-vencimiento").value || null
+      fechaVencimiento: document.getElementById("consulta-fecha-vencimiento").value || null,
+      clienteId: clienteSelect ? (clienteSelect.value || null) : null
     });
   }
 
