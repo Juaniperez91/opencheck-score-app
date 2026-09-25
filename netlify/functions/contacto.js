@@ -8,9 +8,11 @@
 // Requiere la variable de entorno RESEND_API_KEY (ya debería existir
 // en Netlify si la usás para otros mails transaccionales; si no, se
 // consigue en resend.com > API Keys).
-// Los mensajes llegan a DESTINO (opencheckscore@hotmail.com).
+// Los mensajes llegan a DESTINO (contacto@opencheck.pro, que reenvía a
+// tu Hotmail vía ImprovMX — si el día de mañana cambiás dónde recibís
+// esos mails, se ajusta ahí, sin tocar este archivo de nuevo).
 
-const DESTINO = "opencheckscore@hotmail.com";
+const DESTINO = "contacto@opencheck.pro";
 const REMITENTE = "OpenCheck <contacto@opencheck.pro>";
 
 export default async (req) => {
