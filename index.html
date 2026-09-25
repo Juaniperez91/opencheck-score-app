@@ -2922,7 +2922,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-13-v13-cliente-en-consulta-y-contacto";
+const VERSION_APP = "2026-09-13-v14-dominio-opencheck-pro";
 
 const state = {
   user: null,
@@ -3416,7 +3416,7 @@ async function verificarActualizacionApp(){
   if (!esAppNativa) return;
 
   try {
-    const r = await fetch("https://opencheck-app.netlify.app/index.html?t=" + Date.now(), { cache: "no-store" });
+    const r = await fetch("https://opencheck.pro/index.html?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return;
     const html = await r.text();
     const m = html.match(/const VERSION_APP\s*=\s*"([^"]+)"/);
@@ -4783,7 +4783,7 @@ function renderCuenta(){
     <button class="btn btn-danger" onclick="abrirModalEliminar1()">Eliminar cuenta</button>
     ${u && u.es_admin ? `
       <div class="divider-label">Administración</div>
-      <a href="https://opencheck-app.netlify.app/admin.html" target="_blank" style="text-decoration:none;">
+      <a href="https://opencheck.pro/admin.html" target="_blank" style="text-decoration:none;">
         <button class="btn btn-primary" style="background:var(--ink);">Panel de Admin</button>
       </a>
     ` : ""}
