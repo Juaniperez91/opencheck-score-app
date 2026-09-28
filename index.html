@@ -2540,6 +2540,50 @@ function formatearPctConSigno(n){
   const abs = Math.abs(n).toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return (n > 0 ? "+" : n < 0 ? "−" : "") + abs + "%";
 }
+// Período (AAAAMM) más antiguo entre las actividades registradas en ARCA.
+// Ojo: ARCA unificó en noviembre de 2013 (RG 3537, cambio de nomenclador) todas
+// las actividades anteriores bajo ese mes, así que 201311 significa "noviembre
+// de 2013 o antes" — no es la fecha real de inicio. Los períodos posteriores sí
+// son la fecha en que se registró esa actividad.
+const PERIODO_PISO_ARCA = 201311;
+function periodoActividadMasAntiguo(actividades){
+  const periodos = (actividades || [])
+    .map(a => String((a && a.periodo) || ""))
+    .filter(p => /^\d{6}$/.test(p))
+    .map(Number);
+  return periodos.length ? Math.min(...periodos) : null;
+}
+function formatearPeriodoActividad(periodo){
+  const s = String(periodo);
+  return `${MESES_ES[Number(s.slice(4, 6)) - 1] || s.slice(4, 6)} de ${s.slice(0, 4)}`;
+}
+
+// Texto de antigüedad de la actividad a partir del período AAAAMM más antiguo.
+// - Período <= 201311 (piso de la migración de ARCA): no sabemos la fecha real,
+//   solo que es de noviembre de 2013 o antes -> "Más de N años", con N calculado
+//   contra hoy (el piso se va corriendo con el tiempo, no queda fijo).
+// - Período posterior: es una fecha real de registro -> "Desde <mes año> (hace ...)".
+function formatearDuracionMeses(m){
+  const a = Math.floor(m / 12), r = m % 12;
+  const partes = [];
+  if (a > 0) partes.push(`${a} año${a === 1 ? "" : "s"}`);
+  if (r > 0 || a === 0) partes.push(`${r} mes${r === 1 ? "" : "es"}`);
+  return partes.join(" y ");
+}
+function describirAntiguedadActividad(periodo, hoy = new Date()){
+  const s = String(periodo);
+  const mesesDesde = (p) => {
+    const q = String(p);
+    return Math.max(0, (hoy.getFullYear() * 12 + hoy.getMonth()) - (Number(q.slice(0, 4)) * 12 + Number(q.slice(4, 6)) - 1));
+  };
+  if (Number(s) <= PERIODO_PISO_ARCA){
+    const anios = Math.floor(mesesDesde(PERIODO_PISO_ARCA) / 12);
+    return `Más de ${anios} años (registrada en ARCA desde ${formatearPeriodoActividad(PERIODO_PISO_ARCA)} o antes)`;
+  }
+  const m = mesesDesde(s);
+  return `Desde ${formatearPeriodoActividad(s)} (${m === 0 ? "este mes" : "hace " + formatearDuracionMeses(m)})`;
+}
+
 function capitalizarActividad(txt){
   const t = String(txt || "").toLowerCase();
   return t.charAt(0).toUpperCase() + t.slice(1);
@@ -2551,14 +2595,33 @@ function construirBloqueRubro(datos){
 
   const principal = rubro.principal;
   const otras = Math.max(0, (rubro.actividades || []).length - 1);
-  const textoActividad = capitalizarActividad(principal.descripcion)
-    + (otras > 0 ? `. Tiene ${otras} actividad${otras === 1 ? "" : "es"} más registrada${otras === 1 ? "" : "s"}.` : ".");
+  // ARCA a veces termina la descripción con punto ("N.C.P."): no duplicarlo.
+  const baseActividad = capitalizarActividad(principal.descripcion);
+  const actividadConPunto = /[.!?]$/.test(baseActividad) ? baseActividad : baseActividad + ".";
+  const textoActividad = actividadConPunto
+    + (otras > 0 ? ` Tiene ${otras} actividad${otras === 1 ? "" : "es"} más registrada${otras === 1 ? "" : "s"}.` : "");
 
   let filas = `
     <div class="breakdown-row">
       <div class="br-top"><div class="br-label">Actividad principal registrada</div></div>
       <div class="br-desc">${textoActividad}</div>
     </div>`;
+
+  // Para las jurídicas ya mostramos la fecha real de constitución (más
+  // confiable): esta fila queda solo para personas físicas, donde no hay otro dato.
+  const tieneFechaConstitucion = datos.antiguedadCuitAnios !== null && datos.antiguedadCuitAnios !== undefined;
+  const desde = tieneFechaConstitucion
+    ? null
+    : periodoActividadMasAntiguo((rubro.actividades && rubro.actividades.length) ? rubro.actividades : [principal]);
+  if (desde !== null){
+    const textoDesde = describirAntiguedadActividad(desde)
+      + ". Refleja cuándo se registró la actividad, no necesariamente cuándo empezó a trabajar la persona.";
+    filas += `
+    <div class="breakdown-row">
+      <div class="br-top"><div class="br-label">Antigüedad de la actividad registrada</div></div>
+      <div class="br-desc">${textoDesde}</div>
+    </div>`;
+  }
 
   const sector = principal.sectorEmae;
   if (sector){
@@ -3009,7 +3072,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-28-v15-rubro-y-sector";
+const VERSION_APP = "2026-09-28-v18-antiguedad-actividad";
 
 const state = {
   user: null,
