@@ -1154,6 +1154,8 @@
 
       <div class="breakdown" id="res-breakdown"></div>
 
+      <div id="res-rubro"></div>
+
       <div class="section-heading">Detalle por entidad bancaria</div>
       <div class="section-sub">Deuda vigente informada por cada entidad a la Central de Deudores del BCRA (acceso público y gratuito).</div>
       <div class="mini-stats-row">
@@ -2509,6 +2511,78 @@ async function consultarChequeDenunciadoBCRA(codigoEntidad, numeroCheque){
 // Orquesta las 3 llamadas y arma el objeto `datos` en el mismo formato
 // que usa calcularScore(), idéntico al de BCRA_DB. Lanza si algo sale mal;
 // el llamador decide si cae al dataset simulado.
+/* ---- Rubro y contexto sectorial (informativo, no puntúa) ---- */
+// El EMAE cambia una vez por mes: lo guardamos en memoria unas horas para no
+// repetir la consulta en cada CUIT.
+let EMAE_SECTORIAL_CACHE = null;
+async function obtenerContextoSectorialEMAE(){
+  const SEIS_HORAS = 6 * 3600 * 1000;
+  if (EMAE_SECTORIAL_CACHE && Date.now() - EMAE_SECTORIAL_CACHE.ts < SEIS_HORAS) return EMAE_SECTORIAL_CACHE.data;
+  try {
+    const r = await fetch("/.netlify/functions/consultar-emae-sector");
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data || !data.ok) return null;
+    EMAE_SECTORIAL_CACHE = { ts: Date.now(), data };
+    return data;
+  } catch (e){
+    console.warn("[OpenCheck Score] Falló consultar-emae-sector:", e.message);
+    return null;
+  }
+}
+
+const MESES_ES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function formatearPeriodoEMAE(yyyymm){
+  const [anio, mes] = String(yyyymm).split("-");
+  return `${MESES_ES[Number(mes) - 1] || mes} ${anio}`;
+}
+function formatearPctConSigno(n){
+  const abs = Math.abs(n).toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (n > 0 ? "+" : n < 0 ? "−" : "") + abs + "%";
+}
+function capitalizarActividad(txt){
+  const t = String(txt || "").toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function construirBloqueRubro(datos){
+  const rubro = datos.rubro;
+  if (!rubro || !rubro.principal || !rubro.principal.descripcion) return "";
+
+  const principal = rubro.principal;
+  const otras = Math.max(0, (rubro.actividades || []).length - 1);
+  const textoActividad = capitalizarActividad(principal.descripcion)
+    + (otras > 0 ? `. Tiene ${otras} actividad${otras === 1 ? "" : "es"} más registrada${otras === 1 ? "" : "s"}.` : ".");
+
+  let filas = `
+    <div class="breakdown-row">
+      <div class="br-top"><div class="br-label">Actividad principal registrada</div></div>
+      <div class="br-desc">${textoActividad}</div>
+    </div>`;
+
+  const sector = principal.sectorEmae;
+  if (sector){
+    const ctx = datos.contextoSectorial;
+    const s = ctx && ctx.sectores && ctx.sectores[sector.letra];
+    let textoSector = `${sector.nombre}.`;
+    if (s){
+      textoSector += ` La actividad del sector varió <b>${formatearPctConSigno(s.interanualPct)}</b> interanual en ${formatearPeriodoEMAE(s.fecha)} (promedio de los últimos 3 meses: ${formatearPctConSigno(s.promedio3mPct)}).`;
+      if (ctx.general) textoSector += ` Como referencia, la actividad total del país varió ${formatearPctConSigno(ctx.general.interanualPct)}.`;
+    }
+    filas += `
+    <div class="breakdown-row">
+      <div class="br-top"><div class="br-label">Sector (INDEC)</div></div>
+      <div class="br-desc">${textoSector}</div>
+    </div>`;
+  }
+
+  return `
+    <div class="section-heading">Rubro y contexto sectorial</div>
+    <div class="section-sub">Actividad registrada en ARCA y evolución reciente de su sector según el EMAE del INDEC. Es información de contexto: no forma parte del puntaje. El sector se asigna por equivalencia entre clasificadores, por lo que es aproximado.</div>
+    <div class="breakdown">${filas}
+    </div>`;
+}
+
 async function construirDatosLibradorReal(cuit){
   const [deuda, rechazos] = await Promise.all([
     consultarDeudorBCRA(cuit),
@@ -2561,6 +2635,7 @@ async function construirDatosLibradorReal(cuit){
   // persona física sin dato disponible) seguimos con null, sin cortar
   // toda la consulta por esto.
   let antiguedadCuitAnios = null;
+  let rubro = null; // actividad registrada en ARCA (misma consulta, sin costo extra)
   try {
     const respArca = await fetch(`/.netlify/functions/consultar-antiguedad-arca?cuit=${cuit}`);
     if (respArca.ok){
@@ -2568,14 +2643,26 @@ async function construirDatosLibradorReal(cuit){
       if (dataArca.ok && dataArca.encontrado && dataArca.aniosAntiguedad !== null && dataArca.aniosAntiguedad !== undefined){
         antiguedadCuitAnios = dataArca.aniosAntiguedad;
       }
+      if (dataArca.ok && dataArca.encontrado && dataArca.actividadPrincipal){
+        rubro = { principal: dataArca.actividadPrincipal, actividades: dataArca.actividades || [] };
+      }
     }
   } catch (e) {
     console.warn("[OpenCheck Score] Falló consultar-antiguedad-arca:", e.message);
   }
 
+  // Contexto del sector (EMAE, INDEC): solo si el rubro se pudo asociar a un
+  // sector. Informativo, best-effort — si falla, se muestra el rubro sin el dato.
+  let contextoSectorial = null;
+  if (rubro && rubro.principal && rubro.principal.sectorEmae){
+    contextoSectorial = await obtenerContextoSectorialEMAE();
+  }
+
   return prepararDatos({
     empresa: deuda.denominacion || ("Librador " + cuit),
     antiguedadCuitAnios, // vía ARCA (Constancia de Inscripción), best-effort — null si no está disponible
+    rubro,
+    contextoSectorial,
     rechazosSinFondos6m: rechazos.rechazosSinFondos6m,
     rechazosSinFondos6a12m: rechazos.rechazosSinFondos6a12m,
     rechazosSinFondos12a24m: rechazos.rechazosSinFondos12a24m,
@@ -2922,7 +3009,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-13-v14-dominio-opencheck-pro";
+const VERSION_APP = "2026-09-28-v15-rubro-y-sector";
 
 const state = {
   user: null,
@@ -4258,6 +4345,9 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
     </div>
   `;
   }).join("");
+
+  /* ---- Rubro y contexto sectorial (informativo) ---- */
+  document.getElementById("res-rubro").innerHTML = construirBloqueRubro(datos);
 
   /* ---- Detalle por entidad bancaria ---- */
   const concentracion = calcularConcentracionBancaria(datos.entidades);
