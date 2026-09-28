@@ -9,6 +9,9 @@
 // de esta consulta a mano, porque afip-apis no trae un wrapper para este
 // servicio específico.
 //
+// También devuelve el/los rubro(s) registrados (actividades) y el sector
+// EMAE equivalente — disponible tanto para personas físicas como jurídicas.
+//
 // OJO — limitación real, confirmada contra el manual oficial (v3.7): el
 // campo de antigüedad solo existe para personas JURÍDICAS
 // (fechaContratoSocial). Para personas físicas este servicio no informa
@@ -40,6 +43,94 @@ function extraerTagXML(xml, tag){
   const m = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`, "i"));
   return m ? m[1].trim() : null;
 }
+
+// >>> RUBRO (actividad económica registrada en ARCA + sector EMAE equivalente)
+//
+// La respuesta de getPersona_v2 trae las actividades registradas dentro de
+// <datosRegimenGeneral><actividad>...</actividad> (régimen general) y/o
+// <datosMonotributo><actividadMonotributista>...</actividadMonotributista>.
+// Puede haber varias por persona; "orden" las prioriza (1 = principal).
+// Estructura tomada del manual oficial (ws_sr_constancia_inscripcion v3.x).
+
+// extraerTagXML solo devuelve la PRIMERA aparición; para las actividades
+// necesitamos todas.
+function extraerBloques(xml, tag){
+  const re = new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, "gi");
+  return xml.match(re) || [];
+}
+
+function extraerActividades(xml){
+  const bloques = [
+    ...extraerBloques(xml, "actividad"),
+    ...extraerBloques(xml, "actividadMonotributista")
+  ];
+  const vistas = new Set();
+  const actividades = [];
+  for (const b of bloques){
+    const idActividad = extraerTagXML(b, "idActividad");
+    const descripcion = extraerTagXML(b, "descripcionActividad");
+    if (!idActividad && !descripcion) continue;
+    const clave = `${idActividad}|${descripcion}`;
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    const ordenTxt = extraerTagXML(b, "orden");
+    actividades.push({
+      idActividad,
+      descripcion,
+      nomenclador: extraerTagXML(b, "nomenclador"),
+      orden: (ordenTxt !== null && !isNaN(Number(ordenTxt))) ? Number(ordenTxt) : null,
+      periodo: extraerTagXML(b, "periodo")
+    });
+  }
+  actividades.sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999));
+  return actividades;
+}
+
+// Sectores del EMAE (INDEC, apertura sectorial base 2004, letras tipo CIIU Rev.3).
+const SECTORES_EMAE = {
+  A: "Agricultura, ganadería, caza y silvicultura",
+  B: "Pesca",
+  C: "Explotación de minas y canteras",
+  D: "Industria manufacturera",
+  E: "Electricidad, gas y agua",
+  F: "Construcción",
+  G: "Comercio mayorista, minorista y reparaciones",
+  H: "Hoteles y restaurantes",
+  I: "Transporte y comunicaciones",
+  J: "Intermediación financiera",
+  K: "Actividades inmobiliarias, empresariales y de alquiler",
+  L: "Administración pública y defensa",
+  M: "Enseñanza",
+  N: "Servicios sociales y de salud",
+  O: "Otras actividades de servicios comunitarios, sociales y personales"
+};
+
+// Equivalencia por DIVISIÓN (2 primeros dígitos del código CLAE de 6, F.883,
+// que sigue la CIIU Rev.4) hacia el sector del EMAE (que sigue la Rev.3).
+// Las dos clasificaciones no coinciden 1 a 1: los casos límite (informática,
+// edición, servicios de apoyo, saneamiento, etc.) están asignados por
+// aproximación. Es contexto informativo, no una clasificación oficial.
+const DIVISION_A_SECTOR_EMAE = [
+  [1, 2, "A"], [3, 3, "B"], [5, 9, "C"], [10, 33, "D"],
+  [35, 36, "E"], [37, 39, "O"], [41, 43, "F"], [45, 47, "G"],
+  [49, 53, "I"], [55, 56, "H"], [58, 58, "D"], [59, 60, "O"],
+  [61, 61, "I"], [62, 63, "K"], [64, 66, "J"], [68, 75, "K"],
+  [77, 78, "K"], [79, 79, "I"], [80, 82, "K"], [84, 84, "L"],
+  [85, 85, "M"], [86, 88, "N"], [90, 94, "O"], [95, 95, "G"], [96, 96, "O"]
+];
+
+function sectorEmaeDesdeClae(idActividad, nomenclador){
+  if (!idActividad) return null;
+  // Solo mapeamos el nomenclador F.883 (el que verificamos). Si viene otro
+  // o no viene, preferimos no mostrar sector antes que mostrar uno equivocado.
+  if (String(nomenclador) !== "883") return null;
+  const codigo = String(idActividad).replace(/\D/g, "").padStart(6, "0");
+  const division = Number(codigo.slice(0, 2));
+  const fila = DIVISION_A_SECTOR_EMAE.find(([desde, hasta]) => division >= desde && division <= hasta);
+  if (!fila) return null;
+  return { letra: fila[2], nombre: SECTORES_EMAE[fila[2]] };
+}
+// <<< RUBRO
 
 function construirSoapGetPersonaV2(token, sign, cuitRepresentada, idPersona){
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -127,6 +218,13 @@ export default async (req) => {
     const estadoClave = extraerTagXML(xmlTexto, "estadoClave");
     const fechaContratoSocial = extraerTagXML(xmlTexto, "fechaContratoSocial");
 
+    // Rubro(s) registrado(s) en ARCA, con su sector EMAE equivalente.
+    const actividades = extraerActividades(xmlTexto).map(a => ({
+      ...a,
+      sectorEmae: sectorEmaeDesdeClae(a.idActividad, a.nomenclador)
+    }));
+    const actividadPrincipal = actividades[0] || null;
+
     const esJuridica = (tipoPersona || "").toUpperCase() === "JURIDICA";
     const aniosAntiguedad = esJuridica ? calcularAniosDesde(fechaContratoSocial) : null;
 
@@ -139,6 +237,8 @@ export default async (req) => {
       apellido,
       estadoClave,
       fechaContratoSocial,
+      actividadPrincipal,
+      actividades,
       aniosAntiguedad: aniosAntiguedad !== null ? Math.round(aniosAntiguedad * 10) / 10 : null,
       fuenteAntiguedad: esJuridica
         ? (fechaContratoSocial ? "fecha_contrato_social" : "juridica_sin_fecha_contrato_social")
