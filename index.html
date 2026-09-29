@@ -2589,7 +2589,14 @@ function capitalizarActividad(txt){
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-function construirBloqueRubro(datos){
+// Verbo según el signo, para no forzar al lector a traducir "varió -4,6%".
+function verboVariacion(pct){
+  if (pct > 0) return "creció";
+  if (pct < 0) return "cayó";
+  return "se mantuvo estable";
+}
+
+function construirBloqueRubro(datos, resultado){
   const rubro = datos.rubro;
   if (!rubro || !rubro.principal || !rubro.principal.descripcion) return "";
 
@@ -2623,19 +2630,74 @@ function construirBloqueRubro(datos){
     </div>`;
   }
 
+  // Sector a nivel nacional (EMAE, INDEC). Se guarda "s" afuera del if para
+  // reusarlo después en el bloque de "A tener en cuenta".
   const sector = principal.sectorEmae;
+  let s = null;
   if (sector){
     const ctx = datos.contextoSectorial;
-    const s = ctx && ctx.sectores && ctx.sectores[sector.letra];
+    s = ctx && ctx.sectores && ctx.sectores[sector.letra];
     let textoSector = `${sector.nombre}.`;
     if (s){
-      textoSector += ` La actividad del sector varió <b>${formatearPctConSigno(s.interanualPct)}</b> interanual en ${formatearPeriodoEMAE(s.fecha)} (promedio de los últimos 3 meses: ${formatearPctConSigno(s.promedio3mPct)}).`;
-      if (ctx.general) textoSector += ` Como referencia, la actividad total del país varió ${formatearPctConSigno(ctx.general.interanualPct)}.`;
+      textoSector += ` La actividad de este sector en todo el país ${verboVariacion(s.interanualPct)} <b>${formatearPctConSigno(s.interanualPct)}</b> interanual en ${formatearPeriodoEMAE(s.fecha)} (promedio de los últimos 3 meses: ${formatearPctConSigno(s.promedio3mPct)}).`;
+      if (ctx.general) textoSector += ` Como referencia, la actividad total del país ${verboVariacion(ctx.general.interanualPct)} ${formatearPctConSigno(ctx.general.interanualPct)}.`;
+      // Confirmación cruzada (solo Construcción tiene una hoy, vía ISAC).
+      const cc = s.confirmacionCruzada;
+      if (cc) textoSector += ` Otra medición distinta del INDEC (${cc.fuente}, que mide consumo de insumos) da un número parecido: ${verboVariacion(cc.interanualPct)} ${formatearPctConSigno(cc.interanualPct)} en ${formatearPeriodoEMAE(cc.fecha)}.`;
     }
     filas += `
     <div class="breakdown-row">
-      <div class="br-top"><div class="br-label">Sector (INDEC)</div></div>
+      <div class="br-top"><div class="br-label">Sector a nivel nacional (INDEC)</div></div>
       <div class="br-desc">${textoSector}</div>
+    </div>`;
+  }
+
+  // Producto específico dentro de industria manufacturera (IPI, INDEC): un
+  // tercer nivel de detalle, más fino que el sector completo — solo cuando
+  // pudimos matchear la actividad con una categoría puntual del IPI sin
+  // ambigüedad (ver matchIPI en consultar-antiguedad-arca.js).
+  const ipiTitulo = principal.ipi;
+  if (ipiTitulo){
+    const ctx = datos.contextoSectorial;
+    const p = ctx && ctx.ipi && ctx.ipi[ipiTitulo];
+    if (p){
+      const nombreProducto = ipiTitulo.replace(/_/g, " ");
+      const textoProducto = `Dentro de ese sector, el producto que más se acerca a esta actividad (${nombreProducto}) ${verboVariacion(p.interanualPct)} <b>${formatearPctConSigno(p.interanualPct)}</b> interanual en ${formatearPeriodoEMAE(p.fecha)} (promedio de los últimos 3 meses: ${formatearPctConSigno(p.promedio3mPct)}).`;
+      filas += `
+    <div class="breakdown-row">
+      <div class="br-top"><div class="br-label">Producto específico (IPI, INDEC)</div></div>
+      <div class="br-desc">${textoProducto}</div>
+    </div>`;
+    }
+  }
+
+  // "A tener en cuenta": cruce entre el sector (EMAE) y la deuda vs. inflación
+  // — dos señales que, si se dan juntas, conviene mirar en conjunto. Nunca es
+  // un veredicto ("no operar"), solo una observación de contexto para que la
+  // persona decida. Si no se cumple ninguna de las dos condiciones, no se
+  // agrega nada.
+  const dvi = resultado && resultado.detalle && resultado.detalle.deudaVsInflacion;
+  const deudaPenalizada = !!(dvi && dvi.puntos !== null && dvi.puntos !== undefined && dvi.puntos < 10);
+  // Ojo con la diferencia entre "sabemos que no cae" y "no tenemos el dato":
+  // sectorDisponible exige tener el número real del EMAE para este sector, no
+  // solo haber podido clasificar el rubro. Sin ese número no hay nada que
+  // cruzar, y el bloque no debe insinuar una conclusión que no verificamos.
+  const sectorDisponible = !!s;
+  const sectorEnCaida = !!(s && s.interanualPct < 0);
+
+  if (sectorDisponible && (deudaPenalizada || sectorEnCaida)){
+    let textoCruce;
+    if (deudaPenalizada && sectorEnCaida){
+      textoCruce = `Este perfil combina dos señales que conviene mirar juntas: la deuda creció por encima de la inflación, y su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}). No es una señal de alerta por sí sola, pero es un contexto útil al momento de decidir si operar con este cliente o qué seguimiento darle.`;
+    } else if (sectorEnCaida){
+      textoCruce = `Su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}), aunque el endeudamiento de esta empresa no muestra un crecimiento por encima de la inflación. Es contexto para tener en cuenta, no una señal de alerta por sí sola.`;
+    } else {
+      textoCruce = `La deuda de esta empresa creció por encima de la inflación. Su sector (${sector.nombre.toLowerCase()}) no muestra caída a nivel nacional en este momento, lo que puede matizar esa lectura.`;
+    }
+    filas += `
+    <div class="breakdown-row">
+      <div class="br-top"><div class="br-label">A tener en cuenta</div></div>
+      <div class="br-desc">${textoCruce}</div>
     </div>`;
   }
 
@@ -3072,7 +3134,7 @@ function explicarDeudaVsInflacion(cambioRealTotal){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-28-v18-antiguedad-actividad";
+const VERSION_APP = "2026-09-28-v20-ipi-por-producto";
 
 const state = {
   user: null,
@@ -4410,7 +4472,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   }).join("");
 
   /* ---- Rubro y contexto sectorial (informativo) ---- */
-  document.getElementById("res-rubro").innerHTML = construirBloqueRubro(datos);
+  document.getElementById("res-rubro").innerHTML = construirBloqueRubro(datos, resultado);
 
   /* ---- Detalle por entidad bancaria ---- */
   const concentracion = calcularConcentracionBancaria(datos.entidades);
