@@ -2195,8 +2195,13 @@ function calcularScore(d){
          // criterio de fondo: describimos cuánto pesó en NUESTRO cálculo,
          // nunca calificamos el crecimiento en sí como "riesgo real" del
          // negocio (eso seguiría sin datos de facturación para sostenerse).
+         // Ojo: esta frase solo tiene sentido cuando hubo crecimiento real
+         // (cambioTotalRelativo > 0) — si la deuda se achicó o quedó igual,
+         // explicarDeudaVsInflacion ya lo deja claro por su cuenta ("no hubo
+         // penalización"), y agregar "el efecto fue mínimo" ahí sonaría a
+         // que hubo algo de penalización cuando en realidad fue 10/10 pleno.
          desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo)
-           + " " + describirEfectoEnPuntaje(pDeudaVsInflacion)
+           + (d.deudaVsInflacion.cambioTotalRelativo > 0 ? " " + describirEfectoEnPuntaje(pDeudaVsInflacion) : "")
            + ((scoreDeudaVsInflacionCompleto < 10 && factorTramoDeuda < 1)
                ? ` Se aplicó el ${Math.round(factorTramoDeuda*100)}% de esa penalización.`
                : ""),
@@ -3128,8 +3133,8 @@ function explicarDeudaVsInflacion(cambioRealTotal){
   // cualquier valor ≤0% ya da el máximo de 10 pts.
   const pctReal = cambioRealTotal * 100;
   const pct = Math.round(Math.max(pctReal, -100));
-  if (cambioRealTotal <= -1) return `La deuda, ya descontada la inflación, se redujo a una fracción mínima en los últimos 24 meses: no está creciendo por encima de los precios.`;
-  if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios.`;
+  if (cambioRealTotal <= -1) return `La deuda, ya descontada la inflación, se redujo a una fracción mínima en los últimos 24 meses: no está creciendo por encima de los precios. No hubo penalización por este concepto.`;
+  if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios. No hubo penalización por este concepto.`;
   // Un solo mensaje genérico para todo crecimiento positivo (sin calificar
   // "normal"/"alerta" por tramo): no sabemos facturación ni ingresos, así
   // que el texto solo describe el HECHO (cuánto creció). La frase sobre si
