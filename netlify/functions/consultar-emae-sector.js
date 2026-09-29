@@ -209,8 +209,12 @@ export default async () => {
           const valores = columnaPorId(idx);
           let ult = valores.length - 1;
           while (ult >= 0 && (valores[ult] === null || valores[ult] === undefined)) ult--;
-          // El ISAC viene como % ya calculado (no como índice): se lee directo.
-          isac = ult >= 0 ? { fecha: String(fechas[ult]).slice(0, 7), interanualPct: redondear1(valores[ult]) } : null;
+          // El ISAC viene ya calculado como variación (no como índice a
+          // comparar contra 12 meses atrás), pero como FRACCIÓN (ej. -0,045),
+          // no como número de porcentaje — hay que multiplicar por 100, igual
+          // que hacemos con el interanual del EMAE. Confirmado contra el
+          // reporte real del INDEC: julio 2026 dio -4,5%, no 0%.
+          isac = ult >= 0 ? { fecha: String(fechas[ult]).slice(0, 7), interanualPct: redondear1(valores[ult] * 100) } : null;
         } else if (pedido.tipo === "sector"){
           const resumen = resumirSerie(fechas, columnaPorId(idx));
           if (resumen) sectores[pedido.letra] = { nombre: NOMBRES_SECTOR[pedido.letra], ...resumen };
