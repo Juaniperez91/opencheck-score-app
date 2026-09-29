@@ -119,6 +119,60 @@ const DIVISION_A_SECTOR_EMAE = [
   [85, 85, "M"], [86, 88, "N"], [90, 94, "O"], [95, 95, "G"], [96, 96, "O"]
 ];
 
+// Palabras clave -> categoría del IPI manufacturero (INDEC), verificadas
+// contra los títulos reales de la API (mismo criterio de cautela que el
+// mapeo a sector EMAE: mejor no matchear que matchear mal). GATE
+// OBLIGATORIO en quien llama: nunca se intenta esto fuera de industria
+// manufacturera (sectorEmae letra "D"), para no confundir a alguien que
+// VENDE un producto con quien lo FABRICA (el IPI mide producción, no venta).
+// Orden: de lo más específico a lo más genérico — la primera que matchea gana.
+const PALABRAS_CLAVE_IPI = [
+  [/GANADO\s+BOVINO/, "carne_vacuna"],
+  [/GANADO.*AVIAR|AVES\s+DE\s+CORRAL/, "carne_aviar"],
+  [/\bVINOS?\b/, "vino"],
+  [/AZ[UÚ]CAR|CONFITER[IÍ]A|CHOCOLATE/, "azucar_confiteria_chocolate"],
+  [/GALLETITA|PANADER[IÍ]A|PASTAS\s+FRESCAS|PASTAS\s+ALIMENTICIAS/, "galletitas_panaderia_pastas"],
+  [/OLEAGINOSA/, "molienda_oleaginosas"],
+  [/CIGARRILLO/, "cigarrillos"],
+  [/TABACO/, "productos_tabaco"],
+  [/CALZADO/, "calzado"],
+  [/CURTIDO|\bCUERO\b(?!.*CALZADO)/, "curtido_articulos_cuero"],
+  [/PRENDAS\s+DE\s+VESTIR/, "prendas_vestir_cuero_calzado"],
+  [/\bTEXTIL/, "otros_productos_textiles"],
+  [/\bPAPEL(ES)?\b/, "productos_papel"],
+  [/EDICI[OÓ]N|IMPRESI[OÓ]N/, "edicion_impresion"],
+  [/FARMAC[EÉ]UTIC/, "productos_farmaceuticos"],
+  [/AGROQU[IÍ]MIC/, "agroquimicos"],
+  [/PINTURA/, "pinturas"],
+  [/DETERGENTE|JAB[OÓ]N/, "detergentes_jabones_productos_personales"],
+  [/CAUCHO|PL[AÁ]STIC/, "productos_caucho_plastico"],
+  // Más específico primero: "artículos de cemento"/yeso antes que "cemento" a secas.
+  [/ART[IÍ]CULOS\s+DE\s+CEMENTO|\bYESO\b/, "articulos_cemento_yeso"],
+  [/\bCEMENTO\b/, "cemento"],
+  [/CER[AÁ]MIC|ARCILLA/, "productos_arcilla_ceramica"],
+  [/SIDER[UÚ]RGIC/, "industria_siderurgica"],
+  [/FUNDICI[OÓ]N\s+DE\s+METAL/, "fundicion_metales"],
+  [/METALES?\s+B[AÁ]SIC/, "industrias_metalicas_basicas"],
+  [/PRODUCTOS?\s+DE\s+METAL(?!ES\s+B[AÁ]SIC)/, "productos_metal"],
+  [/CARPINTER[IÍ]A\s+MET[AÁ]LICA|METAL.*USO\s+ESTRUCTURAL|ESTRUCTURAS\s+MET[AÁ]LICAS/, "productos_metalicos_uso_estructural"],
+  [/MAQUINARIA\s+AGROPECUARIA/, "maquinaria_agropecuaria"],
+  [/AUTOPARTES/, "autopartes"],
+  [/MOTOCICLETA/, "motocicletas"],
+  [/EQUIPOS?\s+(Y\s+APARATOS\s+)?EL[EÉ]CTRIC/, "equipos_electricos"]
+];
+
+// Solo llamar cuando sectorEmae.letra === "D" (industria manufacturera).
+// Además excluye explícitamente comercio/reparación aunque el código haya
+// caído (por error) en el rango de industria — doble seguro.
+function matchIPI(descripcion){
+  const d = String(descripcion || "").toUpperCase();
+  if (/\bVENTA\b|\bCOMERCIO\b|\bREPARACI[OÓ]N\b|MAYORISTA|MINORISTA|DISTRIBUCI[OÓ]N/.test(d)) return null;
+  for (const [patron, titulo] of PALABRAS_CLAVE_IPI){
+    if (patron.test(d)) return titulo;
+  }
+  return null;
+}
+
 function sectorEmaeDesdeClae(idActividad, nomenclador){
   if (!idActividad) return null;
   // Solo mapeamos el nomenclador F.883 (el que verificamos). Si viene otro
@@ -219,10 +273,11 @@ export default async (req) => {
     const fechaContratoSocial = extraerTagXML(xmlTexto, "fechaContratoSocial");
 
     // Rubro(s) registrado(s) en ARCA, con su sector EMAE equivalente.
-    const actividades = extraerActividades(xmlTexto).map(a => ({
-      ...a,
-      sectorEmae: sectorEmaeDesdeClae(a.idActividad, a.nomenclador)
-    }));
+    const actividades = extraerActividades(xmlTexto).map(a => {
+      const sectorEmae = sectorEmaeDesdeClae(a.idActividad, a.nomenclador);
+      const ipi = (sectorEmae && sectorEmae.letra === "D") ? matchIPI(a.descripcion) : null;
+      return { ...a, sectorEmae, ipi };
+    });
     const actividadPrincipal = actividades[0] || null;
 
     const esJuridica = (tipoPersona || "").toUpperCase() === "JURIDICA";
