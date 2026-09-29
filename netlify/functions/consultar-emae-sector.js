@@ -22,6 +22,54 @@ const API_SERIES = "https://apis.datos.gob.ar/series/api/series/";
 
 const SERIE_GENERAL = "143.3_NO_PR_2004_A_21"; // EMAE original, nivel general
 
+// ISAC (Indicador Sintético de Actividad de la Construcción, INDEC): trae su
+// propia variación interanual YA CALCULADA por el INDEC, no hay que derivarla.
+// Se usa como confirmación cruzada del sector F (Construcción) del EMAE — una
+// fuente distinta, con otra metodología (consumo de insumos), midiendo lo mismo.
+const SERIE_ISAC_VIA = "33.2_I_2004_M_4";
+
+// IPI manufacturero (INDEC), abierto por producto — mucho más fino que el
+// EMAE (que junta TODA la industria en un solo sector). Solo un subconjunto
+// curado y verificado de las ~45 categorías del IPI: las que tienen una
+// palabra clave lo bastante específica como para matchear con la descripción
+// de actividad de ARCA sin ambigüedad. El resto de la industria sigue
+// mostrando solo el dato del sector D del EMAE, sin forzar un match dudoso.
+// Los ids están tomados tal cual de la búsqueda verificada en la API
+// (apis.datos.gob.ar/series/api/search/?q=ipi%20manufacturero), no inventados.
+const SERIES_IPI = {
+  carne_vacuna: "453.2_CARNE_VACUUNA_0_0_12_53",
+  carne_aviar: "453.2_CARNE_AVIAIAR_0_0_11_85",
+  vino: "453.2_VINOINO_0_0_4_89",
+  azucar_confiteria_chocolate: "453.2_AZUCAR_CONATE_0_0_27_68",
+  galletitas_panaderia_pastas: "453.2_GALLETITASTAS_0_0_27_88",
+  molienda_oleaginosas: "453.2_MOLIENDA_OSAS_0_0_20_8",
+  cigarrillos: "453.2_CIGARRILLOLOS_0_0_11_16",
+  productos_tabaco: "453.2_PRODUCTOS_ACO_0_0_16_81",
+  prendas_vestir_cuero_calzado: "453.2_PRENDAS_VEADO_0_0_28_88",
+  calzado: "453.2_CALZADOADO_0_0_7_59",
+  curtido_articulos_cuero: "453.2_CURTIDO_ARERO_0_0_23_60",
+  otros_productos_textiles: "453.2_OTROS_PRODLES_0_0_24_67",
+  productos_papel: "453.2_PRODUCTOS_PEL_0_0_15_66",
+  edicion_impresion: "453.2_EDICION_IMION_0_0_17_59",
+  productos_farmaceuticos: "453.2_PRODUCTOS_COS_0_0_23_90",
+  agroquimicos: "453.2_AGROQUIMICCOS_0_0_12_6",
+  pinturas: "453.2_PINTURASRAS_0_0_8_67",
+  detergentes_jabones_productos_personales: "453.2_DETERGENTELES_0_0_40_99",
+  productos_caucho_plastico: "453.2_PRODUCTOS_ICO_0_0_25_26",
+  cemento: "453.2_CEMENTONTO_0_0_7_59",
+  articulos_cemento_yeso: "453.2_ARTICULOS_ESO_0_0_22_22",
+  productos_arcilla_ceramica: "453.2_PRODUCTOS_ICA_0_0_26_20",
+  industria_siderurgica: "453.2_INDUSTRIA_ICA_0_0_21_100",
+  industrias_metalicas_basicas: "453.2_INDUSTRIASCAS_0_0_28_0",
+  fundicion_metales: "453.2_FUNDICION_LES_0_0_17_29",
+  productos_metal: "453.2_PRODUCTOS_TAL_0_0_15_15",
+  productos_metalicos_uso_estructural: "453.2_PRODUCTOS_RAL_0_0_35_79",
+  maquinaria_agropecuaria: "453.2_MAQUINARIARIA_0_0_23_78",
+  autopartes: "453.2_AUTOPARTESTES_0_0_10_100",
+  motocicletas: "453.2_MOTOCICLETTAS_0_0_12_50",
+  equipos_electricos: "453.2_EQUIPOS_ELCOS_0_0_18_68"
+};
+
 const SERIES_SECTOR = {
   A: "11.3_ISOM_2004_M_39",  // Agricultura, ganadería, caza y silvicultura
   B: "11.3_VIPAA_2004_M_5",  // Pesca
@@ -93,7 +141,8 @@ function resumirSerie(fechas, valores){
 
 export default async () => {
   const letras = Object.keys(SERIES_SECTOR);
-  const ids = [SERIE_GENERAL, ...letras.map(l => SERIES_SECTOR[l])];
+  const tituloIPI = Object.keys(SERIES_IPI);
+  const ids = [SERIE_GENERAL, SERIE_ISAC_VIA, ...letras.map(l => SERIES_SECTOR[l]), ...tituloIPI.map(t => SERIES_IPI[t])];
 
   // 15 datos: los últimos 3 meses + los mismos 3 meses del año anterior
   // (y el margen para que los índices de comparación existan).
@@ -126,17 +175,36 @@ export default async () => {
     const columna = (k) => filas.map(f => f[k + 1]);
 
     const general = resumirSerie(fechas, columna(0));
+
+    // El ISAC viene como % ya calculado (no como índice), así que se lee
+    // directo del último dato disponible, sin repetir el cálculo interanual.
+    const isacValores = columna(1);
+    let ultISAC = isacValores.length - 1;
+    while (ultISAC >= 0 && (isacValores[ultISAC] === null || isacValores[ultISAC] === undefined)) ultISAC--;
+    const isac = ultISAC >= 0 ? { fecha: String(fechas[ultISAC]).slice(0, 7), interanualPct: redondear1(isacValores[ultISAC]) } : null;
+
     const sectores = {};
     letras.forEach((letra, idx) => {
-      const resumen = resumirSerie(fechas, columna(idx + 1));
+      const resumen = resumirSerie(fechas, columna(idx + 2));
       if (resumen) sectores[letra] = { nombre: NOMBRES_SECTOR[letra], ...resumen };
+    });
+    // Adjuntamos el ISAC al sector F (Construcción) como una confirmación
+    // cruzada adicional, con su propia fuente aclarada.
+    if (isac && sectores.F) sectores.F.confirmacionCruzada = { fuente: "ISAC (INDEC)", ...isac };
+
+    const offsetIPI = letras.length + 2;
+    const ipi = {};
+    tituloIPI.forEach((titulo, idx) => {
+      const resumen = resumirSerie(fechas, columna(offsetIPI + idx));
+      if (resumen) ipi[titulo] = resumen;
     });
 
     return new Response(JSON.stringify({
       ok: true,
-      fuente: "INDEC — EMAE apertura sectorial, base 2004 (vía datos.gob.ar)",
+      fuente: "INDEC — EMAE apertura sectorial, base 2004; IPI manufacturero por producto; ISAC construcción (vía datos.gob.ar)",
       general,
-      sectores
+      sectores,
+      ipi
     }), {
       status: 200,
       headers: {
