@@ -2190,11 +2190,17 @@ function calcularScore(d){
       : !deudaMaterialParaTendencia
       ? {puntos:10, max:10, label:"Deuda real vs. inflación", desc: "El crecimiento estuvo por encima de la inflación, pero el endeudamiento actual es bajo. Sin datos de facturación no podemos juzgar qué tan relevante es ese monto para este perfil, así que no penalizamos esta variable por el crecimiento porcentual.", detalleMensual: d.deudaVsInflacion.detalleMensual}
       : {puntos:pDeudaVsInflacion, max:10, label:"Deuda real vs. inflación",
-         desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo) + (
-           (scoreDeudaVsInflacionCompleto < 10 && factorTramoDeuda < 1)
-             ? ` Se aplicó el ${Math.round(factorTramoDeuda*100)}% de esa penalización.`
-             : ""
-         ), detalleMensual: d.deudaVsInflacion.detalleMensual}
+         // El efecto en el puntaje se describe en escalones (ver
+         // describirEfectoEnPuntaje), no en un solo corte binario — mismo
+         // criterio de fondo: describimos cuánto pesó en NUESTRO cálculo,
+         // nunca calificamos el crecimiento en sí como "riesgo real" del
+         // negocio (eso seguiría sin datos de facturación para sostenerse).
+         desc: explicarDeudaVsInflacion(d.deudaVsInflacion.cambioTotalRelativo)
+           + " " + describirEfectoEnPuntaje(pDeudaVsInflacion)
+           + ((scoreDeudaVsInflacionCompleto < 10 && factorTramoDeuda < 1)
+               ? ` Se aplicó el ${Math.round(factorTramoDeuda*100)}% de esa penalización.`
+               : ""),
+         detalleMensual: d.deudaVsInflacion.detalleMensual}
   };
 
   // Antigüedad del CUIT: solo se agrega como fila visible si hay dato
@@ -2676,12 +2682,11 @@ function construirBloqueRubro(datos, resultado){
   // un veredicto ("no operar"), solo una observación de contexto para que la
   // persona decida. Si no se cumple ninguna de las dos condiciones, no se
   // agrega nada.
-  // "Penalizada" acá significa MATERIALMENTE penalizada, no cualquier
-  // descuento — un 9/10 (perdió 1 punto de 10) no amerita mencionarse en el
-  // cruce con el sector, sería una señal que en los hechos casi no pesó en
-  // el puntaje. El corte en <=7 exige perder al menos 3 puntos de 10.
+  // "Penalizada" acá significa MATERIALMENTE penalizada — alineado con
+  // describirEfectoEnPuntaje: solo entra al cruce si el efecto fue
+  // "considerable" o "fuerte" (puntos <=6), no "mínimo" ni "moderado".
   const dvi = resultado && resultado.detalle && resultado.detalle.deudaVsInflacion;
-  const deudaPenalizada = !!(dvi && dvi.puntos !== null && dvi.puntos !== undefined && dvi.puntos <= 7);
+  const deudaPenalizada = !!(dvi && dvi.puntos !== null && dvi.puntos !== undefined && dvi.puntos <= 6);
   // Ojo con la diferencia entre "sabemos que no cae" y "no tenemos el dato":
   // sectorDisponible exige tener el número real del EMAE para este sector, no
   // solo haber podido clasificar el rubro. Sin ese número no hay nada que
@@ -3127,9 +3132,24 @@ function explicarDeudaVsInflacion(cambioRealTotal){
   if (cambioRealTotal <= 0) return `La deuda, ya descontada la inflación, se achicó (o quedó igual) en los últimos 24 meses (${pct}% en términos reales): no está creciendo por encima de los precios.`;
   // Un solo mensaje genérico para todo crecimiento positivo (sin calificar
   // "normal"/"alerta" por tramo): no sabemos facturación ni ingresos, así
-  // que el texto solo describe el hecho y la lógica de la penalización, sin
-  // afirmar que representa (o no) un riesgo real para ese perfil puntual.
-  return `La deuda creció ${pct}% en términos reales en los últimos 24 meses, lo cual aplica una penalización, en función del eventual riesgo que ese crecimiento podría representar.`;
+  // que el texto solo describe el HECHO (cuánto creció). La frase sobre si
+  // eso pesó o no en el puntaje se agrega aparte, en el llamador, porque
+  // ahí sí sabemos el puntaje final — decirlo acá mezclaría el hecho con
+  // una valoración de riesgo que no siempre corresponde (ver más abajo:
+  // un 9/10 no debería sonar igual que un 3/10).
+  return `La deuda creció ${pct}% en términos reales en los últimos 24 meses.`;
+}
+
+// Describe cuánto pesó esto en el puntaje — no el crecimiento en sí — en 4
+// escalones según los puntos finales de esta variable (0-10). Deliberadamente
+// habla del EFECTO EN EL PUNTAJE (algo que sí sabemos con certeza, es nuestro
+// propio cálculo), no de si el crecimiento "es riesgoso" para ese negocio en
+// particular (algo que no podemos afirmar sin datos de facturación).
+function describirEfectoEnPuntaje(puntos){
+  if (puntos >= 9) return "El efecto de esto en el puntaje fue mínimo.";
+  if (puntos >= 7) return "El efecto de esto en el puntaje fue moderado.";
+  if (puntos >= 4) return "El efecto de esto en el puntaje fue considerable.";
+  return "Esto aplicó una penalización fuerte, en función del eventual riesgo que ese crecimiento podría representar.";
 }
 
 /* =======================================================
