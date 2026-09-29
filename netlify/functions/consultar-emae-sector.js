@@ -1,14 +1,20 @@
 // netlify/functions/consultar-emae-sector.js
 //
 // Devuelve la variación interanual del EMAE (Estimador Mensual de Actividad
-// Económica, INDEC, base 2004) para cada uno de los 15 sectores, más el total
-// del país para comparar. Es CONTEXTO informativo para mostrar junto al rubro
-// del CUIT — no entra en el puntaje.
+// Económica, INDEC, base 2004) para cada uno de los 15 sectores, el ISAC
+// (construcción) y un subconjunto curado del IPI manufacturero por producto.
+// Es CONTEXTO informativo para mostrar junto al rubro del CUIT — no entra
+// en el puntaje.
 //
 // Fuente: API de Series de Tiempo de datos.gob.ar (pública, sin autenticación).
-// Los IDs de serie de abajo se verificaron contra el buscador de la propia API
+// Los IDs de serie se verificaron contra el buscador de la propia API
 // (apis.datos.gob.ar/series/api/search): todas son mensuales (R/P1M) y llegan
 // hasta la última publicación del INDEC.
+//
+// OJO — la API rechaza (400) un pedido con demasiados ids juntos (probado:
+// falla con 46). Por eso las pedimos en tandas de a TANDA_MAX, en paralelo,
+// y después juntamos los resultados acá. Si algún día cambian ese límite,
+// esto sigue funcionando igual (solo se harían menos tandas).
 //
 // La variación se calcula acá a partir de los índices (último mes contra el
 // mismo mes del año anterior), en vez de pedirle a la API la transformación
@@ -19,6 +25,7 @@
 // resultado se puede cachear tranquilo.
 
 const API_SERIES = "https://apis.datos.gob.ar/series/api/series/";
+const TANDA_MAX = 8; // ids por pedido — margen cómodo por debajo de donde falló con 46
 
 const SERIE_GENERAL = "143.3_NO_PR_2004_A_21"; // EMAE original, nivel general
 
@@ -27,6 +34,42 @@ const SERIE_GENERAL = "143.3_NO_PR_2004_A_21"; // EMAE original, nivel general
 // Se usa como confirmación cruzada del sector F (Construcción) del EMAE — una
 // fuente distinta, con otra metodología (consumo de insumos), midiendo lo mismo.
 const SERIE_ISAC_VIA = "33.2_I_2004_M_4";
+
+const SERIES_SECTOR = {
+  A: "11.3_ISOM_2004_M_39",  // Agricultura, ganadería, caza y silvicultura
+  B: "11.3_VIPAA_2004_M_5",  // Pesca
+  C: "11.3_ISD_2004_M_26",   // Explotación de minas y canteras
+  D: "11.3_VMASD_2004_M_23", // Industria manufacturera
+  E: "11.3_ITC_2004_M_21",   // Electricidad, gas y agua
+  F: "11.3_VMATC_2004_M_12", // Construcción
+  G: "11.3_AGCS_2004_M_41",  // Comercio mayorista, minorista y reparaciones
+  H: "11.3_P_2004_M_20",     // Hoteles y restaurantes
+  I: "11.3_EMC_2004_M_25",   // Transporte, almacenamiento y comunicaciones
+  J: "11.3_IM_2004_M_25",    // Intermediación financiera
+  K: "11.3_SEGA_2004_M_48",  // Inmobiliarias, empresariales y de alquiler
+  L: "11.3_C_2004_M_60",     // Administración pública y defensa
+  M: "11.3_CMMR_2004_M_10",  // Enseñanza
+  N: "11.3_HR_2004_M_24",    // Servicios sociales y de salud
+  O: "11.3_TAC_2004_M_60"    // Otras actividades de servicios comunitarios, sociales y personales
+};
+
+const NOMBRES_SECTOR = {
+  A: "Agricultura, ganadería, caza y silvicultura",
+  B: "Pesca",
+  C: "Explotación de minas y canteras",
+  D: "Industria manufacturera",
+  E: "Electricidad, gas y agua",
+  F: "Construcción",
+  G: "Comercio mayorista, minorista y reparaciones",
+  H: "Hoteles y restaurantes",
+  I: "Transporte y comunicaciones",
+  J: "Intermediación financiera",
+  K: "Actividades inmobiliarias, empresariales y de alquiler",
+  L: "Administración pública y defensa",
+  M: "Enseñanza",
+  N: "Servicios sociales y de salud",
+  O: "Otras actividades de servicios comunitarios, sociales y personales"
+};
 
 // IPI manufacturero (INDEC), abierto por producto — mucho más fino que el
 // EMAE (que junta TODA la industria en un solo sector). Solo un subconjunto
@@ -70,42 +113,6 @@ const SERIES_IPI = {
   equipos_electricos: "453.2_EQUIPOS_ELCOS_0_0_18_68"
 };
 
-const SERIES_SECTOR = {
-  A: "11.3_ISOM_2004_M_39",  // Agricultura, ganadería, caza y silvicultura
-  B: "11.3_VIPAA_2004_M_5",  // Pesca
-  C: "11.3_ISD_2004_M_26",   // Explotación de minas y canteras
-  D: "11.3_VMASD_2004_M_23", // Industria manufacturera
-  E: "11.3_ITC_2004_M_21",   // Electricidad, gas y agua
-  F: "11.3_VMATC_2004_M_12", // Construcción
-  G: "11.3_AGCS_2004_M_41",  // Comercio mayorista, minorista y reparaciones
-  H: "11.3_P_2004_M_20",     // Hoteles y restaurantes
-  I: "11.3_EMC_2004_M_25",   // Transporte, almacenamiento y comunicaciones
-  J: "11.3_IM_2004_M_25",    // Intermediación financiera
-  K: "11.3_SEGA_2004_M_48",  // Inmobiliarias, empresariales y de alquiler
-  L: "11.3_C_2004_M_60",     // Administración pública y defensa
-  M: "11.3_CMMR_2004_M_10",  // Enseñanza
-  N: "11.3_HR_2004_M_24",    // Servicios sociales y de salud
-  O: "11.3_TAC_2004_M_60"    // Otras actividades de servicios comunitarios, sociales y personales
-};
-
-const NOMBRES_SECTOR = {
-  A: "Agricultura, ganadería, caza y silvicultura",
-  B: "Pesca",
-  C: "Explotación de minas y canteras",
-  D: "Industria manufacturera",
-  E: "Electricidad, gas y agua",
-  F: "Construcción",
-  G: "Comercio mayorista, minorista y reparaciones",
-  H: "Hoteles y restaurantes",
-  I: "Transporte y comunicaciones",
-  J: "Intermediación financiera",
-  K: "Actividades inmobiliarias, empresariales y de alquiler",
-  L: "Administración pública y defensa",
-  M: "Enseñanza",
-  N: "Servicios sociales y de salud",
-  O: "Otras actividades de servicios comunitarios, sociales y personales"
-};
-
 function redondear1(n){ return Math.round(n * 10) / 10; }
 
 // Variación interanual en la posición i (compara contra 12 meses antes).
@@ -139,69 +146,96 @@ function resumirSerie(fechas, valores){
   };
 }
 
-export default async () => {
-  const letras = Object.keys(SERIES_SECTOR);
-  const tituloIPI = Object.keys(SERIES_IPI);
-  const ids = [SERIE_GENERAL, SERIE_ISAC_VIA, ...letras.map(l => SERIES_SECTOR[l]), ...tituloIPI.map(t => SERIES_IPI[t])];
+// Divide un array en tandas de tamaño `n`.
+function enTandas(arr, n){
+  const tandas = [];
+  for (let i = 0; i < arr.length; i += n) tandas.push(arr.slice(i, i + n));
+  return tandas;
+}
 
-  // 15 datos: los últimos 3 meses + los mismos 3 meses del año anterior
-  // (y el margen para que los índices de comparación existan).
+// Pide una tanda de ids a la API y devuelve { fechas, columnaPorId(idx) }.
+// Lanza si la tanda falla — el llamador decide qué hacer con esa tanda
+// puntual (el resto de las tandas siguen su curso igual, vía Promise.allSettled).
+async function pedirTanda(ids, signal){
   const url = `${API_SERIES}?ids=${ids.join(",")}&last=15&format=json`;
+  const r = await fetch(url, { headers: { Accept: "application/json" }, signal });
+  if (!r.ok) throw new Error(`Series de Tiempo respondió ${r.status} para [${ids.join(",")}]`);
+  const json = await r.json();
+  const filas = json && json.data;
+  if (!Array.isArray(filas) || filas.length < 13) throw new Error(`Respuesta inesperada para [${ids.join(",")}]`);
+
+  const fechas = filas.map(f => f[0]);
+  return {
+    fechas,
+    columnaPorId: (idx) => filas.map(f => f[idx + 1]) // idx: posición del id DENTRO de esta tanda
+  };
+}
+
+export default async () => {
+  // Armamos una sola lista de "pedidos" (id + qué hacer con el resultado),
+  // la partimos en tandas, y pedimos todas las tandas en paralelo.
+  const pedidos = [
+    { id: SERIE_GENERAL, tipo: "general" },
+    { id: SERIE_ISAC_VIA, tipo: "isac" },
+    ...Object.entries(SERIES_SECTOR).map(([letra, id]) => ({ id, tipo: "sector", letra })),
+    ...Object.entries(SERIES_IPI).map(([titulo, id]) => ({ id, tipo: "ipi", titulo }))
+  ];
+  const tandas = enTandas(pedidos, TANDA_MAX);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10000);
+  const timer = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const r = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
-    if (!r.ok){
-      console.error("[consultar-emae-sector] La API de series respondió", r.status);
-      return new Response(JSON.stringify({ ok: false, error: `Series de Tiempo respondió ${r.status}` }), {
-        status: 502, headers: { "Content-Type": "application/json" }
-      });
-    }
+    const resultadosTandas = await Promise.allSettled(
+      tandas.map(t => pedirTanda(t.map(p => p.id), controller.signal))
+    );
 
-    const json = await r.json();
-    const filas = json && json.data;
-    if (!Array.isArray(filas) || filas.length < 13){
-      console.error("[consultar-emae-sector] Respuesta inesperada, filas:", Array.isArray(filas) ? filas.length : typeof filas);
-      return new Response(JSON.stringify({ ok: false, error: "Respuesta inesperada de la API de series" }), {
-        status: 502, headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    // Cada fila: [fecha, valor_serie_1, valor_serie_2, ...] en el mismo orden
-    // en que pedimos los ids.
-    const fechas = filas.map(f => f[0]);
-    const columna = (k) => filas.map(f => f[k + 1]);
-
-    const general = resumirSerie(fechas, columna(0));
-
-    // El ISAC viene como % ya calculado (no como índice), así que se lee
-    // directo del último dato disponible, sin repetir el cálculo interanual.
-    const isacValores = columna(1);
-    let ultISAC = isacValores.length - 1;
-    while (ultISAC >= 0 && (isacValores[ultISAC] === null || isacValores[ultISAC] === undefined)) ultISAC--;
-    const isac = ultISAC >= 0 ? { fecha: String(fechas[ultISAC]).slice(0, 7), interanualPct: redondear1(isacValores[ultISAC]) } : null;
-
+    let general = null, isac = null;
     const sectores = {};
-    letras.forEach((letra, idx) => {
-      const resumen = resumirSerie(fechas, columna(idx + 2));
-      if (resumen) sectores[letra] = { nombre: NOMBRES_SECTOR[letra], ...resumen };
+    const ipi = {};
+    let tandasFallidas = 0;
+
+    resultadosTandas.forEach((resultado, i) => {
+      if (resultado.status === "rejected"){
+        console.error("[consultar-emae-sector] Falló una tanda:", resultado.reason && resultado.reason.message);
+        tandasFallidas++;
+        return; // el resto de las tandas igual se procesa — mejor parcial que nada
+      }
+      const { fechas, columnaPorId } = resultado.value;
+      tandas[i].forEach((pedido, idx) => {
+        if (pedido.tipo === "general"){
+          general = resumirSerie(fechas, columnaPorId(idx));
+        } else if (pedido.tipo === "isac"){
+          const valores = columnaPorId(idx);
+          let ult = valores.length - 1;
+          while (ult >= 0 && (valores[ult] === null || valores[ult] === undefined)) ult--;
+          // El ISAC viene como % ya calculado (no como índice): se lee directo.
+          isac = ult >= 0 ? { fecha: String(fechas[ult]).slice(0, 7), interanualPct: redondear1(valores[ult]) } : null;
+        } else if (pedido.tipo === "sector"){
+          const resumen = resumirSerie(fechas, columnaPorId(idx));
+          if (resumen) sectores[pedido.letra] = { nombre: NOMBRES_SECTOR[pedido.letra], ...resumen };
+        } else if (pedido.tipo === "ipi"){
+          const resumen = resumirSerie(fechas, columnaPorId(idx));
+          if (resumen) ipi[pedido.titulo] = resumen;
+        }
+      });
     });
+
     // Adjuntamos el ISAC al sector F (Construcción) como una confirmación
     // cruzada adicional, con su propia fuente aclarada.
     if (isac && sectores.F) sectores.F.confirmacionCruzada = { fuente: "ISAC (INDEC)", ...isac };
 
-    const offsetIPI = letras.length + 2;
-    const ipi = {};
-    tituloIPI.forEach((titulo, idx) => {
-      const resumen = resumirSerie(fechas, columna(offsetIPI + idx));
-      if (resumen) ipi[titulo] = resumen;
-    });
+    // Si TODAS las tandas fallaron, ahí sí es un error real (no parcial).
+    if (tandasFallidas === tandas.length){
+      return new Response(JSON.stringify({ ok: false, error: "Ninguna tanda de series respondió correctamente" }), {
+        status: 502, headers: { "Content-Type": "application/json" }
+      });
+    }
 
     return new Response(JSON.stringify({
       ok: true,
       fuente: "INDEC — EMAE apertura sectorial, base 2004; IPI manufacturero por producto; ISAC construcción (vía datos.gob.ar)",
+      parcial: tandasFallidas > 0, // avisa si alguna tanda falló, para no ocultarlo
       general,
       sectores,
       ipi
