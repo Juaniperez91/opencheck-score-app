@@ -2002,7 +2002,7 @@ function explicarSituacion24m(peorSituacion24m, penalizacion24m){
 function explicarEndeudamiento(m){
   if (m >= 100) return `Endeudamiento bancario informado de $${m}M: perfil muy consolidado, con amplio acceso a financiamiento bancario.`;
   if (m >= 50) return `Endeudamiento bancario informado de $${m}M: buen acceso a crédito bancario, perfil financiero sólido.`;
-  if (m >= 25) return `Endeudamiento bancario informado de $${m}M: nivel de financiamiento bancario moderado a alto.`;
+  if (m >= 25) return `Endeudamiento bancario informado de $${m}M: acceso a financiamiento bancario considerable, por encima del promedio.`;
   if (m >= 5) return `Endeudamiento bancario informado de $${m}M: nivel de financiamiento bancario moderado.`;
   if (m >= 1) return `Endeudamiento bancario informado de $${m}M: financiamiento bancario bajo.`;
   return `Sin endeudamiento bancario informado: sin historial de financiamiento bancario relevante en BCRA.`;
@@ -2676,8 +2676,12 @@ function construirBloqueRubro(datos, resultado){
   // un veredicto ("no operar"), solo una observación de contexto para que la
   // persona decida. Si no se cumple ninguna de las dos condiciones, no se
   // agrega nada.
+  // "Penalizada" acá significa MATERIALMENTE penalizada, no cualquier
+  // descuento — un 9/10 (perdió 1 punto de 10) no amerita mencionarse en el
+  // cruce con el sector, sería una señal que en los hechos casi no pesó en
+  // el puntaje. El corte en <=7 exige perder al menos 3 puntos de 10.
   const dvi = resultado && resultado.detalle && resultado.detalle.deudaVsInflacion;
-  const deudaPenalizada = !!(dvi && dvi.puntos !== null && dvi.puntos !== undefined && dvi.puntos < 10);
+  const deudaPenalizada = !!(dvi && dvi.puntos !== null && dvi.puntos !== undefined && dvi.puntos <= 7);
   // Ojo con la diferencia entre "sabemos que no cae" y "no tenemos el dato":
   // sectorDisponible exige tener el número real del EMAE para este sector, no
   // solo haber podido clasificar el rubro. Sin ese número no hay nada que
