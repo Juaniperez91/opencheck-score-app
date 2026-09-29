@@ -145,7 +145,7 @@ const PALABRAS_CLAVE_IPI = [
   [/AGROQU[IÍ]MIC/, "agroquimicos"],
   [/PINTURA/, "pinturas"],
   [/DETERGENTE|JAB[OÓ]N/, "detergentes_jabones_productos_personales"],
-  [/CAUCHO|PL[AÁ]STIC/, "productos_caucho_plastico"],
+  [/CAUCHO|PL[AÁ]STIC|CUBIERTA|NEUM[AÁ]TIC/, "productos_caucho_plastico"],
   // Más específico primero: "artículos de cemento"/yeso antes que "cemento" a secas.
   [/ART[IÍ]CULOS\s+DE\s+CEMENTO|\bYESO\b/, "articulos_cemento_yeso"],
   [/\bCEMENTO\b/, "cemento"],
