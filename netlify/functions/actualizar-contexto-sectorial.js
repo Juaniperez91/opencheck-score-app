@@ -261,13 +261,33 @@ export default async () => {
       return new Response("ninguna tanda respondió, se mantiene el dato anterior", { status: 502 });
     }
 
+    // Si hubo una falla parcial (algunas tandas sí, otras no — típico de un
+    // límite de pedidos del INDEC, no de un problema nuestro), mezclamos con
+    // lo que ya había guardado en vez de pisarlo entero. Así un sector o una
+    // categoría del IPI que se trajo bien AYER no desaparece solo porque HOY
+    // su tanda puntual falló — gana el dato de hoy donde haya, y se completa
+    // con el de ayer donde falte.
+    let generalFinal = general, sectoresFinal = sectores, ipiFinal = ipi;
+    if (tandasFallidas > 0){
+      const { data: anterior } = await supabaseAdmin
+        .from("contexto_sectorial")
+        .select("datos")
+        .eq("id", "latest")
+        .single();
+      if (anterior && anterior.datos){
+        generalFinal = general || anterior.datos.general || null;
+        sectoresFinal = { ...(anterior.datos.sectores || {}), ...sectores };
+        ipiFinal = { ...(anterior.datos.ipi || {}), ...ipi };
+      }
+    }
+
     const datos = {
       ok: true,
       fuente: "INDEC — EMAE apertura sectorial, base 2004; IPI manufacturero por producto; ISAC construcción (vía datos.gob.ar)",
       parcial: tandasFallidas > 0, // avisa si alguna tanda falló, para no ocultarlo
-      general,
-      sectores,
-      ipi
+      general: generalFinal,
+      sectores: sectoresFinal,
+      ipi: ipiFinal
     };
 
     const { error } = await supabaseAdmin
