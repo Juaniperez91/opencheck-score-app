@@ -2595,6 +2595,43 @@ function describirAntiguedadActividad(periodo, hoy = new Date()){
   return `Desde ${formatearPeriodoActividad(s)} (${m === 0 ? "este mes" : "hace " + formatearDuracionMeses(m)})`;
 }
 
+// Nombres prolijos para mostrar las categorías del IPI (las claves internas
+// son los "title" de la API, en minúscula y sin tildes — esto es solo para
+// la pantalla, no cambia nada de la lógica de matching).
+const NOMBRES_IPI = {
+  carne_vacuna: "carne vacuna",
+  carne_aviar: "carne aviar",
+  vino: "vino",
+  azucar_confiteria_chocolate: "azúcar, confitería y chocolate",
+  galletitas_panaderia_pastas: "galletitas, panadería y pastas",
+  molienda_oleaginosas: "molienda de oleaginosas",
+  cigarrillos: "cigarrillos",
+  productos_tabaco: "productos de tabaco",
+  prendas_vestir_cuero_calzado: "prendas de vestir, cuero y calzado",
+  calzado: "calzado",
+  curtido_articulos_cuero: "curtido y artículos de cuero",
+  otros_productos_textiles: "productos textiles",
+  productos_papel: "papel",
+  edicion_impresion: "edición e impresión",
+  productos_farmaceuticos: "productos farmacéuticos",
+  agroquimicos: "agroquímicos",
+  pinturas: "pinturas",
+  detergentes_jabones_productos_personales: "detergentes, jabones y productos personales",
+  productos_caucho_plastico: "productos de caucho y plástico",
+  cemento: "cemento",
+  articulos_cemento_yeso: "artículos de cemento y yeso",
+  productos_arcilla_ceramica: "productos de arcilla y cerámica",
+  industria_siderurgica: "industria siderúrgica",
+  industrias_metalicas_basicas: "industrias metálicas básicas",
+  fundicion_metales: "fundición de metales",
+  productos_metal: "productos de metal",
+  productos_metalicos_uso_estructural: "productos metálicos de uso estructural",
+  maquinaria_agropecuaria: "maquinaria agropecuaria",
+  autopartes: "autopartes",
+  motocicletas: "motocicletas",
+  equipos_electricos: "equipos eléctricos"
+};
+
 function capitalizarActividad(txt){
   const t = String(txt || "").toLowerCase();
   return t.charAt(0).toUpperCase() + t.slice(1);
@@ -2672,7 +2709,7 @@ function construirBloqueRubro(datos, resultado){
     const ctx = datos.contextoSectorial;
     const p = ctx && ctx.ipi && ctx.ipi[ipiTitulo];
     if (p){
-      const nombreProducto = ipiTitulo.replace(/_/g, " ");
+      const nombreProducto = NOMBRES_IPI[ipiTitulo] || ipiTitulo.replace(/_/g, " ");
       const textoProducto = `Dentro de ese sector, el producto que más se acerca a esta actividad (${nombreProducto}) ${verboVariacion(p.interanualPct)} <b>${formatearPctConSigno(p.interanualPct)}</b> interanual en ${formatearPeriodoEMAE(p.fecha)} (promedio de los últimos 3 meses: ${formatearPctConSigno(p.promedio3mPct)}).`;
       filas += `
     <div class="breakdown-row">
@@ -2723,20 +2760,42 @@ function construirBloqueRubro(datos, resultado){
 }
 
 async function construirDatosLibradorReal(cuit){
-  const [deuda, rechazos] = await Promise.all([
-    consultarDeudorBCRA(cuit),
-    consultarRechazadosBCRA(cuit)
+  // Todo lo de acá abajo es independiente entre sí (ninguna de estas 5
+  // llamadas necesita el RESULTADO de otra para empezar), así que las
+  // lanzamos todas al mismo tiempo en vez de una atrás de la otra. Antes
+  // eran secuenciales (BCRA deuda/rechazos -> historial -> inflación ->
+  // ARCA -> contexto sectorial), y el tiempo total era la SUMA de las 5 —
+  // con esto pasa a ser el de la más lenta de las 5, nada más. El contexto
+  // sectorial en particular ya no hace falta esperar a saber el rubro para
+  // pedirlo: trae los 15 sectores igual, se decide recién al final si hay
+  // uno que usar.
+  const [
+    deudaYRechazosR,
+    historialR,
+    inflacionR,
+    arcaR,
+    contextoSectorialR
+  ] = await Promise.allSettled([
+    Promise.all([consultarDeudorBCRA(cuit), consultarRechazadosBCRA(cuit)]),
+    consultarHistorialBCRA(cuit),
+    obtenerInflacionMensualBCRA(),
+    fetch(`/.netlify/functions/consultar-antiguedad-arca?cuit=${cuit}`).then(r => r.ok ? r.json() : null),
+    obtenerContextoSectorialEMAE()
   ]);
+
+  if (deudaYRechazosR.status === "rejected") throw deudaYRechazosR.reason;
+  const [deuda, rechazos] = deudaYRechazosR.value;
   if (!deuda.ok) throw new Error(deuda.error || "Fallo consultando deuda BCRA");
   if (!rechazos.ok) throw new Error(rechazos.error || "Fallo consultando rechazados BCRA");
 
   // El historial es best-effort: si falla, seguimos con un solo punto (el vigente)
   // en vez de cortar toda la consulta.
   let historial = { historialSituacion:[], historialDeuda:[], historialMontoEnMora:[] };
-  try {
-    const h = await consultarHistorialBCRA(cuit);
-    if (h.ok && h.historialSituacion.length) historial = h;
-  } catch (e) { /* silencioso: el historial es un complemento, no un bloqueante */ }
+  if (historialR.status === "fulfilled" && historialR.value.ok && historialR.value.historialSituacion.length){
+    historial = historialR.value;
+  } else if (historialR.status === "rejected"){
+    /* silencioso: el historial es un complemento, no un bloqueante */
+  }
 
   if (historial.historialSituacion.length === 0){
     const situacionVigente = deuda.entidades.length ? Math.max(...deuda.entidades.map(e=>e.situacion)) : 1;
@@ -2757,16 +2816,16 @@ async function construirDatosLibradorReal(cuit){
   let deudaVsInflacion = { disponible:false };
   let factorAjusteEndeudamiento = 1;
   let factorAjusteAtrasos = 1;
-  try {
-    const inflacionPorPeriodo = await obtenerInflacionMensualBCRA();
+  if (inflacionR.status === "fulfilled"){
+    const inflacionPorPeriodo = inflacionR.value;
     deudaVsInflacion = calcularDeudaRealVsInflacion(historial.historialDeuda, historial.historialPeriodos, inflacionPorPeriodo);
     if (!deudaVsInflacion.disponible){
       console.warn("[OpenCheck Score] Inflación OK pero no se pudo alinear con historialPeriodos:", historial.historialPeriodos, "vs mapa:", inflacionPorPeriodo);
     }
     factorAjusteEndeudamiento = calcularFactorAjusteEndeudamiento(inflacionPorPeriodo);
     factorAjusteAtrasos = calcularFactorAjusteDesdePeriodo(MATRIZ_ATRASOS_PERIODO_BASE, inflacionPorPeriodo);
-  } catch (e) {
-    console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", e.message);
+  } else {
+    console.warn("[OpenCheck Score] Falló obtenerInflacionMensualBCRA:", inflacionR.reason && inflacionR.reason.message);
   }
 
   // Antigüedad del CUIT vía ARCA: best-effort, igual que el resto de los
@@ -2775,27 +2834,25 @@ async function construirDatosLibradorReal(cuit){
   // toda la consulta por esto.
   let antiguedadCuitAnios = null;
   let rubro = null; // actividad registrada en ARCA (misma consulta, sin costo extra)
-  try {
-    const respArca = await fetch(`/.netlify/functions/consultar-antiguedad-arca?cuit=${cuit}`);
-    if (respArca.ok){
-      const dataArca = await respArca.json();
-      if (dataArca.ok && dataArca.encontrado && dataArca.aniosAntiguedad !== null && dataArca.aniosAntiguedad !== undefined){
-        antiguedadCuitAnios = dataArca.aniosAntiguedad;
-      }
-      if (dataArca.ok && dataArca.encontrado && dataArca.actividadPrincipal){
-        rubro = { principal: dataArca.actividadPrincipal, actividades: dataArca.actividades || [] };
-      }
+  if (arcaR.status === "fulfilled" && arcaR.value){
+    const dataArca = arcaR.value;
+    if (dataArca.ok && dataArca.encontrado && dataArca.aniosAntiguedad !== null && dataArca.aniosAntiguedad !== undefined){
+      antiguedadCuitAnios = dataArca.aniosAntiguedad;
     }
-  } catch (e) {
-    console.warn("[OpenCheck Score] Falló consultar-antiguedad-arca:", e.message);
+    if (dataArca.ok && dataArca.encontrado && dataArca.actividadPrincipal){
+      rubro = { principal: dataArca.actividadPrincipal, actividades: dataArca.actividades || [] };
+    }
+  } else if (arcaR.status === "rejected"){
+    console.warn("[OpenCheck Score] Falló consultar-antiguedad-arca:", arcaR.reason && arcaR.reason.message);
   }
 
-  // Contexto del sector (EMAE, INDEC): solo si el rubro se pudo asociar a un
-  // sector. Informativo, best-effort — si falla, se muestra el rubro sin el dato.
-  let contextoSectorial = null;
-  if (rubro && rubro.principal && rubro.principal.sectorEmae){
-    contextoSectorial = await obtenerContextoSectorialEMAE();
-  }
+  // Contexto del sector (EMAE, INDEC): ya lo pedimos en paralelo con todo lo
+  // demás arriba — acá solo decidimos si corresponde usarlo (si el rubro se
+  // pudo asociar a un sector). Informativo, best-effort — si falló la
+  // consulta, se muestra el rubro sin el dato sectorial.
+  const contextoSectorial = (rubro && rubro.principal && rubro.principal.sectorEmae && contextoSectorialR.status === "fulfilled")
+    ? contextoSectorialR.value
+    : null;
 
   return prepararDatos({
     empresa: deuda.denominacion || ("Librador " + cuit),
