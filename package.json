@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "web-push": "^3.6.7",
-    "afip-apis": "^0.5.5"
+    "afip-apis": "^0.5.5",
+    "@supabase/supabase-js": "^2.45.0"
   }
 }
