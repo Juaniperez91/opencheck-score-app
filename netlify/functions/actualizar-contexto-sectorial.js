@@ -36,6 +36,10 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
 
 const API_SERIES = "https://apis.datos.gob.ar/series/api/series/";
+// Tiempo máximo de espera por la API del INDEC. Cuando responde, tarda 1-9s;
+// subimos de 15s a 24s por si algún día está lenta pero viva. Tope duro: Netlify
+// corta las funciones programadas a los 30s, así que no conviene pasarse.
+const TIMEOUT_MS = 24000;
 const TANDA_MAX = 8; // ids por pedido — margen cómodo por debajo de donde falló con 46
 
 const SERIE_GENERAL = "143.3_NO_PR_2004_A_21"; // EMAE original, nivel general
@@ -169,7 +173,15 @@ function enTandas(arr, n){
 // puntual (el resto de las tandas siguen su curso igual, vía Promise.allSettled).
 async function pedirTanda(ids, signal){
   const url = `${API_SERIES}?ids=${ids.join(",")}&last=15&format=json`;
-  const r = await fetch(url, { headers: { Accept: "application/json" }, signal });
+  let r;
+  try {
+    r = await fetch(url, { headers: { Accept: "application/json" }, signal });
+  } catch (e){
+    // Un "This operation was aborted" pelado no dice nada en el log: dejamos
+    // claro que fue el tiempo límite y qué tanda era.
+    const motivo = e && e.name === "AbortError" ? `sin respuesta en ${TIMEOUT_MS / 1000}s (timeout)` : (e && e.message);
+    throw new Error(`${motivo} — tanda [${ids[0]} … ${ids[ids.length - 1]}] (${ids.length} series)`);
+  }
   if (!r.ok) throw new Error(`Series de Tiempo respondió ${r.status} para [${ids.join(",")}]`);
   const json = await r.json();
   const filas = json && json.data;
@@ -200,7 +212,7 @@ export default async () => {
   const tandas = enTandas(pedidos, TANDA_MAX);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
     const resultadosTandas = await Promise.allSettled(
@@ -214,7 +226,7 @@ export default async () => {
 
     resultadosTandas.forEach((resultado, i) => {
       if (resultado.status === "rejected"){
-        console.error("[consultar-emae-sector] Falló una tanda:", resultado.reason && resultado.reason.message);
+        console.error("[actualizar-contexto-sectorial] Falló una tanda:", resultado.reason && resultado.reason.message);
         tandasFallidas++;
         return; // el resto de las tandas igual se procesa — mejor parcial que nada
       }
@@ -245,13 +257,6 @@ export default async () => {
     // Adjuntamos el ISAC al sector F (Construcción) como una confirmación
     // cruzada adicional, con su propia fuente aclarada.
     if (isac && sectores.F) sectores.F.confirmacionCruzada = { fuente: "ISAC (INDEC)", ...isac };
-
-    // Si TODAS las tandas fallaron, ahí sí es un error real (no parcial).
-    if (tandasFallidas === tandas.length){
-      return new Response(JSON.stringify({ ok: false, error: "Ninguna tanda de series respondió correctamente" }), {
-        status: 502, headers: { "Content-Type": "application/json" }
-      });
-    }
 
     // Si ninguna tanda funcionó, mejor NO pisar lo que ya había guardado de
     // un día anterior (eso seguiría siendo útil) — se deja la fila como
@@ -310,11 +315,17 @@ export default async () => {
   }
 };
 
-// Corre todos los días a las 9:00 (hora del servidor, UTC). El INDEC publica
-// estas series con su propio calendario mensual (fecha distinta cada mes,
-// cada organismo) — correr todos los días, no solo cerca de esa fecha, es
-// barato (si no hay dato nuevo, se guarda lo mismo que ya había) y evita
-// tener que llevar la cuenta de cuándo publica cada uno.
+// Corre 3 veces por día (09:17, 15:17 y 21:17 UTC = 06:17, 12:17 y 18:17 hora
+// Argentina). El INDEC publica estas series con su propio calendario mensual,
+// así que correr todos los días es barato (si no hay dato nuevo se guarda lo
+// mismo que ya había) y evita llevar la cuenta de cuándo publica cada uno.
+//
+// Por qué varias veces y en el minuto 17: el 4 y 5 de octubre la corrida de las
+// 09:00 en punto no obtuvo respuesta del INDEC en 15s (las 6 consultas, a la
+// vez). Una falla puntual no pierde nada (el dato anterior queda guardado), pero
+// con 3 intentos separados por horas es mucho más difícil que todos coincidan
+// con un momento malo de la API. Y evitamos el minuto 0, donde tienden a
+// amontonarse los procesos programados de todo el mundo.
 export const config = {
-  schedule: "0 9 * * *"
+  schedule: "17 9,15,21 * * *"
 };
