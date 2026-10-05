@@ -1680,15 +1680,46 @@ function scoreEndeudamiento(mNominal, factorAjuste = 1){
   if (m >= 1) return 2;
   return 0;
 }
+// Factor (0 a 1) que ajusta cuánto premia el endeudamiento según la
+// situación crediticia de los últimos 24 meses. Situación 1 limpia =
+// factor 1 (sin cambios). A peor historial, se achica cuánto puede sumar
+// la misma deuda — nunca la convierte en penalización, solo en un premio
+// más chico.
+//
+// A PROPÓSITO no mira rechazos sin fondos acá: esos ya tienen su propio
+// castigo fuerte en calcularPenalizacionRechazos (factorTotal). Probado
+// con un caso real: un solo rechazo sin fondos de hace 6-12 meses, con
+// situación 1 impecable, terminaba penalizando DOS VECES — una por
+// Rechazos (bajaba el puntaje ~49%) y otra acá, reduciendo encima el
+// puntaje de Endeudamiento. Es justo el error de diseño que se quería
+// evitar (penalizar el mismo hecho en dos lugares distintos), así que
+// este factor queda atado solo a Situación, que no tiene ese riesgo de
+// solaparse — Situación24m mide continuidad de pago, no eventos
+// puntuales como un rechazo.
+function calcularFactorComportamientoEndeudamiento(peorSituacion24m){
+  // Sin historial de 24 meses (ej. sin antecedentes de deuda): no hay
+  // evidencia de mal comportamiento, así que no se reduce nada.
+  if (peorSituacion24m === null || peorSituacion24m === undefined) return 1;
+  if (peorSituacion24m >= 5) return 0.25;
+  if (peorSituacion24m >= 3) return 0.5;
+  if (peorSituacion24m === 2) return 0.75;
+  return 1; // situación 1 todo el período
+}
+
 function scoreBancos(n){
-  // 10 pts. INVERTIDO respecto a versiones anteriores: más entidades
-  // bancarias = mejor puntaje (como en OpenCheck real — más bancos indica
-  // mayor bancarización y acceso al crédito, no más riesgo disperso).
-  if (n >= 5) return 10;
-  if (n === 4) return 8;
-  if (n === 3) return 6;
-  if (n === 2) return 4;
-  if (n === 1) return 2;
+  // 5 pts (antes 10 — Juan Ignacio detectó en casos reales que esta
+  // variable pesaba más de lo que su poder predictivo justifica: hay
+  // buenos contribuyentes con pocos bancos, y contribuyentes complicados
+  // con varios). Bajarle el peso redistribuye esos 5 puntos entre el
+  // resto de las variables automáticamente, vía el reescalado a 100 que
+  // ya hace calcularScore — no hace falta tocar nada más para eso.
+  // Sigue INVERTIDO respecto a versiones anteriores: más entidades
+  // bancarias = mejor puntaje (más bancarización y acceso al crédito).
+  if (n >= 5) return 5;
+  if (n === 4) return 4;
+  if (n === 3) return 3;
+  if (n === 2) return 2;
+  if (n === 1) return 1;
   return 0;
 }
 // Determina si hay algún rechazo "sin fondos" en los últimos 6 meses que
@@ -1777,6 +1808,37 @@ function hayTriggerInhabilitacion(d, hoy = new Date()){
 // propia (con su propio peso dentro de los 100, como las demás),
 // replicando el patrón de "redistribuir si no está disponible" que ya
 // usamos en deuda vs. inflación — no dejarlo como penalización.
+// Ajuste combinado sector + deuda (0% a 5% sobre el puntaje final). Exige
+// las DOS señales juntas: la deuda creciendo materialmente por encima de
+// la inflación, Y el sector de esa actividad cayendo a nivel nacional
+// (EMAE, INDEC). Si falta cualquiera de las dos, o el dato de sector no
+// está disponible, no penaliza nada — deliberadamente conservador, mismo
+// criterio que el resto del motor: mejor no penalizar con un dato dudoso
+// que forzar un número sin sustento. Chico a propósito: todavía no hay
+// feedback real (Clientes) para calibrar cuánto debería pesar esto de
+// verdad — este rango acota el impacto mientras tanto.
+function calcularPenalizacionSectorDeuda(d){
+  const sinDesc = { factor: 0, sTier: null, dTier: null };
+
+  const cambio = (d.deudaVsInflacion && d.deudaVsInflacion.disponible) ? d.deudaVsInflacion.cambioTotalRelativo : null;
+  if (cambio === null || cambio < 0.25) return sinDesc; // por debajo del primer tramo de deuda
+
+  const sectorInfo = d.rubro && d.rubro.principal && d.rubro.principal.sectorEmae;
+  const s = sectorInfo && d.contextoSectorial && d.contextoSectorial.sectores && d.contextoSectorial.sectores[sectorInfo.letra];
+  if (!s || typeof s.interanualPct !== "number" || s.interanualPct >= 0) return sinDesc; // sin dato, o sector no cae
+
+  const caidaSector = Math.abs(s.interanualPct);
+  const sTier = caidaSector <= 1.5 ? 1 : caidaSector <= 3 ? 2 : 3;
+  const dTier = cambio <= 0.5 ? 1 : cambio <= 0.75 ? 2 : cambio <= 1.0 ? 3 : 4;
+
+  const MATRIZ = {
+    1: { 1:1, 2:2, 3:3, 4:4 },
+    2: { 1:2, 2:3, 3:4, 4:5 },
+    3: { 1:3, 2:4, 3:5, 4:5 }
+  };
+  return { factor: MATRIZ[sTier][dTier] / 100, sTier, dTier };
+}
+
 function calcularPenalizacionAntiguedad(antiguedadCuitAnios){
   if (antiguedadCuitAnios === null || antiguedadCuitAnios === undefined) return { factor:0, ventana:null };
   const meses = antiguedadCuitAnios * 12;
@@ -2053,7 +2115,17 @@ function calcularScore(d){
   const pSituacion24mBase = sinAntecedentesDeuda ? null : scoreSituacion24m(peorSituacion24m);
   const pSituacion24m = sinAntecedentesDeuda ? null
     : Math.max(0, pSituacion24mBase - Math.round(penalizacion24m.factor * 20));
-  const pEndeudamiento = scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1);
+  // El monto de deuda informado se lee hoy como "buen acceso a crédito"
+  // sin mirar si el comportamiento de pago lo respalda. Si el historial de
+  // 24 meses muestra mora, o hubo rechazos sin fondos, un endeudamiento
+  // alto deja de ser un dato tan favorable — probablemente refleje
+  // necesidad de financiamiento, no acceso solvente a él. Esto NO es una
+  // penalización nueva (Situación y Rechazos ya penalizan la mora por su
+  // cuenta): es dejar de premiar tan fuerte algo que el propio
+  // comportamiento contradice, para no festejar dos veces lo mismo en
+  // sentidos opuestos.
+  const factorComportamientoEndeudamiento = calcularFactorComportamientoEndeudamiento(peorSituacion24m);
+  const pEndeudamiento = Math.round(scoreEndeudamiento(d.endeudamientoMillones, d.factorAjusteEndeudamiento || 1) * factorComportamientoEndeudamiento);
   const pBancos = scoreBancos(d.cantidadBancos);
 
   // ---- Deuda real vs. inflación: 10 pts, redistribuida si no está disponible ----
@@ -2094,7 +2166,7 @@ function calcularScore(d){
   if (!sinAntecedentesDeuda){
     variables.push({ pts: pSituacion, max: 30 }, { pts: pSituacion24m, max: 20 });
   }
-  variables.push({ pts: pEndeudamiento, max: 10 }, { pts: pBancos, max: 10 });
+  variables.push({ pts: pEndeudamiento, max: 10 }, { pts: pBancos, max: 5 });
   if (inflacionDisponible) variables.push({ pts: pDeudaVsInflacion, max: 10 });
   const sumaPts = variables.reduce((s,v) => s+v.pts, 0);
   const sumaMax = variables.reduce((s,v) => s+v.max, 0);
@@ -2110,6 +2182,7 @@ function calcularScore(d){
   // ---- Penalización por rechazos (% sobre el score, no puntos) ----
   const penalizacionRechazos = calcularPenalizacionRechazos(d);
   const penalizacionAntiguedad = calcularPenalizacionAntiguedad(d.antiguedadCuitAnios);
+  const penalizacionSectorDeuda = calcularPenalizacionSectorDeuda(d);
 
   let puntosFinales = puntosBase;
   let forzadoC2 = false;
@@ -2126,7 +2199,7 @@ function calcularScore(d){
   // dominante, ≥40% de la deuda total), no tiene un % asociado — usamos
   // 1 (100%) como valor conservador para el número mostrado.
   const factorAtrasosNum = (atrasos && typeof atrasos.factor === "number") ? atrasos.factor : (atrasos.tipo === "C2" ? 1 : 0);
-  const factorTotal = Math.min(factorAtrasosNum + penalizacionRechazos.factor + penalizacionAntiguedad.factor, 1);
+  const factorTotal = Math.min(factorAtrasosNum + penalizacionRechazos.factor + penalizacionAntiguedad.factor + penalizacionSectorDeuda.factor, 1);
   puntosFinales = Math.round(puntosBase * (1 - factorTotal));
 
   const peorSituacionEnMora = entidadesEnMora.length ? Math.max(...entidadesEnMora.map(e => e.situacion)) : null;
@@ -2182,8 +2255,12 @@ function calcularScore(d){
          desc: "Sin antecedentes de deuda bancaria en los últimos 24 meses. Redistribuimos estos 20 puntos entre las demás variables."}
       : {puntos:pSituacion24m, max:20, label:"Situación — últimos 24 meses", desc: explicarSituacion24m(peorSituacion24m, penalizacion24m), detalleMensual24m: penalizacion24m.detalleMensual24m || []},
     rechazos: {puntos:null, factorPenalizacion:penalizacionRechazos.factor, label:"Rechazos de cheques (penalización)", desc: explicarRechazos(d, penalizacionRechazos), detalleRechazos: d.detalleRechazos || []},
-    endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario", desc: explicarEndeudamiento(d.endeudamientoMillones)},
-    bancos: {puntos:pBancos, max:10, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
+    endeudamiento: {puntos:pEndeudamiento, max:10, label:"Endeudamiento bancario",
+      desc: explicarEndeudamiento(d.endeudamientoMillones)
+        + (factorComportamientoEndeudamiento < 1
+            ? ` Como el historial de pago de los últimos 24 meses no viene limpio, este puntaje quedó en el ${Math.round(factorComportamientoEndeudamiento*100)}% del que le correspondería solo por el monto.`
+            : "")},
+    bancos: {puntos:pBancos, max:5, label:"Diversificación de bancos", desc: explicarBancos(d.cantidadBancos)},
     deudaVsInflacion: !inflacionDisponible
       ? {puntos:null, max:10, label:"Deuda real vs. inflación", noDisponible:true,
          desc: "No pudimos calcularlo (falta la serie de inflación del BCRA o el historial no tiene fechas alineadas). No penalizamos al librador por esto: redistribuimos estos 10 puntos entre las demás variables."}
@@ -2218,6 +2295,18 @@ function calcularScore(d){
       desc: penalizacionAntiguedad.factor > 0
         ? `Persona jurídica constituida hace ${d.antiguedadCuitAnios} años — CUIT todavía reciente, resta ${Math.round(penalizacionAntiguedad.factor*100)}% (${penalizacionAntiguedad.ventana}).`
         : `Persona jurídica constituida hace ${d.antiguedadCuitAnios} años — antigüedad suficiente, sin descuento por este concepto.`
+    };
+  }
+
+  // Sector + deuda combinados: solo aparece como fila cuando efectivamente
+  // se cumplieron las dos condiciones (si no, no hay nada que mostrar acá
+  // — a diferencia de Rechazos, que siempre es relevante, esta señal recién
+  // existe cuando se dan ambas cosas juntas).
+  if (penalizacionSectorDeuda.factor > 0){
+    detalle.sectorYDeuda = {
+      puntos:null, factorPenalizacion:penalizacionSectorDeuda.factor,
+      label:"Sector y deuda (ajuste combinado)",
+      desc: `La deuda creció por encima de la inflación y el sector de esta actividad viene cayendo a nivel nacional — resta ${Math.round(penalizacionSectorDeuda.factor*100)}% por la combinación de ambas señales.`
     };
   }
 
@@ -2739,7 +2828,13 @@ function construirBloqueRubro(datos, resultado){
   if (sectorDisponible && (deudaPenalizada || sectorEnCaida)){
     let textoCruce;
     if (deudaPenalizada && sectorEnCaida){
-      textoCruce = `Este perfil combina dos señales que conviene mirar juntas: la deuda creció por encima de la inflación, y su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}). No es una señal de alerta por sí sola, pero es un contexto útil al momento de decidir si operar con este cliente o qué seguimiento darle.`;
+      {
+        const sd = resultado && resultado.detalle && resultado.detalle.sectorYDeuda;
+        const textoAjuste = (sd && sd.factorPenalizacion > 0)
+          ? ` Esto ya restó un ${Math.round(sd.factorPenalizacion*100)}% sobre el puntaje final.`
+          : "";
+        textoCruce = `Este perfil combina dos señales que conviene mirar juntas: la deuda creció por encima de la inflación, y su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}).${textoAjuste} No es una señal de alerta por sí sola, pero es un contexto útil al momento de decidir si operar con este cliente o qué seguimiento darle.`;
+      }
     } else if (sectorEnCaida){
       textoCruce = `Su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}), aunque el endeudamiento de esta empresa no muestra un crecimiento por encima de la inflación. Es contexto para tener en cuenta, no una señal de alerta por sí sola.`;
     } else {
@@ -3220,7 +3315,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-09-28-v20-ipi-por-producto";
+const VERSION_APP = "2026-10-05-v21-ajustes-puntaje";
 
 const state = {
   user: null,
