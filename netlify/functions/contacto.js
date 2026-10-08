@@ -15,7 +15,7 @@
 const DESTINO = "contacto@opencheck.pro";
 const REMITENTE = "OpenCheck <contacto@opencheck.pro>";
 
-export default async (req) => {
+const _handlerOriginal = async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   let body;
@@ -59,4 +59,21 @@ export default async (req) => {
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+};
+
+// --- CORS: permite que la app Android (origen https://localhost) llame a esta función ---
+const _ORIGENES_OK = ["https://localhost", "http://localhost", "capacitor://localhost", "https://opencheck-app.netlify.app"];
+export default async (req) => {
+  const origen = req.headers.get("origin") || "";
+  const cors = {
+    "Access-Control-Allow-Origin": _ORIGENES_OK.includes(origen) ? origen : "https://opencheck-app.netlify.app",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Vary": "Origin"
+  };
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  const res = await _handlerOriginal(req);
+  const h = new Headers(res.headers);
+  for (const k in cors) h.set(k, cors[k]);
+  return new Response(res.body, { status: res.status, headers: h });
 };
