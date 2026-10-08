@@ -1471,7 +1471,7 @@ async function responderConfirmacion(id, token, resultado, btn){
   const contenedor = btn.closest("[data-confirmacion-widget]");
   if (contenedor) contenedor.remove();
   try {
-    await fetch(`/.netlify/functions/confirmar-pago?id=${id}&token=${token}&resultado=${resultado}&fuente=usuario_app`);
+    await fetch(`${API_BASE}/.netlify/functions/confirmar-pago?id=${id}&token=${token}&resultado=${resultado}&fuente=usuario_app`);
     mostrarToast("¡Gracias por confirmarnos!");
     if (document.getElementById("screen-historial").classList.contains("active")) renderHistorial();
     verificarConfirmacionesPendientes();
@@ -2501,6 +2501,8 @@ for (const [cuit, raw] of Object.entries(BCRA_DB_RAW)) BCRA_DB[cuit] = prepararD
    Si falla (red/CORS/500), cae al dataset simulado de arriba
    para que la demo nunca se rompa.
    ======================================================= */
+// En la app Android el origen es https://localhost: las funciones de Netlify hay que llamarlas con URL completa.
+const API_BASE = (location.hostname === "localhost" || location.protocol === "capacitor:") ? "https://opencheck-app.netlify.app" : "";
 const BCRA_DEUDAS_URL = "https://api.bcra.gob.ar/CentralDeDeudores/v1.0/Deudas";
 const BCRA_HISTORICAS_URL = "https://api.bcra.gob.ar/CentralDeDeudores/v1.0/Deudas/Historicas";
 const BCRA_RECHAZADOS_URL = "https://api.bcra.gob.ar/CentralDeDeudores/v1.0/Deudas/ChequesRechazados";
@@ -2619,7 +2621,7 @@ async function obtenerContextoSectorialEMAE(){
   const SEIS_HORAS = 6 * 3600 * 1000;
   if (EMAE_SECTORIAL_CACHE && Date.now() - EMAE_SECTORIAL_CACHE.ts < SEIS_HORAS) return EMAE_SECTORIAL_CACHE.data;
   try {
-    const r = await fetch("/.netlify/functions/consultar-emae-sector");
+    const r = await fetch(`${API_BASE}/.netlify/functions/consultar-emae-sector`);
     if (!r.ok) return null;
     const data = await r.json();
     if (!data || !data.ok) return null;
@@ -2874,7 +2876,7 @@ async function construirDatosLibradorReal(cuit){
     Promise.all([consultarDeudorBCRA(cuit), consultarRechazadosBCRA(cuit)]),
     consultarHistorialBCRA(cuit),
     obtenerInflacionMensualBCRA(),
-    fetch(`/.netlify/functions/consultar-antiguedad-arca?cuit=${cuit}`).then(r => r.ok ? r.json() : null),
+    fetch(`${API_BASE}/.netlify/functions/consultar-antiguedad-arca?cuit=${cuit}`).then(r => r.ok ? r.json() : null),
     obtenerContextoSectorialEMAE()
   ]);
 
@@ -3405,7 +3407,7 @@ async function enviarContacto(){
   btn.textContent = "Enviando…";
 
   try {
-    const r = await fetch("/.netlify/functions/contacto", {
+    const r = await fetch(`${API_BASE}/.netlify/functions/contacto`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nombre, email, celular, mensaje })
@@ -3676,7 +3678,7 @@ async function eliminarCuentaDefinitivamente(){
       cerrarModalEliminar2();
       return;
     }
-    const resp = await fetch("/.netlify/functions/eliminar-usuario", {
+    const resp = await fetch(`${API_BASE}/.netlify/functions/eliminar-usuario`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tokenLlamante: sessionData.session.access_token })
