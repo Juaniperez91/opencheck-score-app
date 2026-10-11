@@ -105,11 +105,21 @@ const _handlerOriginal = async (req) => {
   }
 
   try {
-    const r = await fetch(BCRA_BASE + ruta, {
-      headers: CABECERAS,
-      signal: AbortSignal.timeout(TIMEOUT_MS)
-    });
-    const texto = await r.text();
+    // El BCRA a veces corta la conexión (ECONNRESET) de forma intermitente:
+    // reintentamos hasta 3 veces con una pausa corta antes de rendirnos.
+    let r, texto, ultimoError;
+    for (let intento = 1; intento <= 3; intento++){
+      try {
+        r = await fetch(BCRA_BASE + ruta, { headers: CABECERAS, signal: AbortSignal.timeout(4000) });
+        texto = await r.text();
+        ultimoError = null;
+        break;
+      } catch (e){
+        ultimoError = e;
+        if (intento < 3) await new Promise(res => setTimeout(res, 300 * intento));
+      }
+    }
+    if (ultimoError) throw ultimoError;
     // 200 = datos, 404 = "sin datos" para ese CUIT. Cualquier otra cosa es un
     // error del BCRA y no se guarda.
     if (r.status === 200 || r.status === 404){
