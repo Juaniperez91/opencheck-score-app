@@ -24,6 +24,21 @@ const RUTAS_OK = [
   /^\/cheques\/v1\.0\/entidades$/
 ];
 
+// Nos identificamos con un User-Agent propio: algunos filtros anti-bots cortan
+// la conexión a clientes que llegan sin identificación.
+const CABECERAS = {
+  "Accept": "application/json",
+  "User-Agent": "Mozilla/5.0 (compatible; OpenCheckScore/1.0; +https://opencheck.pro)",
+  "Accept-Language": "es-AR,es;q=0.9"
+};
+
+// Devuelve el motivo real de una falla de red (el mensaje de fetch solo dice
+// "fetch failed"; el detalle útil viene en e.cause).
+function motivo(e){
+  const c = e && e.cause;
+  return (c && (c.code || c.message)) ? `${e.message} (${c.code || ""} ${c.message || ""})`.trim() : (e && e.message) || String(e);
+}
+
 const cache = new Map();   // ruta -> { t, status, body }
 const visitas = new Map(); // cliente -> { desde, n }
 
@@ -39,10 +54,36 @@ const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
   status, headers: { "Content-Type": "application/json" }
 });
 
+// Diagnóstico: ?diag=1 muestra con qué IP y desde qué región sale este servidor,
+// y si logra conectarse al BCRA. Sirve para saber POR QUÉ falla el plan B.
+async function diagnostico(){
+  const salida = { region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || null, ip: null, pruebas: [] };
+  try {
+    const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(6000) });
+    salida.ip = (await r.json()).ip;
+  } catch (e){ salida.ip = "no se pudo averiguar: " + motivo(e); }
+  const destinos = [
+    BCRA_BASE + "/cheques/v1.0/entidades",
+    BCRA_BASE + "/CentralDeDeudores/v1.0/Deudas/20352469328",
+    "https://www.bcra.gob.ar/"
+  ];
+  for (const d of destinos){
+    const t0 = Date.now();
+    try {
+      const r = await fetch(d, { headers: CABECERAS, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      salida.pruebas.push({ destino: d, status: r.status, ms: Date.now() - t0 });
+    } catch (e){
+      salida.pruebas.push({ destino: d, error: motivo(e), ms: Date.now() - t0 });
+    }
+  }
+  return json(salida);
+}
+
 const _handlerOriginal = async (req) => {
   if (req.method !== "GET") return json({ error: "Método no permitido" }, 405);
 
   const url = new URL(req.url);
+  if (url.searchParams.get("diag") === "1") return diagnostico();
   const ruta = url.searchParams.get("path") || "";
   if (!RUTAS_OK.some(re => re.test(ruta))) return json({ error: "Ruta no permitida" }, 400);
 
@@ -59,7 +100,7 @@ const _handlerOriginal = async (req) => {
 
   try {
     const r = await fetch(BCRA_BASE + ruta, {
-      headers: { "Accept": "application/json" },
+      headers: CABECERAS,
       signal: AbortSignal.timeout(TIMEOUT_MS)
     });
     const texto = await r.text();
@@ -75,7 +116,7 @@ const _handlerOriginal = async (req) => {
     }
     return json({ error: "El BCRA respondió HTTP " + r.status }, 502);
   } catch (e){
-    return json({ error: "No se pudo contactar al BCRA: " + e.message }, 504);
+    return json({ error: "No se pudo contactar al BCRA: " + motivo(e) }, 504);
   }
 };
 
