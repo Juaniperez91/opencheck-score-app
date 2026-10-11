@@ -2509,9 +2509,62 @@ const BCRA_RECHAZADOS_URL = "https://api.bcra.gob.ar/CentralDeDeudores/v1.0/Deud
 const BCRA_DENUNCIADOS_URL = "https://api.bcra.gob.ar/cheques/v1.0/denunciados";
 const BCRA_ENTIDADES_URL = "https://api.bcra.gob.ar/cheques/v1.0/entidades";
 
+/* ---- Acceso al BCRA con plan B ----
+   El BCRA controla el tráfico POR IP (sin publicar los límites). Si la IP del
+   usuario está bloqueada o limitada, el pedido directo falla: en ese caso se
+   repite por la función bcra-proxy de Netlify, que sale con otra IP.
+   Primero se intenta directo a propósito: reparte la carga entre las IPs de
+   los usuarios en vez de concentrarla en una sola. */
+const BCRA_API = "https://api.bcra.gob.ar";
+const _bcraCache = new Map();           // ruta -> { t, status, body }
+const BCRA_CACHE_MS = 10 * 60 * 1000;   // evita repetir el mismo pedido (ej.: vista previa + consulta)
+function _senalTimeout(ms){
+  return (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") ? AbortSignal.timeout(ms) : undefined;
+}
+async function bcraFetch(ruta){
+  const g = _bcraCache.get(ruta);
+  if (g && Date.now() - g.t < BCRA_CACHE_MS) return new Response(g.body, { status: g.status });
+
+  let r = null;
+  try {
+    r = await fetch(BCRA_API + ruta, { method:"GET", headers:{ "Accept":"application/json" }, signal: _senalTimeout(7000) });
+  } catch (e){ r = null; }
+
+  // 200 (datos) y 404 ("sin datos para ese CUIT") son respuestas válidas del BCRA.
+  if (!r || (r.status !== 200 && r.status !== 404)){
+    console.warn("[OpenCheck Score] BCRA directo falló (" + (r ? "HTTP " + r.status : "sin respuesta") + "), probando por el servidor:", ruta);
+    try {
+      const rp = await fetch(`${API_BASE}/.netlify/functions/bcra-proxy?path=${encodeURIComponent(ruta)}`, { signal: _senalTimeout(15000) });
+      if (rp.status === 200 || rp.status === 404 || !r) r = rp;
+    } catch (e){
+      if (!r) throw e;   // ni directo ni por el servidor: que lo maneje quien llamó
+    }
+  }
+
+  if (r.status === 200 || r.status === 404){
+    try { _bcraCache.set(ruta, { t: Date.now(), status: r.status, body: await r.clone().text() }); } catch (e) {}
+  }
+  return r;
+}
+
+// Datos generales del BCRA (inflación mensual + listado de bancos) que guarda
+// el job diario en el servidor. Así no hace falta pedírselos al BCRA en cada
+// sesión. Devuelve null si todavía no hay datos o no se pudo leer.
+let _datosGeneralesBCRA = null;
+async function obtenerDatosGeneralesBCRA(){
+  if (_datosGeneralesBCRA) return _datosGeneralesBCRA;
+  try {
+    const r = await fetch(`${API_BASE}/.netlify/functions/consultar-datos-bcra`, { signal: _senalTimeout(8000) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (d && d.ok){ _datosGeneralesBCRA = d; return d; }
+  } catch (e) { /* seguimos con el pedido directo */ }
+  return null;
+}
+
 // Deuda vigente + razón social. 404 = sin deuda informada (no es error).
 async function consultarDeudorBCRA(cuit){
-  const r = await fetch(BCRA_DEUDAS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
+  const r = await bcraFetch("/CentralDeDeudores/v1.0/Deudas/" + cuit);
   if (r.status === 404) return { ok:true, sinDatos:true, denominacion:null, entidades:[] };
   if (!r.ok) return { ok:false, error:"HTTP " + r.status };
   const data = await r.json();
@@ -2527,7 +2580,7 @@ async function consultarDeudorBCRA(cuit){
 
 // Historial de hasta 24 períodos. Best-effort: si falla, seguimos sin cortar el flujo.
 async function consultarHistorialBCRA(cuit){
-  const r = await fetch(BCRA_HISTORICAS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
+  const r = await bcraFetch("/CentralDeDeudores/v1.0/Deudas/Historicas/" + cuit);
   if (r.status === 404) return { ok:true, historialSituacion:[], historialDeuda:[], historialMontoEnMora:[], historialPeriodos:[] };
   if (!r.ok) return { ok:false };
   const data = await r.json();
@@ -2544,7 +2597,7 @@ async function consultarHistorialBCRA(cuit){
 
 // Cheques rechazados, agrupados por causal/entidad, con bucket de recencia.
 async function consultarRechazadosBCRA(cuit, ahora = new Date()){
-  const r = await fetch(BCRA_RECHAZADOS_URL + "/" + cuit, { method:"GET", headers:{ "Accept":"application/json" } });
+  const r = await bcraFetch("/CentralDeDeudores/v1.0/Deudas/ChequesRechazados/" + cuit);
   if (r.status === 404) return { ok:true, rechazosSinFondos6m:0, rechazosSinFondos6a12m:0, rechazosSinFondos12a24m:0, rechazosDefectosFormales6m:0, rechazosDefectosFormales6a12m:0, rechazosDefectosFormales12a24m:0, detalleRechazos:[] };
   if (!r.ok) return { ok:false, error:"HTTP " + r.status };
   const data = await r.json();
@@ -2602,7 +2655,7 @@ async function consultarRechazadosBCRA(cuit, ahora = new Date()){
 // Cheque denunciado. IMPORTANTE (confirmado con el código real de OpenCheck):
 // la API devuelve results como ARRAY, no un booleano — denunciado = results.length > 0.
 async function consultarChequeDenunciadoBCRA(codigoEntidad, numeroCheque){
-  const r = await fetch(`${BCRA_DENUNCIADOS_URL}/${codigoEntidad}/${numeroCheque}`, { method:"GET", headers:{ "Accept":"application/json" } });
+  const r = await bcraFetch(`/cheques/v1.0/denunciados/${codigoEntidad}/${numeroCheque}`);
   if (r.status === 404) return { ok:true, denunciado:false };
   if (!r.ok) return { ok:false, error:"HTTP " + r.status };
   const data = await r.json();
@@ -2826,10 +2879,19 @@ function construirBloqueRubro(datos, resultado){
   // cruzar, y el bloque no debe insinuar una conclusión que no verificamos.
   const sectorDisponible = !!s;
   const sectorEnCaida = !!(s && s.interanualPct < 0);
+  // OJO: el ajuste combinado (calcularPenalizacionSectorDeuda) se activa cuando
+  // la deuda real creció 25% o más, aunque el puntaje de "Deuda real vs.
+  // inflación" haya quedado alto (por ejemplo, por ser deuda de monto bajo).
+  // Si acá solo mirábamos puntos <= 6, el texto decía "no muestra un
+  // crecimiento por encima de la inflación" mientras la fila de arriba ya
+  // había restado por justamente eso. Usamos la misma señal que el ajuste.
+  const sdAjuste = resultado && resultado.detalle && resultado.detalle.sectorYDeuda;
+  const hayAjusteCombinado = !!(sdAjuste && sdAjuste.factorPenalizacion > 0);
+  const deudaCreceMaterial = deudaPenalizada || hayAjusteCombinado;
 
-  if (sectorDisponible && (deudaPenalizada || sectorEnCaida)){
+  if (sectorDisponible && (deudaCreceMaterial || sectorEnCaida)){
     let textoCruce;
-    if (deudaPenalizada && sectorEnCaida){
+    if (deudaCreceMaterial && sectorEnCaida){
       {
         const sd = resultado && resultado.detalle && resultado.detalle.sectorYDeuda;
         const textoAjuste = (sd && sd.factorPenalizacion > 0)
@@ -2838,7 +2900,7 @@ function construirBloqueRubro(datos, resultado){
         textoCruce = `Este perfil combina dos señales que conviene mirar juntas: la deuda creció por encima de la inflación, y su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}).${textoAjuste} No es una señal de alerta por sí sola, pero es un contexto útil al momento de decidir si operar con este cliente o qué seguimiento darle.`;
       }
     } else if (sectorEnCaida){
-      textoCruce = `Su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}), aunque el endeudamiento de esta empresa no muestra un crecimiento por encima de la inflación. Es contexto para tener en cuenta, no una señal de alerta por sí sola.`;
+      textoCruce = `Su sector (${sector.nombre.toLowerCase()}) viene cayendo a nivel nacional (${formatearPctConSigno(s.interanualPct)} interanual en ${formatearPeriodoEMAE(s.fecha)}), aunque el endeudamiento de esta empresa no muestra un crecimiento relevante por encima de la inflación. Es contexto para tener en cuenta, no una señal de alerta por sí sola.`;
     } else {
       textoCruce = `La deuda de esta empresa creció por encima de la inflación. Su sector (${sector.nombre.toLowerCase()}) no muestra caída a nivel nacional en este momento, lo que puede matizar esa lectura.`;
     }
@@ -2993,12 +3055,19 @@ const NOMBRES_BANCOS = ENTIDADES_CHEQUES.map(e => e.nombre);
 // Intenta traer el listado real de entidades; si falla, se queda con el de arriba.
 async function actualizarListadoEntidadesReal(){
   try {
-    const r = await fetch(BCRA_ENTIDADES_URL, { method:"GET", headers:{ "Accept":"application/json" } });
-    if (!r.ok) return;
-    const data = await r.json();
-    if (!data || !Array.isArray(data.results) || !data.results.length) return;
+    const g = await obtenerDatosGeneralesBCRA();
+    let lista = null;
+    if (g && Array.isArray(g.entidades) && g.entidades.length){
+      lista = g.entidades;                                   // ya viene como {codigo, nombre}
+    } else {
+      const r = await bcraFetch("/cheques/v1.0/entidades");
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!data || !Array.isArray(data.results) || !data.results.length) return;
+      lista = data.results.map(e => ({ codigo:e.codigoEntidad, nombre:e.denominacion }));
+    }
     ENTIDADES_CHEQUES.length = 0;
-    data.results.forEach(e => ENTIDADES_CHEQUES.push({ codigo:e.codigoEntidad, nombre:e.denominacion }));
+    lista.forEach(e => ENTIDADES_CHEQUES.push({ codigo:e.codigo, nombre:e.nombre }));
     poblarSelectoresBanco();
   } catch (e) { /* silencioso: seguimos con el listado local */ }
 }
@@ -3126,6 +3195,14 @@ let cacheInflacionMensualBCRA = null; // { "202406": 4.2, ... } valores en % men
 async function obtenerInflacionMensualBCRA(){
   if (cacheInflacionMensualBCRA) return cacheInflacionMensualBCRA;
 
+  // Camino normal: la serie ya la guardó el job diario en el servidor.
+  const g = await obtenerDatosGeneralesBCRA();
+  if (g && g.inflacionMensual && Object.keys(g.inflacionMensual).length){
+    cacheInflacionMensualBCRA = g.inflacionMensual;
+    return cacheInflacionMensualBCRA;
+  }
+
+  // Plan B (el job todavía no corrió, o el servidor no respondió): pedido directo.
   const rVars = await fetch(BCRA_MONETARIAS_URL, { method:"GET", headers:{ "Accept":"application/json" } });
   if (!rVars.ok){
     console.warn("[OpenCheck Score] Falló GET", BCRA_MONETARIAS_URL, "status:", rVars.status);
@@ -3317,7 +3394,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-05-v21-ajustes-puntaje";
+const VERSION_APP = "2026-10-10-v23-respaldo-bcra-y-texto-sector";
 
 const state = {
   user: null,
