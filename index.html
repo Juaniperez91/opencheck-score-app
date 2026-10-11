@@ -3891,6 +3891,11 @@ verificarActualizacionApp();
 // Best-effort y solo corre en la app nativa (Capacitor) — la web en vivo
 // ya está siempre al día, no necesita chequearse a sí misma.
 async function verificarActualizacionApp(){
+  // DESACTIVADO para la versión de Google Play: Play actualiza la app por sí
+  // mismo y su política prohíbe que una app se actualice desde un instalador
+  // externo (.apk). Se deja el código por si hiciera falta un APK directo.
+  return;
+  // eslint-disable-next-line no-unreachable
   const esAppNativa = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   if (!esAppNativa) return;
 
