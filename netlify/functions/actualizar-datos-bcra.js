@@ -21,8 +21,20 @@ const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
 const BCRA = "https://api.bcra.gob.ar";
 const TIMEOUT_MS = 10000;
 
+const CABECERAS = {
+  "Accept": "application/json",
+  "User-Agent": "Mozilla/5.0 (compatible; OpenCheckScore/1.0; +https://opencheck.pro)",
+  "Accept-Language": "es-AR,es;q=0.9"
+};
+
 async function getJson(url){
-  const r = await fetch(url, { headers: { "Accept": "application/json" }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  let r;
+  try {
+    r = await fetch(url, { headers: CABECERAS, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  } catch (e){
+    const c = e && e.cause;
+    throw new Error(`No se pudo conectar a ${url}: ${e.message}${c ? " (" + (c.code || "") + " " + (c.message || "") + ")" : ""}`);
+  }
   if (!r.ok) throw new Error("HTTP " + r.status + " en " + url);
   return r.json();
 }
