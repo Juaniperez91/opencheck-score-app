@@ -2521,14 +2521,21 @@ const BCRA_CACHE_MS = 10 * 60 * 1000;   // evita repetir el mismo pedido (ej.: v
 function _senalTimeout(ms){
   return (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") ? AbortSignal.timeout(ms) : undefined;
 }
+// Si el BCRA directo falla (p. ej. bloquea la IP del usuario), nos acordamos 10 min
+// y vamos directo por el servidor, así solo la primera consulta paga la espera.
+let _directoBloqueadoHasta = 0;
 async function bcraFetch(ruta){
   const g = _bcraCache.get(ruta);
   if (g && Date.now() - g.t < BCRA_CACHE_MS) return new Response(g.body, { status: g.status });
 
   let r = null;
-  try {
-    r = await fetch(BCRA_API + ruta, { method:"GET", headers:{ "Accept":"application/json" }, signal: _senalTimeout(7000) });
-  } catch (e){ r = null; }
+  if (Date.now() >= _directoBloqueadoHasta){
+    try {
+      r = await fetch(BCRA_API + ruta, { method:"GET", headers:{ "Accept":"application/json" }, signal: _senalTimeout(7000) });
+    } catch (e){ r = null; }
+    if (r && (r.status === 200 || r.status === 404)) _directoBloqueadoHasta = 0;
+    else _directoBloqueadoHasta = Date.now() + 10 * 60 * 1000;
+  }
 
   // 200 (datos) y 404 ("sin datos para ese CUIT") son respuestas válidas del BCRA.
   if (!r || (r.status !== 200 && r.status !== 404)){
