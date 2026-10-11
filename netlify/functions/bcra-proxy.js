@@ -62,18 +62,24 @@ async function diagnostico(){
     const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(6000) });
     salida.ip = (await r.json()).ip;
   } catch (e){ salida.ip = "no se pudo averiguar: " + motivo(e); }
-  const destinos = [
-    BCRA_BASE + "/cheques/v1.0/entidades",
-    BCRA_BASE + "/CentralDeDeudores/v1.0/Deudas/20352469328",
-    "https://www.bcra.gob.ar/"
+  const D = BCRA_BASE + "/CentralDeDeudores/v1.0/Deudas/";
+  const H = BCRA_BASE + "/CentralDeDeudores/v1.0/Deudas/Historicas/";
+  const pruebas = [
+    ["deudas cuit1, con UA propio", D + "20352469328", CABECERAS],
+    ["deudas cuit1, solo Accept", D + "20352469328", { "Accept": "application/json" }],
+    ["deudas cuit1, sin cabeceras", D + "20352469328", {}],
+    ["deudas cuit1, UA de navegador", D + "20352469328", { "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" }],
+    ["deudas otro cuit (AFIP 33693450239)", D + "33693450239", CABECERAS],
+    ["historicas cuit1", H + "20352469328", CABECERAS],
+    ["deudas cuit1, reintento", D + "20352469328", CABECERAS]
   ];
-  for (const d of destinos){
+  for (const [nombre, d, h] of pruebas){
     const t0 = Date.now();
     try {
-      const r = await fetch(d, { headers: CABECERAS, signal: AbortSignal.timeout(TIMEOUT_MS) });
-      salida.pruebas.push({ destino: d, status: r.status, ms: Date.now() - t0 });
+      const r = await fetch(d, { headers: h, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      salida.pruebas.push({ nombre, status: r.status, ms: Date.now() - t0 });
     } catch (e){
-      salida.pruebas.push({ destino: d, error: motivo(e), ms: Date.now() - t0 });
+      salida.pruebas.push({ nombre, error: motivo(e), ms: Date.now() - t0 });
     }
   }
   return json(salida);
