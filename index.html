@@ -1191,6 +1191,7 @@
         <div class="sparkline-holder" id="res-sparkline-deuda"></div>
       </div>
       <div class="fuente-nota">Fuente: Central de Deudores del Sistema Financiero, Banco Central de la República Argentina (BCRA) — centraldedeudores.bcra.gob.ar. Acceso público y gratuito.</div>
+      <div class="fuente-nota" id="res-fechas-datos" style="display:none;"></div>
 
       <button class="btn btn-secondary" onclick="irA('home')">Volver a consultar</button>
     </div>
@@ -2584,7 +2585,7 @@ async function consultarDeudorBCRA(cuit){
     monto: (e.monto || 0) * 1000,       // BCRA informa en miles de pesos
     diasAtraso: e.diasAtrasoPago || 0
   }));
-  return { ok:true, sinDatos:entidades.length===0, denominacion:data.results.denominacion || null, entidades };
+  return { ok:true, sinDatos:entidades.length===0, denominacion:data.results.denominacion || null, entidades, periodo: periodo ? String(periodo.periodo || "") : null };
 }
 
 // Historial de hasta 24 períodos. Best-effort: si falla, seguimos sin cortar el flujo.
@@ -3022,7 +3023,18 @@ async function construirDatosLibradorReal(cuit){
     ? contextoSectorialR.value
     : null;
 
+  // Fecha de cada fuente, para mostrar "datos al ..." en el resultado.
+  let periodoInflacion = null;
+  if (inflacionR.status === "fulfilled" && inflacionR.value){
+    const ks = Object.keys(inflacionR.value).filter(k => inflacionR.value[k] !== null && inflacionR.value[k] !== undefined && /^\d{6}$/.test(k)).sort();
+    if (ks.length) periodoInflacion = ks[ks.length - 1];
+  }
+  const periodoSectorial = (contextoSectorial && contextoSectorial.general && contextoSectorial.general.fecha) ? String(contextoSectorial.general.fecha) : null;
+
   return prepararDatos({
+    periodoBCRA: deuda.periodo || null,
+    periodoInflacion,
+    periodoSectorial,
     empresa: deuda.denominacion || ("Librador " + cuit),
     antiguedadCuitAnios, // vía ARCA (Constancia de Inscripción), best-effort — null si no está disponible
     rubro,
@@ -4719,6 +4731,22 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
     ? `<span class="fuente-badge fuente-real">API BCRA real</span>`
     : `<span class="fuente-badge fuente-demo">Datos de ejemplo (demo) — no son datos reales del BCRA</span>`;
   document.getElementById("res-fuente").innerHTML = fuenteBadge;
+
+  // "Datos al ...": cada fuente publica con rezago, así que mostramos hasta qué mes llega cada una.
+  const elFechas = document.getElementById("res-fechas-datos");
+  if (elFechas){
+    const partes = [];
+    if (/^\d{6}$/.test(datos.periodoBCRA || "")) partes.push(`Central de Deudores (BCRA): ${formatearPeriodoActividad(datos.periodoBCRA)}`);
+    if (/^\d{6}$/.test(datos.periodoInflacion || "")) partes.push(`Inflación (BCRA): ${formatearPeriodoActividad(datos.periodoInflacion)}`);
+    if (/^\d{4}-\d{2}/.test(datos.periodoSectorial || "")) partes.push(`Actividad sectorial (INDEC): ${formatearPeriodoEMAE(datos.periodoSectorial)}`);
+    if (fuente === "real" && partes.length){
+      elFechas.innerHTML = `<b>Datos al:</b> ${partes.join(" · ")}. Estas fuentes publican con rezago respecto del mes en curso.`;
+      elFechas.style.display = "";
+    } else {
+      elFechas.innerHTML = "";
+      elFechas.style.display = "none";
+    }
+  }
 
   document.getElementById("res-gauge").innerHTML = construirGauge(resultado.categoria);
   requestAnimationFrame(() => animarGauge(resultado.puntosFinales, resultado.categoria));
