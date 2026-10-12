@@ -3443,6 +3443,24 @@ function mostrarToast(msg){
   setTimeout(() => t.classList.remove("show"), 2200);
 }
 
+// Aviso que NO se va solo, para cuando el BCRA no responde. Se muestra pegado
+// arriba del botón que se tocó, para que se lea con calma (el toast dura 2 s).
+function mostrarAvisoBCRA(btnId){
+  ocultarAvisoBCRA();
+  const btn = document.getElementById(btnId);
+  if (!btn || !btn.parentNode) return;
+  const d = document.createElement("div");
+  d.id = "aviso-bcra";
+  d.className = "alert-block info";
+  d.style.marginBottom = "12px";
+  d.innerHTML = `<span>⚠️</span><div><b>No pudimos consultar el BCRA en este momento</b>El servicio del BCRA no respondió. No se calculó ningún puntaje y <b style="display:inline;font-size:inherit;">no se descontó ninguna consulta</b> de tu plan. Reintentá en unos minutos.</div>`;
+  btn.parentNode.insertBefore(d, btn);
+}
+function ocultarAvisoBCRA(){
+  const d = document.getElementById("aviso-bcra");
+  if (d) d.remove();
+}
+
 /* ---- Navegación ---- */
 function irA(pantalla){
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
@@ -3966,6 +3984,7 @@ async function consultarCuit(){
   }
 
   const btn = document.getElementById("btn-consultar");
+  ocultarAvisoBCRA();
   btn.disabled = true;
   btn.textContent = "Consultando BCRA…";
 
@@ -3974,8 +3993,18 @@ async function consultarCuit(){
     datos = await construirDatosLibradorReal(digits);
     fuente = "real";
   } catch (e) {
-    datos = BCRA_DB[digits] || generarDatosSimulados(digits);
-    fuente = "demo";
+    console.warn("[OpenCheck Score] Consulta BCRA falló:", e && e.message);
+    if (BCRA_DB[digits]){
+      // CUITs de ejemplo del demo: se siguen mostrando, marcados como tales.
+      datos = BCRA_DB[digits];
+      fuente = "demo";
+    } else {
+      // Nunca inventamos un puntaje para un CUIT real: avisamos y no gastamos la consulta.
+      btn.disabled = false;
+      btn.textContent = "Consultar score";
+      mostrarAvisoBCRA("btn-consultar");
+      return;
+    }
   }
 
   let chequeInfo = null;
@@ -3985,7 +4014,8 @@ async function consultarCuit(){
       if (!real.ok) throw new Error(real.error);
       chequeInfo = real;
     } catch (e) {
-      chequeInfo = buscarDenuncia(bancoCheque, numeroCheque);
+      // Si el BCRA no respondió NO decimos "sin denuncias": decimos que no se pudo verificar.
+      chequeInfo = (fuente === "demo") ? buscarDenuncia(bancoCheque, numeroCheque) : { ok:false, noDisponible:true, denunciado:null };
     }
   }
 
@@ -4037,13 +4067,21 @@ async function verEstadoCliente(clienteId){
   const btn = document.getElementById("btn-ver-estado-cliente");
   if (btn){ btn.disabled = true; btn.textContent = "Consultando BCRA…"; }
 
+  ocultarAvisoBCRA();
   let datos, fuente;
   try {
     datos = await construirDatosLibradorReal(digits);
     fuente = "real";
   } catch (e){
-    datos = BCRA_DB[digits] || generarDatosSimulados(digits);
-    fuente = "demo";
+    console.warn("[OpenCheck Score] Consulta BCRA falló:", e && e.message);
+    if (BCRA_DB[digits]){
+      datos = BCRA_DB[digits];
+      fuente = "demo";
+    } else {
+      if (btn){ btn.disabled = false; btn.textContent = "🔍 Ver estado actual"; }
+      mostrarAvisoBCRA("btn-ver-estado-cliente");
+      return;
+    }
   }
 
   const resultado = calcularScore(datos);
@@ -4674,7 +4712,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
 
   const fuenteBadge = fuente === "real"
     ? `<span class="fuente-badge fuente-real">API BCRA real</span>`
-    : `<span class="fuente-badge fuente-demo">BCRA no disponible — reintentá en unos minutos</span>`;
+    : `<span class="fuente-badge fuente-demo">Datos de ejemplo (demo) — no son datos reales del BCRA</span>`;
   document.getElementById("res-fuente").innerHTML = fuenteBadge;
 
   document.getElementById("res-gauge").innerHTML = construirGauge(resultado.categoria);
@@ -4709,7 +4747,9 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   }
 
   if (numeroCheque){
-    if (chequeInfo && chequeInfo.denunciado){
+    if (chequeInfo && chequeInfo.noDisponible){
+      alertaHtml += `<div class="alert-block info"><span>${ICONO_ALERTA_WARN}</span><div><b>No pudimos verificar el cheque N° ${numeroCheque}</b>El BCRA no respondió al consultar denuncias. Esto NO significa que el cheque esté libre de denuncias: volvé a verificarlo en la sección de denuncias antes de operar.</div></div>`;
+    } else if (chequeInfo && chequeInfo.denunciado){
       alertaHtml += `<div class="alert-block danger"><span>${ICONO_ALERTA_BLOCK}</span><div><b>Cheque N° ${numeroCheque} denunciado</b>${chequeInfo.motivo}</div></div>`;
     } else {
       alertaHtml += `<div class="alert-block ok"><span>${ICONO_ALERTA_OK}</span><div><b>Cheque N° ${numeroCheque} sin denuncias</b>No registra extravío, robo ni oposición al pago en BCRA.</div></div>`;
@@ -4781,8 +4821,8 @@ async function verificarDenuncia(){
     info = real;
     fuente = "real";
   } catch (e) {
-    info = buscarDenuncia(banco, num);
-    fuente = "demo";
+    box.innerHTML = `<div class="alert-block info"><span>⚠️</span><div><b>No pudimos verificar el cheque</b>El BCRA no respondió en este momento. Esto NO significa que el cheque esté libre de denuncias. Reintentá en unos minutos.</div></div>`;
+    return;
   }
 
   const badge = fuente === "real"
