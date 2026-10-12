@@ -2527,11 +2527,13 @@ let _directoBloqueadoHasta = 0;
 async function bcraFetch(ruta){
   const g = _bcraCache.get(ruta);
   if (g && Date.now() - g.t < BCRA_CACHE_MS) return new Response(g.body, { status: g.status });
+  // Sin internet no tiene sentido esperar a ningún timeout: avisamos al instante.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("sin_conexion");
 
   let r = null;
   if (Date.now() >= _directoBloqueadoHasta){
     try {
-      r = await fetch(BCRA_API + ruta, { method:"GET", headers:{ "Accept":"application/json" }, signal: _senalTimeout(7000) });
+      r = await fetch(BCRA_API + ruta, { method:"GET", headers:{ "Accept":"application/json" }, signal: _senalTimeout(5000) });
     } catch (e){ r = null; }
     if (r && (r.status === 200 || r.status === 404)) _directoBloqueadoHasta = 0;
     else _directoBloqueadoHasta = Date.now() + 10 * 60 * 1000;
@@ -3447,13 +3449,14 @@ function mostrarToast(msg){
 // arriba del botón que se tocó, para que se lea con calma (el toast dura 2 s).
 function mostrarAvisoBCRA(btnId){
   ocultarAvisoBCRA();
+  const sinConexion = (typeof navigator !== "undefined" && navigator.onLine === false);
   const btn = document.getElementById(btnId);
   if (!btn || !btn.parentNode) return;
   const d = document.createElement("div");
   d.id = "aviso-bcra";
   d.className = "alert-block info";
   d.style.marginBottom = "12px";
-  d.innerHTML = `<span>⚠️</span><div><b>No pudimos consultar el BCRA en este momento</b>El servicio del BCRA no respondió. No se calculó ningún puntaje y <b style="display:inline;font-size:inherit;">no se descontó ninguna consulta</b> de tu plan. Reintentá en unos minutos.</div>`;
+  d.innerHTML = `<span>⚠️</span><div><b>${sinConexion ? "Sin conexión a internet" : "No pudimos consultar el BCRA en este momento"}</b>${sinConexion ? "Revisá tu WiFi o tus datos móviles." : "El servicio del BCRA no respondió."} No se calculó ningún puntaje y <b style="display:inline;font-size:inherit;">no se descontó ninguna consulta</b> de tu plan. Reintentá en unos minutos.</div>`;
   btn.parentNode.insertBefore(d, btn);
 }
 function ocultarAvisoBCRA(){
@@ -3877,7 +3880,9 @@ function previsualizarRazonSocial(){
         preview.innerHTML = `✓ ${datos.empresa} <span class="fuente-badge fuente-demo">BCRA no disponible — reintentá en unos minutos</span>`;
       } else {
         preview.className = "razon-social-preview show rs-unknown";
-        preview.innerHTML = "El servicio del BCRA no está disponible en este momento. Reintentá en unos minutos. <span class=\"fuente-badge fuente-demo\">BCRA no disponible</span>";
+        preview.innerHTML = (navigator.onLine === false)
+          ? "Sin conexión a internet. Revisá tu WiFi o tus datos móviles. <span class=\"fuente-badge fuente-demo\">Sin conexión</span>"
+          : "El servicio del BCRA no está disponible en este momento. Reintentá en unos minutos. <span class=\"fuente-badge fuente-demo\">BCRA no disponible</span>";
       }
     }
   }, 350);
