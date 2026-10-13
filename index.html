@@ -413,6 +413,32 @@
     background:var(--brick); border:1.5px solid var(--paper);
   }
 
+  /* ---- Alertas / Cartera (Premium) ---- */
+  .ge-tabs{display:flex; gap:8px; margin:0 0 14px;}
+  .ge-tab{flex:1; text-align:center; padding:9px 6px; border:1px solid var(--hairline); border-radius:100px; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; background:var(--white);}
+  .ge-tab.active{background:var(--green-ink); border-color:var(--green-ink); color:#fff;}
+  .ge-tab .ge-n{display:inline-block; min-width:16px; margin-left:5px; padding:0 5px; border-radius:100px; background:var(--brick); color:#fff; font-size:10.5px; line-height:16px;}
+  .alerta-card{border:1px solid var(--hairline); border-left:4px solid var(--amber); border-radius:10px; padding:11px 12px; margin-bottom:10px; background:var(--white);}
+  .alerta-card.mala{border-left-color:var(--brick);}
+  .alerta-card.buena{border-left-color:var(--green);}
+  .alerta-card.leida{opacity:.6;}
+  .alerta-titulo{font-size:13px; font-weight:700; line-height:1.35;}
+  .alerta-detalle{font-size:12px; color:var(--ink-soft); margin-top:4px; line-height:1.45;}
+  .alerta-pie{display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:11px; color:#96A099;}
+  .alerta-pie button{background:none; border:none; color:var(--green-ink); font-weight:600; font-size:11.5px; cursor:pointer; padding:2px 0;}
+  .ge-kpis{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px;}
+  .ge-kpi{border:1px solid var(--hairline); border-radius:10px; padding:10px 12px; background:var(--white);}
+  .ge-kpi b{display:block; font-size:16px; font-family:'DM Mono',monospace;}
+  .ge-kpi span{font-size:11px; color:var(--ink-soft);}
+  .ge-seccion{font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:18px 0 8px;}
+  .ge-barra-fila{margin-bottom:9px; font-size:12px;}
+  .ge-barra-fila .ge-barra-top{display:flex; justify-content:space-between; gap:8px;}
+  .ge-barra{height:7px; border-radius:100px; background:var(--green-soft); margin-top:4px; overflow:hidden;}
+  .ge-barra i{display:block; height:100%; background:var(--green); border-radius:100px;}
+  .ge-barra i.B{background:var(--amber);}
+  .ge-barra i.C{background:var(--brick);}
+  .ge-aviso{font-size:12px; line-height:1.45; padding:10px 12px; border-radius:10px; background:var(--amber-soft); color:#6b4c12; margin-bottom:12px;}
+
   /* ---- Resultado / Sello ---- */
   .stamp-wrap{
     display:flex; justify-content:center; margin:6px 0 22px;
@@ -1073,6 +1099,11 @@
         <input type="date" id="consulta-fecha-vencimiento">
         <div class="field-hint">Obligatoria si cargaste número de cheque — con esto podemos verificar más adelante si efectivamente se cobró.</div>
       </div>
+      <div class="field">
+        <label class="field-label">Monto del cheque (opcional)</label>
+        <input type="text" class="mono" id="consulta-monto-cheque" inputmode="decimal" placeholder="Ej: 1.500.000" autocomplete="off">
+        <div class="field-hint">Si lo cargás, el panel de Cartera (Premium) puede mostrarte cuánto dinero tenés en cheques de cada categoría y de cada librador.</div>
+      </div>
       <div class="field" id="campo-consulta-cliente" style="display:none;">
         <label class="field-label">Asignar a cliente (opcional)</label>
         <select id="consulta-cliente-select">
@@ -1102,6 +1133,7 @@
       <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
       <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
       <div class="nav-item" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
+      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-1" style="display:none;"></span></div>
     </div>
   </div>
 
@@ -1216,6 +1248,7 @@
       <div class="nav-item active" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
       <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
       <div class="nav-item" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
+      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-2" style="display:none;"></span></div>
     </div>
   </div>
 
@@ -1233,6 +1266,7 @@
       <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
       <div class="nav-item active" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
       <div class="nav-item active" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
+      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-3" style="display:none;"></span></div>
     </div>
   </div>
 
@@ -1253,6 +1287,31 @@
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
       <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
       <div class="nav-item active" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
+      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-4" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
+    </div>
+  </div>
+
+  <!-- ===================== ALERTAS Y CARTERA (Premium) ===================== -->
+  <div class="screen" id="screen-alertas">
+    <div class="topbar">
+      <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Alertas</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="ge-tabs">
+        <div class="ge-tab active" id="ge-tab-alertas" onclick="mostrarTabGestion('alertas')">Alertas<span class="ge-n" id="ge-tab-n" style="display:none;"></span></div>
+        <div class="ge-tab" id="ge-tab-cartera" onclick="mostrarTabGestion('cartera')">Cartera</div>
+      </div>
+      <div id="alertas-content"></div>
+    </div>
+    <div class="navbar">
+      <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
+      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
+      <div class="nav-item active" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-5" style="display:none;"></span></div>
       <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
@@ -1268,6 +1327,7 @@
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
       <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
       <div class="nav-item active" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
+      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-6" style="display:none;"></span></div>
       <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
@@ -1534,7 +1594,7 @@ async function registrarAceptacionTC(usuarioId){
   if (error) console.warn("[OpenCheck Score] No se pudo registrar aceptación de T&C:", error.message);
 }
 
-async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento, clienteId }){
+async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento, clienteId, montoCheque }){
   const { error } = await supabaseClient
     .from("consultas")
     .insert({
@@ -1548,7 +1608,8 @@ async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, punt
       banco_cheque_consultado: bancoCheque || null,
       cheque_denunciado: chequeDenunciado,
       fecha_vencimiento_cheque: fechaVencimiento || null,
-      cliente_id: clienteId || null
+      cliente_id: clienteId || null,
+      monto_cheque: (montoCheque && montoCheque > 0) ? montoCheque : null
     });
   if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
 }
@@ -3486,6 +3547,7 @@ function irA(pantalla){
   if (pantalla === "cuenta") renderCuenta();
   if (pantalla === "paywall") renderPaywall();
   if (pantalla === "clientes") renderClientes();
+  if (pantalla === "alertas") renderGestion();
   if (pantalla === "cliente-detalle") renderClienteDetalle(state.clienteActualId);
   if (pantalla === "home" && state.user){
     const mesActual = new Date().toISOString().slice(0,7);
@@ -3734,6 +3796,7 @@ async function iniciarSesion(){
     mostrarToast("¡Hola de nuevo, " + perfil.nombre.split(" ")[0] + "!");
     irA("home");
     verificarConfirmacionesPendientes();
+    actualizarBadgeAlertas();
   } catch (e){
     mostrarToast("No pudimos iniciar sesión: " + e.message);
   } finally {
@@ -3843,6 +3906,7 @@ async function cargarSesionExistente(){
       btnPrincipal.setAttribute("onclick", "irA('home')");
     }
     verificarConfirmacionesPendientes();
+    actualizarBadgeAlertas();
   }
 }
 cargarSesionExistente();
@@ -4051,7 +4115,8 @@ async function consultarCuit(){
       numeroCheque: numeroCheque || null, bancoCheque: numeroCheque ? bancoCheque : null,
       chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null,
       fechaVencimiento: document.getElementById("consulta-fecha-vencimiento").value || null,
-      clienteId: clienteSelect ? (clienteSelect.value || null) : null
+      clienteId: clienteSelect ? (clienteSelect.value || null) : null,
+      montoCheque: numeroCheque ? parseMontoAR(document.getElementById("consulta-monto-cheque").value) : null
     });
   }
 
@@ -4957,7 +5022,7 @@ async function renderHistorial(){
         <span>${h.razon_social || h.cuit_consultado}</span>
         <span class="tag ${tier}">${h.categoria || "—"}</span>
       </div>
-      <div class="hist-mid">${h.cuit_consultado} · ${fuenteLabel}</div>
+      <div class="hist-mid">${h.cuit_consultado} · ${fuenteLabel}${h.monto_cheque ? " · " + formatearPesos(h.monto_cheque) : ""}</div>
       <div class="hist-bottom">
         <span class="hist-date">${fecha.toLocaleString("es-AR")}</span>
       </div>
@@ -4982,6 +5047,220 @@ async function asignarClienteAConsulta(consultaId, clienteId){
     return;
   }
   mostrarToast(clienteId ? "Cliente asignado." : "Cliente desasignado.");
+}
+
+
+/* ---- Alertas y Cartera (Premium) ---- */
+function parseMontoAR(txt){
+  // Acepta "1.500.000", "1.500.000,50", "1500000.5", "$ 1.500.000"
+  let t = String(txt || "").replace(/[^\d.,]/g, "");
+  if (!t) return null;
+  if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+  else if ((t.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(t)) t = t.replace(/\./g, "");
+  const n = parseFloat(t);
+  return (isFinite(n) && n > 0) ? Math.round(n * 100) / 100 : null;
+}
+function formatearPesos(n){
+  return "$" + Math.round(Number(n) || 0).toLocaleString("es-AR");
+}
+function escHtml(t){
+  return String(t == null ? "" : t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function esUsuarioPremium(){
+  return !!(state.user && (state.user.plan === "premium" || state.user.es_admin));
+}
+
+async function actualizarBadgeAlertas(){
+  const badges = document.querySelectorAll('[id^="nav-badge-alertas"]');
+  const ocultar = () => badges.forEach(b => b.style.display = "none");
+  if (!esUsuarioPremium()){ ocultar(); return; }
+  try {
+    const { count, error } = await supabaseClient.from("alertas")
+      .select("id", { count: "exact", head: true })
+      .eq("usuario_id", state.user.id).eq("leida", false);
+    if (error) throw error;
+    state.alertasNoLeidas = count || 0;
+    badges.forEach(b => b.style.display = state.alertasNoLeidas > 0 ? "block" : "none");
+    const n = document.getElementById("ge-tab-n");
+    if (n){ n.textContent = state.alertasNoLeidas; n.style.display = state.alertasNoLeidas > 0 ? "inline-block" : "none"; }
+  } catch (e){
+    console.warn("[OpenCheck Score] No se pudo leer el contador de alertas:", e && e.message);
+  }
+}
+
+function mostrarTabGestion(tab){
+  state.tabGestion = tab;
+  document.getElementById("ge-tab-alertas").classList.toggle("active", tab === "alertas");
+  document.getElementById("ge-tab-cartera").classList.toggle("active", tab === "cartera");
+  if (tab === "alertas") renderAlertas(); else renderCartera();
+}
+
+function renderGestion(){
+  const cont = document.getElementById("alertas-content");
+  if (!state.user){
+    cont.innerHTML = `<div class="empty-state"><div class="ico">🔒</div><p>Iniciá sesión para ver tus alertas.</p></div>`;
+    return;
+  }
+  if (!esUsuarioPremium()){
+    cont.innerHTML = `
+      <div class="empty-state">
+        <div class="ico">⭐</div>
+        <p>Las alertas y el panel de cartera son funciones Premium.<br>Con Premium te avisamos cuando un librador de tus cheques tiene un cheque rechazado nuevo, cuando empeora su situación en el BCRA o cuando uno de tus cheques figura denunciado. Y ves cuánto dinero tenés en cheques, por categoría y por librador.</p>
+        <button class="btn btn-primary" style="margin-top:14px;" onclick="solicitarPlanPremium()">Solicitar acceso</button>
+      </div>`;
+    return;
+  }
+  mostrarTabGestion(state.tabGestion || "alertas");
+}
+
+const ALERTA_META = {
+  cheque_rechazado_nuevo:  { clase: "mala",  icono: "⛔" },
+  cheque_propio_rechazado: { clase: "mala",  icono: "⛔" },
+  cheque_denunciado:       { clase: "mala",  icono: "🚨" },
+  situacion_empeora:       { clase: "mala",  icono: "📉" },
+  deuda_salta:             { clase: "",      icono: "📈" },
+  situacion_mejora:        { clase: "buena", icono: "📈" }
+};
+
+async function renderAlertas(){
+  const cont = document.getElementById("alertas-content");
+  cont.innerHTML = `<div class="empty-state"><p>Cargando alertas…</p></div>`;
+  const { data, error } = await supabaseClient.from("alertas")
+    .select("*").eq("usuario_id", state.user.id)
+    .order("creada_en", { ascending: false }).limit(100);
+  if (error){
+    console.warn("[OpenCheck Score] Error trayendo alertas:", error.message);
+    cont.innerHTML = `<div class="empty-state"><p>No pudimos cargar tus alertas. Probá de nuevo en un rato.</p></div>`;
+    return;
+  }
+  state.alertasLista = data || [];
+  const noLeidas = state.alertasLista.filter(a => !a.leida).length;
+  const info = `<div class="field-hint" style="margin:0 0 12px;">Vigilamos los libradores de tus cheques abiertos y de tus clientes. Los datos de deuda del BCRA se publican una vez por mes; los cheques rechazados y denunciados se revisan varias veces por día.</div>`;
+  if (!state.alertasLista.length){
+    cont.innerHTML = info + `<div class="empty-state" style="padding:40px 20px;"><div class="ico">🔔</div><p>Todavía no hay novedades.<br>Cuando consultes cheques o asignes clientes, te avisamos acá si algo cambia.</p></div>`;
+    return;
+  }
+  const botonTodas = noLeidas > 0 ? `<button class="btn btn-secondary" style="margin-bottom:12px;" onclick="marcarAlertasLeidas()">Marcar todas como leídas</button>` : "";
+  cont.innerHTML = info + botonTodas + state.alertasLista.map(a => {
+    const meta = ALERTA_META[a.tipo] || { clase: "", icono: "🔔" };
+    const fecha = new Date(a.creada_en).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return `
+      <div class="alerta-card ${meta.clase} ${a.leida ? "leida" : ""}">
+        <div class="alerta-titulo">${meta.icono} ${escHtml(a.titulo)}</div>
+        <div class="alerta-detalle">${escHtml(a.detalle || "")}</div>
+        <div class="alerta-pie">
+          <span>${fecha} · CUIT ${escHtml(a.cuit)}</span>
+          ${a.leida ? "" : `<button onclick="marcarAlertasLeidas('${a.id}')">Marcar como leída</button>`}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function marcarAlertasLeidas(id){
+  let q = supabaseClient.from("alertas").update({ leida: true }).eq("usuario_id", state.user.id).eq("leida", false);
+  if (id) q = q.eq("id", id);
+  const { error } = await q;
+  if (error){
+    console.warn("[OpenCheck Score] No se pudo marcar como leída:", error.message);
+    mostrarToast("No pudimos actualizar la alerta, probá de nuevo.");
+    return;
+  }
+  await actualizarBadgeAlertas();
+  renderAlertas();
+}
+
+// Panel de cartera: cheques "abiertos" = consultados con número de
+// cheque y todavía sin resultado final (cobrado / rechazado).
+async function renderCartera(){
+  const cont = document.getElementById("alertas-content");
+  cont.innerHTML = `<div class="empty-state"><p>Calculando cartera…</p></div>`;
+  const desde = new Date(Date.now() - 365 * 86400000).toISOString();
+  const { data, error } = await supabaseClient.from("consultas")
+    .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real")
+    .eq("usuario_id", state.user.id)
+    .not("numero_cheque_consultado", "is", null)
+    .is("resultado_real", null)
+    .gte("creado_en", desde)
+    .order("creado_en", { ascending: false })
+    .limit(2000);
+  if (error){
+    console.warn("[OpenCheck Score] Error trayendo cartera:", error.message);
+    cont.innerHTML = `<div class="empty-state"><p>No pudimos calcular tu cartera. Probá de nuevo en un rato.</p></div>`;
+    return;
+  }
+  const cheques = (data || []).filter(c => c.cheque_denunciado !== true);
+  if (!cheques.length){
+    cont.innerHTML = `<div class="empty-state"><div class="ico">💼</div><p>Todavía no tenés cheques en cartera.<br>Cuando consultes un CUIT cargando número de cheque, fecha de vencimiento y monto, aparece acá.</p></div>`;
+    return;
+  }
+  let clientes = [];
+  try { clientes = await obtenerClientesUsuario(state.user.id); } catch (e) {}
+  const nombreCliente = {};
+  clientes.forEach(cl => nombreCliente[cl.id] = cl.nombre);
+
+  const conMonto = cheques.filter(c => Number(c.monto_cheque) > 0);
+  const sinMonto = cheques.length - conMonto.length;
+  const total = conMonto.reduce((s, c) => s + Number(c.monto_cheque), 0);
+
+  const agrupar = (clave, etiqueta) => {
+    const m = new Map();
+    for (const c of conMonto){
+      const k = clave(c);
+      if (!m.has(k)) m.set(k, { etiqueta: etiqueta(c), monto: 0, n: 0 });
+      const g = m.get(k); g.monto += Number(c.monto_cheque); g.n++;
+    }
+    return [...m.entries()].map(([k, g]) => ({ k, ...g })).sort((a, b) => b.monto - a.monto);
+  };
+  const porCategoria = agrupar(c => c.categoria || "Sin categoría", c => c.categoria || "Sin categoría")
+    .sort((a, b) => String(a.k).localeCompare(String(b.k)));
+  const porLibrador = agrupar(c => c.cuit_consultado, c => c.razon_social || c.cuit_consultado);
+  const porCliente = agrupar(c => c.cliente_id || "-", c => c.cliente_id ? (nombreCliente[c.cliente_id] || "Cliente") : "Sin cliente asignado");
+
+  const barra = (g, claseTier) => {
+    const pct = total > 0 ? g.monto / total * 100 : 0;
+    return `
+      <div class="ge-barra-fila">
+        <div class="ge-barra-top"><span>${escHtml(g.etiqueta)} <span style="color:var(--ink-soft);">· ${g.n} cheque${g.n === 1 ? "" : "s"}</span></span><b>${formatearPesos(g.monto)} · ${pct.toFixed(0)}%</b></div>
+        <div class="ge-barra"><i class="${claseTier || ""}" style="width:${Math.max(2, pct).toFixed(1)}%"></i></div>
+      </div>`;
+  };
+
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const en30 = new Date(hoy.getTime() + 30 * 86400000);
+  const proximos = conMonto.filter(c => c.fecha_vencimiento_cheque).map(c => ({ ...c, f: new Date(c.fecha_vencimiento_cheque + "T00:00:00") }))
+    .filter(c => c.f >= hoy && c.f <= en30).sort((a, b) => a.f - b.f);
+  const vencidos = cheques.filter(c => c.fecha_vencimiento_cheque && new Date(c.fecha_vencimiento_cheque + "T00:00:00") < hoy).length;
+
+  const top = porLibrador[0];
+  const topPct = (top && total > 0) ? top.monto / total * 100 : 0;
+  const avisoConc = topPct >= 40 && porLibrador.length > 1
+    ? `<div class="ge-aviso">⚠️ <b>Concentración alta:</b> el ${topPct.toFixed(0)}% de tu cartera (${formatearPesos(top.monto)}) depende de un solo librador: ${escHtml(top.etiqueta)}.</div>` : "";
+  const avisoSinMonto = sinMonto > 0
+    ? `<div class="ge-aviso">${sinMonto} cheque${sinMonto === 1 ? "" : "s"} no ${sinMonto === 1 ? "tiene" : "tienen"} monto cargado y no se ${sinMonto === 1 ? "suma" : "suman"} a los totales.</div>` : "";
+  const avisoVencidos = vencidos > 0
+    ? `<div class="ge-aviso">${vencidos} cheque${vencidos === 1 ? "" : "s"} ya ${vencidos === 1 ? "venció" : "vencieron"} y todavía no confirmaste si se cobró. Hacelo desde el Historial.</div>` : "";
+
+  cont.innerHTML = `
+    <div class="ge-kpis">
+      <div class="ge-kpi"><b>${formatearPesos(total)}</b><span>en cartera (con monto)</span></div>
+      <div class="ge-kpi"><b>${cheques.length}</b><span>cheque${cheques.length === 1 ? "" : "s"} abierto${cheques.length === 1 ? "" : "s"}</span></div>
+    </div>
+    ${avisoConc}${avisoVencidos}${avisoSinMonto}
+    ${conMonto.length ? `
+    <div class="ge-seccion">Por categoría de riesgo</div>
+    ${porCategoria.map(g => barra(g, String(g.k)[0] === "A" ? "" : String(g.k)[0] === "B" ? "B" : "C")).join("")}
+    <div class="ge-seccion">Por librador (top 8)</div>
+    ${porLibrador.slice(0, 8).map(g => barra(g)).join("")}
+    <div class="ge-seccion">Por cliente</div>
+    ${porCliente.slice(0, 8).map(g => barra(g)).join("")}
+    <div class="ge-seccion">Vencen en los próximos 30 días</div>
+    ${proximos.length ? proximos.map(c => `
+      <div class="hist-row">
+        <div class="hist-top"><span>${escHtml(c.razon_social || c.cuit_consultado)}</span><span>${formatearPesos(c.monto_cheque)}</span></div>
+        <div class="hist-mid">Cheque N° ${escHtml(c.numero_cheque_consultado)} · vence ${c.f.toLocaleDateString("es-AR")} · ${escHtml(c.categoria || "—")}</div>
+      </div>`).join("") : `<div class="field-hint">No tenés cheques con monto que venzan en los próximos 30 días.</div>`}
+    ` : `<div class="field-hint">Cargá el monto al consultar un cheque para ver tu cartera por categoría, librador y cliente.</div>`}
+  `;
 }
 
 /* ---- Pantalla Clientes (Premium) ---- */
