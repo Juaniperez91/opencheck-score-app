@@ -5135,7 +5135,7 @@ async function renderAlertas(){
   }
   state.alertasLista = data || [];
   const noLeidas = state.alertasLista.filter(a => !a.leida).length;
-  const info = `<div class="field-hint" style="margin:0 0 12px;">Vigilamos los libradores de tus cheques abiertos y de tus clientes. Los datos de deuda del BCRA se publican una vez por mes; los cheques rechazados y denunciados se revisan varias veces por día.</div>`;
+  const info = `<div class="field-hint" style="margin:0 0 12px;">Vigilamos los libradores de tus cheques abiertos y de tus clientes. Los datos de deuda del BCRA se publican una vez por mes; los cheques rechazados y denunciados se revisan una vez por día, repartidos a lo largo del día.</div>`;
   if (!state.alertasLista.length){
     cont.innerHTML = info + `<div class="empty-state" style="padding:40px 20px;"><div class="ico">🔔</div><p>Todavía no hay novedades.<br>Cuando consultes cheques o asignes clientes, te avisamos acá si algo cambia.</p></div>`;
     return;
