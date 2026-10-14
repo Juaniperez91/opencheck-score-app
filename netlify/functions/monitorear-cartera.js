@@ -57,7 +57,7 @@ function fechaLinda(f){
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(f || "");
 }
 
-// GET al BCRA con pausa mínima entre consultas y un reintento.
+// GET al BCRA con pausa mínima entre consultas y hasta dos reintentos.
 // 404 = "sin datos para ese CUIT" (válido). Cuenta los códigos HTTP vistos.
 let ultimaConsultaMs = 0;
 const httpVistos = {};
@@ -65,7 +65,7 @@ let nroConsulta = 0;
 const posiciones429 = []; // en qué número de consulta de la corrida apareció cada 429
 async function bcraGet(ruta){
   let ultimo = null;
-  for (let intento = 1; intento <= 2; intento++){
+  for (let intento = 1; intento <= 3; intento++){
     const espera = (intento === 1 ? PAUSA_ENTRE_CONSULTAS_MS : (ultimo && ultimo.message === "HTTP 429" ? ESPERA_TRAS_429_MS : PAUSA_ENTRE_CONSULTAS_MS * 2)) - (Date.now() - ultimaConsultaMs);
     if (espera > 0) await new Promise(res => setTimeout(res, espera));
     ultimaConsultaMs = Date.now();
