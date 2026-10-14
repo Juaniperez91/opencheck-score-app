@@ -14,6 +14,6 @@ export default async (req) => {
   if (!clave || url.searchParams.get("clave") !== clave){
     return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { "Content-Type": "application/json" } });
   }
-  const resumen = await correrMonitoreo();
+  const resumen = await correrMonitoreo({ forzar: true });
   return new Response(JSON.stringify(resumen, null, 2), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
 };

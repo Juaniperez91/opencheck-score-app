@@ -1,7 +1,10 @@
 // netlify/functions/monitorear-cartera.js
 //
-// Monitoreo de cartera (función PREMIUM). Corre solo cada 3 horas y vigila
-// los CUITs que los usuarios premium tienen "abiertos":
+// Monitoreo de cartera (función PREMIUM). Corre solo cada 20 minutos, en tandas
+// chicas y con pausa entre consultas, para NO generar ráfagas contra la API del
+// BCRA (pedido expreso del BCRA). Cada CUIT se revisa una vez por día
+// (cheques rechazados) y una vez por semana (deuda, que cambia por mes).
+// Vigila los CUITs que los usuarios premium tienen "abiertos":
 //   - CUITs de cheques consultados que todavía no tienen resultado final
 //   - CUITs de cheques asignados a un cliente
 // Compara contra el último estado guardado (tabla monitoreo_cuit) y, si hay
@@ -14,8 +17,9 @@
 //
 // La primera vez que ve un CUIT solo guarda su estado (no avisa nada), para no
 // llenar de alertas viejas. Cada corrida revisa primero los CUITs más
-// antiguos sin revisar, con un tope de tiempo (las funciones programadas
-// duran 30 s), así que a lo largo del día se va cubriendo toda la cartera.
+// atrasados, con un tope de tiempo (las funciones programadas duran 30 s), así
+// que a lo largo del día se va cubriendo toda la cartera.
+// Requiere la columna monitoreo_cuit.deuda_revisada_en (timestamptz).
 //
 // Requiere SUPABASE_SERVICE_ROLE_KEY (ya está en Netlify).
 
@@ -32,7 +36,11 @@ const CABECERAS = {
 const DIAS_ATRAS_CONSULTAS = 180;   // solo se vigilan consultas de los últimos 180 días
 const PRESUPUESTO_CUITS_MS = 13000; // tiempo máximo revisando CUITs
 const PRESUPUESTO_TOTAL_MS = 24000; // tiempo máximo de toda la corrida
-const CONCURRENCIA = 3;
+const PAUSA_ENTRE_CONSULTAS_MS = 350; // separación mínima entre dos consultas al BCRA (sin ráfagas)
+const RECHAZOS_CADA_HORAS = 20;       // el BCRA incorpora datos nuevos una vez por día
+const DEUDA_CADA_DIAS = 7;            // la deuda se actualiza por mes
+const MINUTOS_POR_TANDA = 20;         // la función corre cada 20 min (72 tandas por día)
+const FALLOS_PARA_CORTAR = 2;
 const UMBRAL_DEUDA_PCT = 30;
 const MAX_ALERTAS_RECHAZO_POR_CUIT = 5;
 
@@ -48,17 +56,26 @@ function fechaLinda(f){
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(f || "");
 }
 
-// GET al BCRA con reintentos. 404 = "sin datos para ese CUIT" (válido).
+// GET al BCRA con pausa mínima entre consultas y un reintento.
+// 404 = "sin datos para ese CUIT" (válido). Cuenta los códigos HTTP vistos.
+let ultimaConsultaMs = 0;
+const httpVistos = {};
 async function bcraGet(ruta){
   let ultimo = null;
   for (let intento = 1; intento <= 2; intento++){
+    const espera = PAUSA_ENTRE_CONSULTAS_MS * (intento === 1 ? 1 : 2) - (Date.now() - ultimaConsultaMs);
+    if (espera > 0) await new Promise(res => setTimeout(res, espera));
+    ultimaConsultaMs = Date.now();
     try {
       const r = await fetch(BCRA + ruta, { headers: CABECERAS, signal: AbortSignal.timeout(5000) });
+      httpVistos[r.status] = (httpVistos[r.status] || 0) + 1;
       if (r.status === 404) return { status: 404, json: null };
       if (r.status === 200) return { status: 200, json: await r.json() };
       ultimo = new Error("HTTP " + r.status);
-    } catch (e){ ultimo = e; }
-    if (intento < 2) await new Promise(res => setTimeout(res, 250));
+    } catch (e){
+      httpVistos.error = (httpVistos.error || 0) + 1;
+      ultimo = e;
+    }
   }
   throw ultimo || new Error("sin respuesta");
 }
@@ -91,9 +108,9 @@ function leerRechazos(resp){
   return mapa;
 }
 
-export async function correrMonitoreo(){
+export async function correrMonitoreo({ forzar = false } = {}){
   const t0 = Date.now();
-  const resumen = { cuitsVigilados: 0, cuitsRevisados: 0, cuitsConError: 0, baselines: 0, alertasNuevas: 0, chequesRevisados: 0, errores: [] };
+  const resumen = { cuitsVigilados: 0, cuitsRevisados: 0, cuitsConError: 0, baselines: 0, alertasNuevas: 0, chequesRevisados: 0, errores: [], forzado: !!forzar };
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY){
     resumen.errores.push("Falta SUPABASE_SERVICE_ROLE_KEY");
     return resumen;
@@ -136,61 +153,71 @@ export async function correrMonitoreo(){
     if (error){ resumen.errores.push("monitoreo_cuit: " + error.message); return resumen; }
     for (const f of data || []) previos.set(f.cuit, f);
   }
-  // Primero los nunca revisados, después los más antiguos
-  cuits.sort((a, b) => {
+  // Qué le toca a cada CUIT: cheques rechazados una vez por día, deuda una vez por semana
+  const msDesde = (iso) => iso ? (Date.now() - new Date(iso).getTime()) : Infinity;
+  const toca = (cuit) => {
+    const pr = previos.get(cuit);
+    return {
+      rech: forzar || !pr || msDesde(pr.actualizado_en) > RECHAZOS_CADA_HORAS * 3600000,
+      deuda: forzar || !pr || msDesde(pr.deuda_revisada_en) > DEUDA_CADA_DIAS * 86400000
+    };
+  };
+  // Solo los que tienen algo pendiente; primero los nunca revisados, después los más atrasados
+  const pendientes = cuits.filter(c => { const t = toca(c); return t.rech || t.deuda; });
+  pendientes.sort((a, b) => {
     const pa = previos.get(a), pb = previos.get(b);
     if (!pa && !pb) return 0;
     if (!pa) return -1;
     if (!pb) return 1;
     return new Date(pa.actualizado_en) - new Date(pb.actualizado_en);
   });
+  resumen.cuitsPendientes = pendientes.length;
 
   const alertas = []; // filas para insertar
   const agregarAlerta = (usuario_id, cuit, razon, tipo, clave, titulo, detalle, datos, consulta_id) =>
     alertas.push({ usuario_id, cuit, razon_social: razon || null, tipo, clave: String(clave || ""), titulo, detalle, datos: datos || null, consulta_id: consulta_id || null });
 
-  // 5) Revisar CUITs (de a CONCURRENCIA, con tope de tiempo)
+  // 5) Revisar CUITs de a uno, con pausa entre consultas (sin ráfagas) y tope de tiempo
   let fallosSeguidos = 0;
   async function revisarCuit(cuit){
     const g = porCuit.get(cuit);
-    let deudaResp, rechResp;
+    const previo = previos.get(cuit);
+    const t = toca(cuit);
+    let rech = null, d = null;
     try {
-      [deudaResp, rechResp] = await Promise.all([
-        bcraGet("/CentralDeDeudores/v1.0/Deudas/" + cuit),
-        bcraGet("/CentralDeDeudores/v1.0/Deudas/ChequesRechazados/" + cuit)
-      ]);
+      if (t.rech) rech = leerRechazos(await bcraGet("/CentralDeDeudores/v1.0/Deudas/ChequesRechazados/" + cuit));
+      if (t.deuda) d = leerDeuda(await bcraGet("/CentralDeDeudores/v1.0/Deudas/" + cuit));
     } catch (e){
       resumen.cuitsConError++; fallosSeguidos++;
       if (resumen.errores.length < 5) resumen.errores.push(`${cuit}: ${e.message}`);
       return;
     }
     fallosSeguidos = 0;
-    const d = leerDeuda(deudaResp);
-    const rech = leerRechazos(rechResp);
-    const claves = Object.keys(rech);
-    const nombre = g.razon || d.denominacion || cuit;
-    const previo = previos.get(cuit);
+    const claves = rech ? Object.keys(rech) : null;
+    const nombre = g.razon || (d && d.denominacion) || cuit;
 
     if (!previo){
       resumen.baselines++;
     } else {
       // a) cheques rechazados nuevos
-      const anteriores = new Set(Array.isArray(previo.rechazos_claves) ? previo.rechazos_claves : []);
-      const nuevos = claves.filter(k => !anteriores.has(k)).slice(0, MAX_ALERTAS_RECHAZO_POR_CUIT);
-      for (const k of nuevos){
-        const r = rech[k];
-        const textoCheque = `Cheque N° ${r.nro} (${r.entidad}) por ${pesos(r.monto)}, rechazado el ${fechaLinda(r.fecha)} por "${r.causal}".`;
-        for (const [uid, cs] of g.usuarios){
-          const propia = cs.find(c => c.numero_cheque_consultado && String(c.numero_cheque_consultado).replace(/^0+/, "") === String(r.nro).replace(/^0+/, ""));
-          if (propia){
-            agregarAlerta(uid, cuit, nombre, "cheque_propio_rechazado", k, `Tu cheque N° ${r.nro} fue rechazado`, `${textoCheque} Librador: ${nombre}.`, r, propia.id);
-          } else {
-            agregarAlerta(uid, cuit, nombre, "cheque_rechazado_nuevo", k, `Nuevo cheque rechazado: ${nombre}`, textoCheque, r, null);
+      if (rech){
+        const anteriores = new Set(Array.isArray(previo.rechazos_claves) ? previo.rechazos_claves : []);
+        const nuevos = claves.filter(k => !anteriores.has(k)).slice(0, MAX_ALERTAS_RECHAZO_POR_CUIT);
+        for (const k of nuevos){
+          const r = rech[k];
+          const textoCheque = `Cheque N° ${r.nro} (${r.entidad}) por ${pesos(r.monto)}, rechazado el ${fechaLinda(r.fecha)} por "${r.causal}".`;
+          for (const [uid, cs] of g.usuarios){
+            const propia = cs.find(c => c.numero_cheque_consultado && String(c.numero_cheque_consultado).replace(/^0+/, "") === String(r.nro).replace(/^0+/, ""));
+            if (propia){
+              agregarAlerta(uid, cuit, nombre, "cheque_propio_rechazado", k, `Tu cheque N° ${r.nro} fue rechazado`, `${textoCheque} Librador: ${nombre}.`, r, propia.id);
+            } else {
+              agregarAlerta(uid, cuit, nombre, "cheque_rechazado_nuevo", k, `Nuevo cheque rechazado: ${nombre}`, textoCheque, r, null);
+            }
           }
         }
       }
       // b) período nuevo del BCRA: situación y deuda
-      if (d.periodo && previo.periodo_bcra && d.periodo !== previo.periodo_bcra){
+      if (d && d.periodo && previo.periodo_bcra && d.periodo !== previo.periodo_bcra){
         const sPrev = previo.situacion_max, sNow = d.situacionMax;
         if (sPrev != null && sNow != null && sNow > sPrev){
           for (const [uid] of g.usuarios) agregarAlerta(uid, cuit, nombre, "situacion_empeora", d.periodo, `Empeoró la situación crediticia: ${nombre}`, `Pasó de situación ${sPrev} a situación ${sNow} en ${periodoLindo(d.periodo)}.`, { de: sPrev, a: sNow, periodo: d.periodo }, null);
@@ -205,52 +232,64 @@ export async function correrMonitoreo(){
       }
     }
 
+    // Guardar estado: lo que no se consultó en esta vuelta se conserva como estaba
+    const ahora = new Date().toISOString();
+    const pr = previo || {};
     const { error } = await supabase.from("monitoreo_cuit").upsert({
-      cuit, periodo_bcra: d.periodo, situacion_max: d.situacionMax, deuda_total_miles: d.deudaMiles,
-      cant_entidades: d.entidades, rechazos_claves: claves, rechazos_total: claves.length, actualizado_en: new Date().toISOString()
+      cuit,
+      periodo_bcra: d ? d.periodo : (pr.periodo_bcra ?? null),
+      situacion_max: d ? d.situacionMax : (pr.situacion_max ?? null),
+      deuda_total_miles: d ? d.deudaMiles : (pr.deuda_total_miles ?? 0),
+      cant_entidades: d ? d.entidades : (pr.cant_entidades ?? 0),
+      rechazos_claves: rech ? claves : (Array.isArray(pr.rechazos_claves) ? pr.rechazos_claves : []),
+      rechazos_total: rech ? claves.length : (pr.rechazos_total ?? 0),
+      actualizado_en: rech ? ahora : (pr.actualizado_en || ahora),
+      deuda_revisada_en: d ? ahora : (pr.deuda_revisada_en || null)
     });
     if (error) resumen.errores.push("guardar estado " + cuit + ": " + error.message);
     resumen.cuitsRevisados++;
   }
 
-  for (let i = 0; i < cuits.length; i += CONCURRENCIA){
-    if (Date.now() - t0 > PRESUPUESTO_CUITS_MS || fallosSeguidos >= 3) break;
-    await Promise.all(cuits.slice(i, i + CONCURRENCIA).map(revisarCuit));
+  for (const cuit of pendientes){
+    if (Date.now() - t0 > PRESUPUESTO_CUITS_MS || fallosSeguidos >= FALLOS_PARA_CORTAR) break;
+    await revisarCuit(cuit);
   }
 
-  // 6) Cheques propios denunciados (orden aleatorio para cubrir todos con el tiempo)
-  const hoy = new Date().toISOString().slice(0, 10);
+  // 6) Cheques propios denunciados: cada cheque se revisa UNA vez por día, en la tanda
+  // que le toca según su id (así el tráfico queda repartido y no hay ráfagas).
+  const ahoraUtc = new Date();
+  const tandaActual = Math.floor((ahoraUtc.getUTCHours() * 60 + ahoraUtc.getUTCMinutes()) / MINUTOS_POR_TANDA);
+  const tandasPorDia = Math.floor(1440 / MINUTOS_POR_TANDA);
+  const tandaDe = (id) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) % 100003; return h % tandasPorDia; };
   const abiertos = [];
   for (const [cuit, g] of porCuit){
     for (const [uid, cs] of g.usuarios){
       for (const c of cs){
         if (!c.numero_cheque_consultado || !c.banco_cheque_consultado) continue;
         if (c.cheque_denunciado === true || c.resultado_real) continue;
+        if (!forzar && tandaDe(c.id) !== tandaActual) continue;
         abiertos.push({ uid, cuit, razon: g.razon, c });
       }
     }
   }
-  abiertos.sort(() => Math.random() - 0.5);
-  for (let i = 0; i < abiertos.length; i += CONCURRENCIA){
-    if (Date.now() - t0 > PRESUPUESTO_TOTAL_MS || fallosSeguidos >= 3) break;
-    await Promise.all(abiertos.slice(i, i + CONCURRENCIA).map(async ({ uid, cuit, razon, c }) => {
-      try {
-        const r = await bcraGet(`/cheques/v1.0/denunciados/${encodeURIComponent(c.banco_cheque_consultado)}/${encodeURIComponent(c.numero_cheque_consultado)}`);
-        resumen.chequesRevisados++;
-        fallosSeguidos = 0;
-        const denunciado = !!(r.json && r.json.results && r.json.results.length > 0);
-        if (denunciado){
-          agregarAlerta(uid, cuit, razon, "cheque_denunciado", `${c.banco_cheque_consultado}|${c.numero_cheque_consultado}`,
-            `Tu cheque N° ${c.numero_cheque_consultado} figura denunciado`,
-            `El cheque N° ${c.numero_cheque_consultado} (librador: ${razon || cuit}) aparece en el registro público de cheques denunciados del BCRA. No lo des por cobrado.`,
-            null, c.id);
-          await supabase.from("consultas").update({ cheque_denunciado: true }).eq("id", c.id);
-        }
-      } catch (e){
-        fallosSeguidos++;
-        if (resumen.errores.length < 5) resumen.errores.push(`denuncia ${c.numero_cheque_consultado}: ${e.message}`);
+  for (const { uid, cuit, razon, c } of abiertos){
+    if (Date.now() - t0 > PRESUPUESTO_TOTAL_MS || fallosSeguidos >= FALLOS_PARA_CORTAR) break;
+    try {
+      const r = await bcraGet(`/cheques/v1.0/denunciados/${encodeURIComponent(c.banco_cheque_consultado)}/${encodeURIComponent(c.numero_cheque_consultado)}`);
+      resumen.chequesRevisados++;
+      fallosSeguidos = 0;
+      const denunciado = !!(r.json && r.json.results && r.json.results.length > 0);
+      if (denunciado){
+        agregarAlerta(uid, cuit, razon, "cheque_denunciado", `${c.banco_cheque_consultado}|${c.numero_cheque_consultado}`,
+          `Tu cheque N° ${c.numero_cheque_consultado} figura denunciado`,
+          `El cheque N° ${c.numero_cheque_consultado} (librador: ${razon || cuit}) aparece en el registro público de cheques denunciados del BCRA. No lo des por cobrado.`,
+          null, c.id);
+        await supabase.from("consultas").update({ cheque_denunciado: true }).eq("id", c.id);
       }
-    }));
+    } catch (e){
+      fallosSeguidos++;
+      if (resumen.errores.length < 5) resumen.errores.push(`denuncia ${c.numero_cheque_consultado}: ${e.message}`);
+    }
   }
 
   // 7) Guardar alertas (las repetidas se ignoran por la clave única)
@@ -261,6 +300,7 @@ export async function correrMonitoreo(){
     else resumen.alertasNuevas = (data || []).length;
   }
 
+  resumen.http = httpVistos;
   resumen.segundos = Math.round((Date.now() - t0) / 100) / 10;
   return resumen;
 }
@@ -274,5 +314,5 @@ export default async () => {
 };
 
 export const config = {
-  schedule: "7 */3 * * *"
+  schedule: "5,25,45 * * * *"
 };
