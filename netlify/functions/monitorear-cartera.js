@@ -36,7 +36,8 @@ const CABECERAS = {
 const DIAS_ATRAS_CONSULTAS = 180;   // solo se vigilan consultas de los últimos 180 días
 const PRESUPUESTO_CUITS_MS = 13000; // tiempo máximo revisando CUITs
 const PRESUPUESTO_TOTAL_MS = 24000; // tiempo máximo de toda la corrida
-const PAUSA_ENTRE_CONSULTAS_MS = 350; // separación mínima entre dos consultas al BCRA (sin ráfagas)
+const PAUSA_ENTRE_CONSULTAS_MS = 1000; // separación mínima entre dos consultas al BCRA (sin ráfagas): 1 por segundo
+const ESPERA_TRAS_429_MS = 3000;        // si el BCRA dice "demasiadas consultas", esperamos antes de reintentar
 const RECHAZOS_CADA_HORAS = 20;       // el BCRA incorpora datos nuevos una vez por día
 const DEUDA_CADA_DIAS = 7;            // la deuda se actualiza por mes
 const MINUTOS_POR_TANDA = 20;         // la función corre cada 20 min (72 tandas por día)
@@ -63,7 +64,7 @@ const httpVistos = {};
 async function bcraGet(ruta){
   let ultimo = null;
   for (let intento = 1; intento <= 2; intento++){
-    const espera = PAUSA_ENTRE_CONSULTAS_MS * (intento === 1 ? 1 : 2) - (Date.now() - ultimaConsultaMs);
+    const espera = (intento === 1 ? PAUSA_ENTRE_CONSULTAS_MS : (ultimo && ultimo.message === "HTTP 429" ? ESPERA_TRAS_429_MS : PAUSA_ENTRE_CONSULTAS_MS * 2)) - (Date.now() - ultimaConsultaMs);
     if (espera > 0) await new Promise(res => setTimeout(res, espera));
     ultimaConsultaMs = Date.now();
     try {
