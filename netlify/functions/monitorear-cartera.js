@@ -61,6 +61,8 @@ function fechaLinda(f){
 // 404 = "sin datos para ese CUIT" (válido). Cuenta los códigos HTTP vistos.
 let ultimaConsultaMs = 0;
 const httpVistos = {};
+let nroConsulta = 0;
+const posiciones429 = []; // en qué número de consulta de la corrida apareció cada 429
 async function bcraGet(ruta){
   let ultimo = null;
   for (let intento = 1; intento <= 2; intento++){
@@ -69,7 +71,9 @@ async function bcraGet(ruta){
     ultimaConsultaMs = Date.now();
     try {
       const r = await fetch(BCRA + ruta, { headers: CABECERAS, signal: AbortSignal.timeout(5000) });
+      nroConsulta++;
       httpVistos[r.status] = (httpVistos[r.status] || 0) + 1;
+      if (r.status === 429) posiciones429.push(nroConsulta);
       if (r.status === 404) return { status: 404, json: null };
       if (r.status === 200) return { status: 200, json: await r.json() };
       ultimo = new Error("HTTP " + r.status);
@@ -111,6 +115,9 @@ function leerRechazos(resp){
 
 export async function correrMonitoreo({ forzar = false } = {}){
   const t0 = Date.now();
+  // Contadores de esta corrida (el módulo puede quedar en memoria entre ejecuciones)
+  for (const k of Object.keys(httpVistos)) delete httpVistos[k];
+  nroConsulta = 0; posiciones429.length = 0; ultimaConsultaMs = 0;
   const resumen = { cuitsVigilados: 0, cuitsRevisados: 0, cuitsConError: 0, baselines: 0, alertasNuevas: 0, chequesRevisados: 0, errores: [], forzado: !!forzar };
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY){
     resumen.errores.push("Falta SUPABASE_SERVICE_ROLE_KEY");
@@ -302,6 +309,7 @@ export async function correrMonitoreo({ forzar = false } = {}){
   }
 
   resumen.http = httpVistos;
+  if (posiciones429.length) resumen.posiciones429 = posiciones429;
   resumen.segundos = Math.round((Date.now() - t0) / 100) / 10;
   return resumen;
 }
