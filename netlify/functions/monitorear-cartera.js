@@ -333,8 +333,43 @@ export async function correrMonitoreo({ forzar = false } = {}){
   return resumen;
 }
 
+// Acumula las cifras del día (hora argentina) en vigilante_estadisticas, para
+// que vigilar-datos pueda avisar por mail si algo se degrada. Si la tabla no
+// existe o falla, solo se anota en el log: nunca interrumpe el monitoreo.
+async function registrarEstadistica(resumen){
+  try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return;
+    const supabase = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const dia = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+    const { data: previo } = await supabase.from("vigilante_estadisticas").select("*").eq("dia", dia).maybeSingle();
+    const p = previo || {};
+    const http = { ...(p.http || {}) };
+    for (const [k, v] of Object.entries(resumen.http || {})) http[k] = (http[k] || 0) + v;
+    const restantes = Math.max(0, (resumen.cuitsPendientes || 0) - (resumen.cuitsRevisados || 0));
+    const fila = {
+      dia,
+      corridas: (p.corridas || 0) + 1,
+      cuits_revisados: (p.cuits_revisados || 0) + (resumen.cuitsRevisados || 0),
+      cuits_con_error: (p.cuits_con_error || 0) + (resumen.cuitsConError || 0),
+      cheques_revisados: (p.cheques_revisados || 0) + (resumen.chequesRevisados || 0),
+      alertas_nuevas: (p.alertas_nuevas || 0) + (resumen.alertasNuevas || 0),
+      n429: (p.n429 || 0) + ((resumen.posiciones429 || []).length),
+      http,
+      max_restantes: Math.max(p.max_restantes || 0, restantes),
+      restantes_final: restantes,
+      cuits_vigilados: resumen.cuitsVigilados || 0,
+      ultima_corrida: new Date().toISOString()
+    };
+    const { error } = await supabase.from("vigilante_estadisticas").upsert(fila, { onConflict: "dia" });
+    if (error) console.error("[monitorear-cartera] estadística no guardada:", error.message);
+  } catch (e) {
+    console.error("[monitorear-cartera] estadística no guardada:", e.message);
+  }
+}
+
 export default async () => {
   const resumen = await correrMonitoreo();
+  await registrarEstadistica(resumen);
   const linea = JSON.stringify(resumen);
   if (resumen.errores.length) console.error("[monitorear-cartera]", linea);
   else console.log("[monitorear-cartera]", linea);
