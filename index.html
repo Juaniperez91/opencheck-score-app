@@ -156,6 +156,20 @@
   }
   .institucional-bullets li b{ color:var(--green-ink); }
 
+  /* ---- Cuenta corriente ---- */
+  .cc-card{ background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:14px; margin-bottom:14px; }
+  .cc-card h3{ margin:0 0 8px; font-size:14px; }
+  .cc-fila{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; }
+  .cc-total{ border-top:1px solid var(--hairline); margin-top:6px; padding-top:8px; font-size:14px; }
+  .cc-aviso{ background:#FBECEC; color:#8A2F2F; border-radius:10px; padding:9px 11px; font-size:12.5px; font-weight:600; margin-top:10px; }
+  .cc-ok{ background:#EAF3EE; color:#2F6B4F; border-radius:10px; padding:9px 11px; font-size:12.5px; margin-top:10px; }
+  .cc-mov{ display:flex; justify-content:space-between; align-items:center; gap:8px; border-bottom:1px solid var(--hairline); padding:9px 0; font-size:13px; }
+  .cc-mov small{ display:block; color:var(--ink-soft); font-size:11.5px; }
+  .cc-mov .cc-x{ background:none; border:none; color:var(--ink-soft); font-size:16px; cursor:pointer; padding:4px; }
+  .cc-botones{ display:flex; gap:8px; margin-top:10px; }
+  .cc-botones .btn{ flex:1; }
+  .ge-limite{ background:#FBECEC; border-left:4px solid #A63D3D; border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:13px; }
+
   /* ---- Ayuda / glosario ---- */
   .ayuda-det{ border-bottom:1px solid var(--hairline); padding:2px 0; }
   .ayuda-det summary{ cursor:pointer; font-weight:700; font-size:13.5px; color:var(--green-ink); padding:12px 0; list-style:none; }
@@ -921,6 +935,7 @@
 <details class="ayuda-det"><summary>Consultar a un librador</summary><div class="ayuda-cuerpo"><ol><li>En Inicio, ingresá el <b>CUIT/CUIL</b> (11 números).</li><li>Opcional: sumá el <b>número de cheque</b> y el banco para verificar si tiene denuncias.</li><li>Opcional: cargá el <b>monto del cheque</b> (se usa para tu cartera).</li><li>Tocá consultar. Verás el puntaje (0 a 100), la categoría (A1 a C2) y la explicación de qué la formó.</li></ol><p>También podés usar la cámara para leer el cheque; revisá siempre que los números leídos sean correctos.</p></div></details>
 <details class="ayuda-det"><summary>Cargar un cheque con su monto</summary><div class="ayuda-cuerpo"><ol><li>En la consulta, completá número de cheque, banco y monto.</li><li>El cheque queda guardado en tu <b>Historial</b>.</li><li>Cuando se resuelva (cobrado o rechazado), marcá el resultado real: nos ayuda a validar el modelo.</li></ol><p>Los cheques abiertos (sin resultado) quedan bajo vigilancia automática en Premium.</p></div></details>
 <details class="ayuda-det"><summary>Clientes y asignación de cheques<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><ol><li>En la sección de clientes, creá un cliente con su nombre y, si lo tenés, su <b>CUIT propio</b>.</li><li>Al consultar un cheque, asignalo al cliente para que se sume a su cartera.</li></ol><p>Si cargás el CUIT del cliente, lo monitoreamos automáticamente. Sin CUIT aparece como “Sin CUIT propio”.</p></div></details>
+<details class="ayuda-det"><summary>Cuenta corriente y tope de exposición<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><ol><li>Entrá a <b>Clientes</b> y abrí un cliente.</li><li>En <b>Cuenta corriente</b> tocá <b>+ Factura</b> cada vez que le vendas a cuenta, y <b>+ Pago</b> cuando te pague (efectivo, transferencia o cheque recibido). Las notas de crédito también restan.</li><li>En <b>Editar cliente</b> podés fijar un <b>tope de exposición</b> en pesos (opcional).</li></ol><p><b>Exposición total</b> = saldo de cuenta corriente (facturas − pagos) + cheques de ese cliente que todavía no se cobraron. Si supera el tope, te avisamos en <b>Alertas</b> y en la lista de clientes. Es solo un aviso: no bloquea nada.</p></div></details>
 <details class="ayuda-det"><summary>Centro de alertas<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Tocá <b>Alertas</b> en la barra inferior. Ahí aparecen los avisos nuevos (con un número rojo si hay sin leer).</p><ul><li><b>Cheque rechazado nuevo</b> del librador o de un cliente.</li><li><b>Cheque propio rechazado / denunciado.</b></li><li><b>Situación BCRA</b> que empeora o mejora.</li><li><b>Deuda que salta</b>: aumento del 30% o más respecto del período anterior.</li></ul><p>Podés marcarlas como leídas. Cada aviso indica a quién corresponde y cuándo se detectó.</p></div></details>
 <details class="ayuda-det"><summary>Cartera<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>En <b>Alertas &gt; Cartera</b> ves el panel de tus cheques abiertos: montos totales, distribución por categoría de riesgo y concentración por librador.</p></div></details>
 <details class="ayuda-det"><summary>“En monitoreo”<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Significa que vigilamos automáticamente a ese CUIT: los cheques abiertos que cargaste y los clientes con CUIT propio. No tenés que hacer nada; si algo cambia, te llega una alerta.</p></div></details>
@@ -1382,9 +1397,37 @@
         <input type="text" id="input-nuevo-cliente-cuit" placeholder="11 dígitos, con o sin guiones" autocomplete="off" inputmode="numeric">
         <div class="field-hint">Si lo cargás, vigilamos a este cliente automáticamente (cheques rechazados y situación en el BCRA) y te avisamos en Alertas si hay novedades, aunque no te haya dado cheques.</div>
       </div>
+      <div class="field">
+        <label>Tope de exposición en $ (opcional)</label>
+        <input type="text" id="input-nuevo-cliente-limite" placeholder="Ej: 4.000.000" autocomplete="off" inputmode="numeric">
+        <div class="field-hint">Cuánto estás dispuesto a tener en riesgo con este cliente (lo que te debe más sus cheques sin cobrar). Si lo superás, te avisamos. Es solo un aviso: no bloquea nada.</div>
+      </div>
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="cerrarModalNuevoCliente()">Cancelar</button>
         <button class="btn btn-primary" id="btn-confirmar-cliente" onclick="confirmarNuevoCliente()">Crear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-movimiento">
+    <div class="modal-caja">
+      <h3 id="modal-mov-titulo">Nueva factura</h3>
+      <p id="modal-mov-texto"></p>
+      <div class="field">
+        <label>Monto ($)</label>
+        <input type="text" id="input-mov-monto" placeholder="Ej: 850.000" autocomplete="off" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" id="input-mov-fecha">
+      </div>
+      <div class="field">
+        <label>Detalle (opcional)</label>
+        <input type="text" id="input-mov-detalle" placeholder="Ej: Factura A 0003-00001234" autocomplete="off">
+      </div>
+      <div class="modal-botones">
+        <button class="btn btn-secondary" onclick="cerrarModalMovimiento()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarMovimiento()">Guardar</button>
       </div>
     </div>
   </div>
@@ -1680,31 +1723,68 @@ async function obtenerClientesUsuario(usuarioId){
 
   const { data: consultas, error: errConsultas } = await supabaseClient
     .from("consultas")
-    .select("cliente_id")
+    .select("cliente_id, monto_cheque, numero_cheque_consultado, resultado_real, cheque_denunciado")
     .eq("usuario_id", usuarioId)
     .not("cliente_id", "is", null);
   const conteos = {};
+  const abiertos = {}; // cheques en cartera (con monto, sin resultado, no denunciados)
   if (!errConsultas){
-    for (const c of consultas || []) conteos[c.cliente_id] = (conteos[c.cliente_id] || 0) + 1;
+    for (const c of consultas || []){
+      conteos[c.cliente_id] = (conteos[c.cliente_id] || 0) + 1;
+      if (c.numero_cheque_consultado && !c.resultado_real && c.cheque_denunciado !== true && Number(c.monto_cheque) > 0){
+        abiertos[c.cliente_id] = (abiertos[c.cliente_id] || 0) + Number(c.monto_cheque);
+      }
+    }
   }
 
-  return (clientes || []).map(cl => ({ ...cl, cantidadCheques: conteos[cl.id] || 0 }));
+  // Cuenta corriente: facturas suman, pagos y notas de crédito restan.
+  const saldos = {};
+  const { data: movs, error: errMovs } = await supabaseClient
+    .from("movimientos").select("cliente_id, tipo, monto").eq("usuario_id", usuarioId);
+  if (!errMovs){
+    for (const m of movs || []) saldos[m.cliente_id] = (saldos[m.cliente_id] || 0) + saldoDeMovimiento(m);
+  }
+
+  return (clientes || []).map(cl => calcularExposicionCliente({
+    ...cl, cantidadCheques: conteos[cl.id] || 0
+  }, saldos[cl.id] || 0, abiertos[cl.id] || 0));
 }
 
-async function crearCliente(usuarioId, nombre, cuitPrincipal){
+/* ---- Cuenta corriente por cliente (Premium) ---- */
+// Factura = el cliente te debe más. Pago / nota de crédito = te debe menos.
+function saldoDeMovimiento(m){
+  const monto = Number(m.monto) || 0;
+  return m.tipo === "factura" ? monto : -monto;
+}
+// Exposición = saldo de cuenta corriente + cheques del cliente que todavía
+// no se cobraron (ese riesgo sigue vivo aunque la factura figure como paga).
+function calcularExposicionCliente(cl, saldo, chequesAbiertos){
+  const exposicion = Math.max(0, saldo) + chequesAbiertos;
+  const limite = Number(cl.limite_exposicion) > 0 ? Number(cl.limite_exposicion) : null;
+  return { ...cl, saldoCC: saldo, chequesAbiertosMonto: chequesAbiertos, exposicion, limite,
+           superaLimite: limite !== null && exposicion > limite };
+}
+async function obtenerMovimientosCliente(clienteId){
+  const { data, error } = await supabaseClient.from("movimientos")
+    .select("*").eq("cliente_id", clienteId).order("fecha", { ascending: false }).order("creado_en", { ascending: false }).limit(300);
+  if (error){ console.warn("[OpenCheck Score] Error trayendo movimientos:", error.message); return []; }
+  return data || [];
+}
+
+async function crearCliente(usuarioId, nombre, cuitPrincipal, limite){
   const { data, error } = await supabaseClient
     .from("clientes")
-    .insert({ usuario_id: usuarioId, nombre, cuit_principal: cuitPrincipal || null })
+    .insert({ usuario_id: usuarioId, nombre, cuit_principal: cuitPrincipal || null, limite_exposicion: limite || null })
     .select()
     .single();
   if (error) throw error;
   return data;
 }
 
-async function actualizarCliente(clienteId, nombre, cuitPrincipal){
+async function actualizarCliente(clienteId, nombre, cuitPrincipal, limite){
   const { data, error } = await supabaseClient
     .from("clientes")
-    .update({ nombre, cuit_principal: cuitPrincipal || null })
+    .update({ nombre, cuit_principal: cuitPrincipal || null, limite_exposicion: limite || null })
     .eq("id", clienteId)
     .select()
     .single();
@@ -5171,14 +5251,20 @@ async function renderAlertas(){
     return;
   }
   state.alertasLista = data || [];
+  let avisosTope = "";
+  try {
+    const cls = await obtenerClientesUsuario(state.user.id);
+    avisosTope = cls.filter(c => c.superaLimite).map(c =>
+      `<div class="ge-limite">⚠️ <b>${escHtml(c.nombre)}</b> superó su tope de exposición: ${formatearPesos(c.exposicion)} de ${formatearPesos(c.limite)}.</div>`).join("");
+  } catch (e) {}
   const noLeidas = state.alertasLista.filter(a => !a.leida).length;
   const info = `<div class="field-hint" style="margin:0 0 12px;">Vigilamos los libradores de tus cheques abiertos y de tus clientes. Los datos de deuda del BCRA se publican una vez por mes; los cheques rechazados y denunciados se revisan una vez por día, repartidos a lo largo del día.</div>`;
   if (!state.alertasLista.length){
-    cont.innerHTML = info + `<div class="empty-state" style="padding:40px 20px;"><div class="ico">🔔</div><p>Todavía no hay novedades.<br>Cuando consultes cheques o asignes clientes, te avisamos acá si algo cambia.</p></div>`;
+    cont.innerHTML = info + avisosTope + `<div class="empty-state" style="padding:40px 20px;"><div class="ico">🔔</div><p>Todavía no hay novedades.<br>Cuando consultes cheques o asignes clientes, te avisamos acá si algo cambia.</p></div>`;
     return;
   }
   const botonTodas = noLeidas > 0 ? `<button class="btn btn-secondary" style="margin-bottom:12px;" onclick="marcarAlertasLeidas()">Marcar todas como leídas</button>` : "";
-  cont.innerHTML = info + botonTodas + state.alertasLista.map(a => {
+  cont.innerHTML = info + avisosTope + botonTodas + state.alertasLista.map(a => {
     const meta = ALERTA_META[a.tipo] || { clase: "", icono: "🔔" };
     const fecha = new Date(a.creada_en).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
     return `
@@ -5331,6 +5417,7 @@ async function renderClientes(){
           <span class="tag">${cl.cantidadCheques} cheque${cl.cantidadCheques === 1 ? "" : "s"}</span>
         </div>
         ${cl.cuit_principal ? `<div class="hist-mid">CUIT propio: ${cl.cuit_principal} · 🔔 en monitoreo</div>` : `<div class="hist-mid">Sin CUIT propio · cargalo para monitorearlo</div>`}
+        ${cl.exposicion > 0 || cl.limite ? `<div class="hist-mid" style="${cl.superaLimite ? "color:#A63D3D; font-weight:700;" : ""}">${cl.superaLimite ? "⚠️ Superó el tope · " : ""}Exposición ${formatearPesos(cl.exposicion)}${cl.limite ? " de " + formatearPesos(cl.limite) : ""}</div>` : ""}
       </div>`).join("");
 
   cont.innerHTML = `
@@ -5345,6 +5432,7 @@ function abrirModalNuevoCliente(){
   document.getElementById("btn-confirmar-cliente").textContent = "Crear";
   document.getElementById("input-nuevo-cliente-nombre").value = "";
   document.getElementById("input-nuevo-cliente-cuit").value = "";
+  document.getElementById("input-nuevo-cliente-limite").value = "";
   document.getElementById("modal-nuevo-cliente").classList.add("show");
 }
 function abrirModalEditarCliente(cliente){
@@ -5354,6 +5442,7 @@ function abrirModalEditarCliente(cliente){
   document.getElementById("btn-confirmar-cliente").textContent = "Guardar";
   document.getElementById("input-nuevo-cliente-nombre").value = cliente.nombre || "";
   document.getElementById("input-nuevo-cliente-cuit").value = cliente.cuit_principal || "";
+  document.getElementById("input-nuevo-cliente-limite").value = Number(cliente.limite_exposicion) > 0 ? String(Math.round(Number(cliente.limite_exposicion))) : "";
   document.getElementById("modal-nuevo-cliente").classList.add("show");
 }
 function cerrarModalNuevoCliente(){
@@ -5362,15 +5451,18 @@ function cerrarModalNuevoCliente(){
 async function confirmarNuevoCliente(){
   const nombre = document.getElementById("input-nuevo-cliente-nombre").value.trim();
   const cuit = document.getElementById("input-nuevo-cliente-cuit").value.trim();
+  const limiteTxt = document.getElementById("input-nuevo-cliente-limite").value.trim();
+  const limite = limiteTxt ? parseMontoAR(limiteTxt) : null;
   if (!nombre){ mostrarToast("Ponele un nombre al cliente."); return; }
+  if (limiteTxt && !(limite > 0)){ mostrarToast("El tope tiene que ser un monto válido."); return; }
   try {
     if (state.modoModalCliente === "editar"){
-      await actualizarCliente(state.clienteEditandoId, nombre, cuit);
+      await actualizarCliente(state.clienteEditandoId, nombre, cuit, limite);
       cerrarModalNuevoCliente();
       mostrarToast("Cliente actualizado.");
       renderClienteDetalle(state.clienteEditandoId);
     } else {
-      await crearCliente(state.user.id, nombre, cuit);
+      await crearCliente(state.user.id, nombre, cuit, limite);
       cerrarModalNuevoCliente();
       mostrarToast("Cliente creado.");
       renderClientes();
@@ -5434,6 +5526,88 @@ function colorPorTierCategoria(categoria){
   return "#9AA9A2";
 }
 
+function construirBloqueCuentaCorriente(cliente, movimientos){
+  const saldo = movimientos.reduce((s, m) => s + saldoDeMovimiento(m), 0);
+  // Cheques abiertos del cliente: viene calculado desde la lista de clientes.
+  const base = (state.clientesUsuario || []).find(c => c.id === cliente.id);
+  const abiertos = base ? base.chequesAbiertosMonto : 0;
+  const x = calcularExposicionCliente(cliente, saldo, abiertos);
+  const ETQ = { factura: "Factura", pago: "Pago", nota_credito: "Nota de crédito" };
+  const filas = movimientos.map(m => `
+    <div class="cc-mov">
+      <div>${ETQ[m.tipo] || m.tipo}${m.detalle ? " · " + escHtml(m.detalle) : ""}<small>${new Date(m.fecha + "T00:00:00").toLocaleDateString("es-AR")}</small></div>
+      <div><b style="color:${m.tipo === "factura" ? "var(--ink)" : "#2F6B4F"}">${m.tipo === "factura" ? "+" : "−"}${formatearPesos(Number(m.monto))}</b>
+        <button class="cc-x" title="Eliminar" onclick="eliminarMovimiento('${m.id}')">✕</button></div>
+    </div>`).join("");
+  let estado = "";
+  if (x.limite){
+    const pct = Math.round(x.exposicion / x.limite * 100);
+    estado = x.superaLimite
+      ? `<div class="cc-aviso">⚠️ Superó el tope: ${formatearPesos(x.exposicion)} de ${formatearPesos(x.limite)} (${pct}%).</div>`
+      : `<div class="cc-ok">Dentro del tope: ${formatearPesos(x.exposicion)} de ${formatearPesos(x.limite)} (${pct}%).</div>`;
+  } else {
+    estado = `<div class="field-hint" style="margin-top:8px;">Sin tope definido. Podés fijarlo en "Editar cliente" para que te avisemos al superarlo.</div>`;
+  }
+  return `
+    <div class="cc-card">
+      <h3>Cuenta corriente</h3>
+      <div class="cc-fila"><span>Saldo (facturas − pagos)</span><b>${formatearPesos(saldo)}</b></div>
+      <div class="cc-fila"><span>Cheques sin cobrar</span><b>${formatearPesos(abiertos)}</b></div>
+      <div class="cc-fila cc-total"><span>Exposición total</span><b>${formatearPesos(x.exposicion)}</b></div>
+      ${estado}
+      <div class="cc-botones">
+        <button class="btn btn-secondary" onclick="abrirModalMovimiento('factura')">+ Factura</button>
+        <button class="btn btn-secondary" onclick="abrirModalMovimiento('pago')">+ Pago</button>
+      </div>
+      <div class="field-hint" style="margin-top:8px;">Cuando recibís un cheque como pago, registralo acá como pago: el cheque sigue sumando a la exposición hasta que se cobre.</div>
+      ${filas ? `<div style="margin-top:10px;">${filas}</div>` : ""}
+      ${movimientos.length ? `<button class="btn btn-secondary" style="margin-top:10px;" onclick="abrirModalMovimiento('nota_credito')">+ Nota de crédito</button>` : ""}
+    </div>`;
+}
+
+function abrirModalMovimiento(tipo){
+  state.movTipo = tipo;
+  const T = {
+    factura: ["Nueva factura", "Suma a lo que el cliente te debe."],
+    pago: ["Nuevo pago", "Resta de lo que el cliente te debe (efectivo, transferencia o cheque recibido)."],
+    nota_credito: ["Nueva nota de crédito", "Resta de lo que el cliente te debe (devolución o descuento)."]
+  }[tipo];
+  document.getElementById("modal-mov-titulo").textContent = T[0];
+  document.getElementById("modal-mov-texto").textContent = T[1];
+  document.getElementById("input-mov-monto").value = "";
+  document.getElementById("input-mov-detalle").value = "";
+  document.getElementById("input-mov-fecha").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("modal-movimiento").classList.add("show");
+}
+function cerrarModalMovimiento(){ document.getElementById("modal-movimiento").classList.remove("show"); }
+async function confirmarMovimiento(){
+  const monto = parseMontoAR(document.getElementById("input-mov-monto").value);
+  const fecha = document.getElementById("input-mov-fecha").value;
+  const detalle = document.getElementById("input-mov-detalle").value.trim();
+  if (!(monto > 0)){ mostrarToast("Ingresá un monto válido."); return; }
+  if (!fecha){ mostrarToast("Elegí una fecha."); return; }
+  const { error } = await supabaseClient.from("movimientos").insert({
+    usuario_id: state.user.id, cliente_id: state.clienteActualId, tipo: state.movTipo,
+    monto, fecha, detalle: detalle || null
+  });
+  if (error){
+    console.warn("[OpenCheck Score] Error guardando movimiento:", error.message);
+    mostrarToast("No pudimos guardar el movimiento, probá de nuevo.");
+    return;
+  }
+  cerrarModalMovimiento();
+  mostrarToast("Movimiento guardado.");
+  state.clientesUsuario = await obtenerClientesUsuario(state.user.id);
+  renderClienteDetalle(state.clienteActualId);
+}
+async function eliminarMovimiento(id){
+  if (!confirm("¿Eliminar este movimiento?")) return;
+  const { error } = await supabaseClient.from("movimientos").delete().eq("id", id);
+  if (error){ mostrarToast("No pudimos eliminarlo, probá de nuevo."); return; }
+  state.clientesUsuario = await obtenerClientesUsuario(state.user.id);
+  renderClienteDetalle(state.clienteActualId);
+}
+
 async function renderClienteDetalle(clienteId){
   const contTitulo = document.getElementById("cliente-detalle-nombre");
   const cont = document.getElementById("cliente-detalle-content");
@@ -5446,6 +5620,8 @@ async function renderClienteDetalle(clienteId){
   state.clienteActualObj = cliente; // para poder reabrir el modal de edición sin refetch
 
   const consultas = await obtenerConsultasDeCliente(state.user.id, clienteId);
+  const movimientos = await obtenerMovimientosCliente(clienteId);
+  const bloqueCC = construirBloqueCuentaCorriente(cliente, movimientos);
 
   const btnEditar = `<button class="btn btn-secondary" style="margin-bottom:10px;" onclick="abrirModalEditarCliente(state.clienteActualObj)">✎ Editar cliente</button>`;
   const btnVerEstado = cliente.cuit_principal
@@ -5453,7 +5629,7 @@ async function renderClienteDetalle(clienteId){
     : `<div class="dash-nota" style="margin-bottom:14px;">Cargale un CUIT propio a este cliente (botón "Editar cliente") para poder consultar su estado actual con un clic.</div>`;
 
   if (consultas.length === 0){
-    cont.innerHTML = `${btnEditar}${btnVerEstado}<div class="empty-state"><div class="ico">📄</div><p>Todavía no le asignaste ningún cheque a este cliente.<br>Hacelo desde una fila del Historial.</p></div>`;
+    cont.innerHTML = `${btnEditar}${btnVerEstado}${bloqueCC}<div class="empty-state"><div class="ico">📄</div><p>Todavía no le asignaste ningún cheque a este cliente.<br>Hacelo desde una fila del Historial.</p></div>`;
     return;
   }
 
@@ -5526,6 +5702,7 @@ async function renderClienteDetalle(clienteId){
   cont.innerHTML = `
     ${btnEditar}
     ${btnVerEstado}
+    ${bloqueCC}
     <div class="dash-toggle">
       <button class="active" id="btn-tab-resumen" onclick="mostrarTabClienteDash('resumen')">Resumen</button>
       <button id="btn-tab-estadisticas" onclick="mostrarTabClienteDash('estadisticas')">📊 Estadísticas</button>
