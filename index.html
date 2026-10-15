@@ -1343,7 +1343,8 @@
       </div>
       <div class="field">
         <label>CUIT propio del cliente (opcional)</label>
-        <input type="text" id="input-nuevo-cliente-cuit" placeholder="Para distinguir cheques propios de cheques de terceros" autocomplete="off" inputmode="numeric">
+        <input type="text" id="input-nuevo-cliente-cuit" placeholder="11 dígitos, con o sin guiones" autocomplete="off" inputmode="numeric">
+        <div class="field-hint">Si lo cargás, vigilamos a este cliente automáticamente (cheques rechazados y situación en el BCRA) y te avisamos en Alertas si hay novedades, aunque no te haya dado cheques.</div>
       </div>
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="cerrarModalNuevoCliente()">Cancelar</button>
@@ -5293,7 +5294,7 @@ async function renderClientes(){
           <span>${cl.nombre}</span>
           <span class="tag">${cl.cantidadCheques} cheque${cl.cantidadCheques === 1 ? "" : "s"}</span>
         </div>
-        ${cl.cuit_principal ? `<div class="hist-mid">CUIT propio: ${cl.cuit_principal}</div>` : ""}
+        ${cl.cuit_principal ? `<div class="hist-mid">CUIT propio: ${cl.cuit_principal} · 🔔 en monitoreo</div>` : `<div class="hist-mid">Sin CUIT propio · cargalo para monitorearlo</div>`}
       </div>`).join("");
 
   cont.innerHTML = `
