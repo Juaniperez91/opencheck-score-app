@@ -151,6 +151,22 @@ export async function correrMonitoreo({ forzar = false } = {}){
     if (!g.usuarios.has(c.usuario_id)) g.usuarios.set(c.usuario_id, []);
     g.usuarios.get(c.usuario_id).push(c);
   }
+  // 3b) CUIT propio de cada cliente de los usuarios premium: se vigila siempre,
+  // tenga o no cheques asignados (monitoreo constante del cliente).
+  const { data: clientes, error: eCl } = await supabase.from("clientes")
+    .select("id, usuario_id, nombre, cuit_principal")
+    .in("usuario_id", ids).not("cuit_principal", "is", null).limit(5000);
+  if (eCl){ resumen.errores.push("clientes: " + eCl.message); }
+  for (const cl of clientes || []){
+    const cuit = soloDigitos(cl.cuit_principal);
+    if (cuit.length !== 11) continue;
+    if (!porCuit.has(cuit)) porCuit.set(cuit, { razon: null, usuarios: new Map() });
+    const g = porCuit.get(cuit);
+    if (!g.usuarios.has(cl.usuario_id)) g.usuarios.set(cl.usuario_id, []);
+    if (!g.clientes) g.clientes = new Map();
+    g.clientes.set(cl.usuario_id, cl.nombre || cuit);
+  }
+  resumen.clientesVigilados = (clientes || []).length;
   const cuits = [...porCuit.keys()];
   resumen.cuitsVigilados = cuits.length;
 
@@ -202,7 +218,9 @@ export async function correrMonitoreo({ forzar = false } = {}){
     }
     fallosSeguidos = 0;
     const claves = rech ? Object.keys(rech) : null;
-    const nombre = g.razon || (d && d.denominacion) || cuit;
+    const nombreBase = g.razon || (d && d.denominacion) || cuit;
+    // Si es un cliente del usuario, se lo nombra como lo cargó el usuario
+    const nombreU = (uid) => (g.clientes && g.clientes.get(uid)) ? `${g.clientes.get(uid)} (cliente)` : nombreBase;
 
     if (!previo){
       resumen.baselines++;
@@ -215,6 +233,7 @@ export async function correrMonitoreo({ forzar = false } = {}){
           const r = rech[k];
           const textoCheque = `Cheque N° ${r.nro} (${r.entidad}) por ${pesos(r.monto)}, rechazado el ${fechaLinda(r.fecha)} por "${r.causal}".`;
           for (const [uid, cs] of g.usuarios){
+            const nombre = nombreU(uid);
             const propia = cs.find(c => c.numero_cheque_consultado && String(c.numero_cheque_consultado).replace(/^0+/, "") === String(r.nro).replace(/^0+/, ""));
             if (propia){
               agregarAlerta(uid, cuit, nombre, "cheque_propio_rechazado", k, `Tu cheque N° ${r.nro} fue rechazado`, `${textoCheque} Librador: ${nombre}.`, r, propia.id);
@@ -228,14 +247,14 @@ export async function correrMonitoreo({ forzar = false } = {}){
       if (d && d.periodo && previo.periodo_bcra && d.periodo !== previo.periodo_bcra){
         const sPrev = previo.situacion_max, sNow = d.situacionMax;
         if (sPrev != null && sNow != null && sNow > sPrev){
-          for (const [uid] of g.usuarios) agregarAlerta(uid, cuit, nombre, "situacion_empeora", d.periodo, `Empeoró la situación crediticia: ${nombre}`, `Pasó de situación ${sPrev} a situación ${sNow} en ${periodoLindo(d.periodo)}.`, { de: sPrev, a: sNow, periodo: d.periodo }, null);
+          for (const [uid] of g.usuarios) { const nombre = nombreU(uid); agregarAlerta(uid, cuit, nombre, "situacion_empeora", d.periodo, `Empeoró la situación crediticia: ${nombre}`, `Pasó de situación ${sPrev} a situación ${sNow} en ${periodoLindo(d.periodo)}.`, { de: sPrev, a: sNow, periodo: d.periodo }, null); }
         } else if (sPrev != null && sNow != null && sNow < sPrev){
-          for (const [uid] of g.usuarios) agregarAlerta(uid, cuit, nombre, "situacion_mejora", d.periodo, `Mejoró la situación crediticia: ${nombre}`, `Pasó de situación ${sPrev} a situación ${sNow} en ${periodoLindo(d.periodo)}.`, { de: sPrev, a: sNow, periodo: d.periodo }, null);
+          for (const [uid] of g.usuarios) { const nombre = nombreU(uid); agregarAlerta(uid, cuit, nombre, "situacion_mejora", d.periodo, `Mejoró la situación crediticia: ${nombre}`, `Pasó de situación ${sPrev} a situación ${sNow} en ${periodoLindo(d.periodo)}.`, { de: sPrev, a: sNow, periodo: d.periodo }, null); }
         }
         const dPrev = Number(previo.deuda_total_miles) || 0;
         if (dPrev > 0 && d.deudaMiles >= dPrev * (1 + UMBRAL_DEUDA_PCT / 100)){
           const pct = Math.round((d.deudaMiles / dPrev - 1) * 100);
-          for (const [uid] of g.usuarios) agregarAlerta(uid, cuit, nombre, "deuda_salta", d.periodo, `La deuda bancaria subió ${pct}%: ${nombre}`, `De ${pesos(dPrev * 1000)} a ${pesos(d.deudaMiles * 1000)} en ${periodoLindo(d.periodo)}.`, { de: dPrev, a: d.deudaMiles, periodo: d.periodo }, null);
+          for (const [uid] of g.usuarios) { const nombre = nombreU(uid); agregarAlerta(uid, cuit, nombre, "deuda_salta", d.periodo, `La deuda bancaria subió ${pct}%: ${nombre}`, `De ${pesos(dPrev * 1000)} a ${pesos(d.deudaMiles * 1000)} en ${periodoLindo(d.periodo)}.`, { de: dPrev, a: d.deudaMiles, periodo: d.periodo }, null); }
         }
       }
     }
