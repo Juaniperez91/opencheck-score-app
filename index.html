@@ -156,6 +156,19 @@
   }
   .institucional-bullets li b{ color:var(--green-ink); }
 
+  /* ---- Ayuda / glosario ---- */
+  .ayuda-det{ border-bottom:1px solid var(--hairline); padding:2px 0; }
+  .ayuda-det summary{ cursor:pointer; font-weight:700; font-size:13.5px; color:var(--green-ink); padding:12px 0; list-style:none; }
+  .ayuda-det summary::-webkit-details-marker{ display:none; }
+  .ayuda-det summary::before{ content:"▸ "; }
+  .ayuda-det[open] summary::before{ content:"▾ "; }
+  .ayuda-det .ayuda-cuerpo{ font-size:13.5px; color:var(--ink); line-height:1.55; padding:0 0 12px; }
+  .ayuda-det .ayuda-cuerpo p{ margin:0 0 8px; }
+  .ayuda-det .ayuda-cuerpo ol, .ayuda-det .ayuda-cuerpo ul{ margin:0 0 8px; padding-left:20px; }
+  .ayuda-det .ayuda-cuerpo li{ margin-bottom:4px; }
+  .ayuda-h{ font-size:11.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:16px 0 4px; }
+  .ayuda-prem{ display:inline-block; font-size:10.5px; font-weight:800; background:var(--green-ink); color:#fff; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:middle; }
+
   /* En desktop, la institucional se despliega ancha y en 2 columnas —
      el resto de la app (una vez adentro) sigue como simulador de
      teléfono a propósito, no se toca acá. */
@@ -875,6 +888,7 @@
             <button class="institucional-tab active" data-tab="quienes" onclick="mostrarTabInstitucional('quienes')">Quiénes somos</button>
             <button class="institucional-tab" data-tab="funciona" onclick="mostrarTabInstitucional('funciona')">Cómo funciona</button>
             <button class="institucional-tab" data-tab="datos" onclick="mostrarTabInstitucional('datos')">De dónde salen los datos</button>
+            <button class="institucional-tab" data-tab="ayuda" onclick="mostrarTabInstitucional('ayuda')">Ayuda</button>
             <button class="institucional-tab" data-tab="contacto" onclick="mostrarTabInstitucional('contacto')">Contacto</button>
           </div>
 
@@ -901,6 +915,28 @@
               <li>La misma fuente de información para cada consulta, sin excepciones.</li>
             </ul>
           </div>
+
+<div class="institucional-panel" data-panel="ayuda">
+<div class="ayuda-h">Cómo se hace</div>
+<details class="ayuda-det"><summary>Consultar a un librador</summary><div class="ayuda-cuerpo"><ol><li>En Inicio, ingresá el <b>CUIT/CUIL</b> (11 números).</li><li>Opcional: sumá el <b>número de cheque</b> y el banco para verificar si tiene denuncias.</li><li>Opcional: cargá el <b>monto del cheque</b> (se usa para tu cartera).</li><li>Tocá consultar. Verás el puntaje (0 a 100), la categoría (A1 a C2) y la explicación de qué la formó.</li></ol><p>También podés usar la cámara para leer el cheque; revisá siempre que los números leídos sean correctos.</p></div></details>
+<details class="ayuda-det"><summary>Cargar un cheque con su monto</summary><div class="ayuda-cuerpo"><ol><li>En la consulta, completá número de cheque, banco y monto.</li><li>El cheque queda guardado en tu <b>Historial</b>.</li><li>Cuando se resuelva (cobrado o rechazado), marcá el resultado real: nos ayuda a validar el modelo.</li></ol><p>Los cheques abiertos (sin resultado) quedan bajo vigilancia automática en Premium.</p></div></details>
+<details class="ayuda-det"><summary>Clientes y asignación de cheques<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><ol><li>En la sección de clientes, creá un cliente con su nombre y, si lo tenés, su <b>CUIT propio</b>.</li><li>Al consultar un cheque, asignalo al cliente para que se sume a su cartera.</li></ol><p>Si cargás el CUIT del cliente, lo monitoreamos automáticamente. Sin CUIT aparece como “Sin CUIT propio”.</p></div></details>
+<details class="ayuda-det"><summary>Centro de alertas<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Tocá <b>Alertas</b> en la barra inferior. Ahí aparecen los avisos nuevos (con un número rojo si hay sin leer).</p><ul><li><b>Cheque rechazado nuevo</b> del librador o de un cliente.</li><li><b>Cheque propio rechazado / denunciado.</b></li><li><b>Situación BCRA</b> que empeora o mejora.</li><li><b>Deuda que salta</b>: aumento del 30% o más respecto del período anterior.</li></ul><p>Podés marcarlas como leídas. Cada aviso indica a quién corresponde y cuándo se detectó.</p></div></details>
+<details class="ayuda-det"><summary>Cartera<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>En <b>Alertas &gt; Cartera</b> ves el panel de tus cheques abiertos: montos totales, distribución por categoría de riesgo y concentración por librador.</p></div></details>
+<details class="ayuda-det"><summary>“En monitoreo”<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Significa que vigilamos automáticamente a ese CUIT: los cheques abiertos que cargaste y los clientes con CUIT propio. No tenés que hacer nada; si algo cambia, te llega una alerta.</p></div></details>
+<div class="ayuda-h">Glosario</div>
+<details class="ayuda-det"><summary>Situaciones BCRA (1 a 6)</summary><div class="ayuda-cuerpo"><ul><li><b>1</b> – Normal: sin atrasos.</li><li><b>2</b> – Riesgo bajo: atrasos de hasta 31 días.</li><li><b>3</b> – Riesgo medio: atrasos de 31 a 90 días.</li><li><b>4</b> – Riesgo alto: atrasos de 90 a 180 días.</li><li><b>5</b> – Irrecuperable: más de 180 días.</li><li><b>6</b> – Irrecuperable por disposición técnica.</li></ul></div></details>
+<details class="ayuda-det"><summary>Categorías de riesgo (A1 a C2)</summary><div class="ayuda-cuerpo"><ul><li><b>A1</b> – Riesgo muy bajo.</li><li><b>A2</b> – Riesgo bajo.</li><li><b>B1</b> – Riesgo medio-bajo.</li><li><b>B2</b> – Riesgo medio-alto.</li><li><b>C1</b> – Riesgo alto.</li><li><b>C2</b> – No operable (por ejemplo, con cheques rechazados sin regularizar o situación crítica).</li></ul><p>Es una referencia para decidir, no una orden de aceptar o rechazar.</p></div></details>
+<details class="ayuda-det"><summary>Puntaje 0 a 100</summary><div class="ayuda-cuerpo"><p>Combina historial de pagos (situación en los últimos 24 meses), endeudamiento, antecedentes de cheques rechazados y antigüedad. Siempre te mostramos qué factor pesó más.</p></div></details>
+<details class="ayuda-det"><summary>Central de Deudores</summary><div class="ayuda-cuerpo"><p>Base del BCRA con la situación de cada persona o empresa frente a las entidades financieras. Se actualiza <b>una vez por mes</b>.</p></div></details>
+<details class="ayuda-det"><summary>Cheque rechazado</summary><div class="ayuda-cuerpo"><p>Cheque no pagado por el banco (por falta de fondos u otros motivos). Figura en el listado de cheques rechazados del BCRA, que se consulta a diario.</p></div></details>
+<details class="ayuda-det"><summary>Cheque denunciado</summary><div class="ayuda-cuerpo"><p>Cheque con denuncia de extravío, robo o adulteración registrada ante el BCRA. Se verifica con el número de cheque y el banco.</p></div></details>
+<details class="ayuda-det"><summary>Concentración</summary><div class="ayuda-cuerpo"><p>Qué parte de tu cartera depende de un mismo librador. Cuanto mayor la concentración, mayor el riesgo si ese librador falla.</p></div></details>
+<div class="ayuda-h">Alcance y límites</div>
+<details class="ayuda-det"><summary>Qué datos usamos y cada cuánto se actualizan</summary><div class="ayuda-cuerpo"><ul><li>Fuente: información pública del <b>BCRA</b> y ARCA.</li><li>Deuda y situación: se actualizan <b>una vez por mes</b> (dato del BCRA).</li><li>Cheques rechazados y denuncias: se revisan <b>una vez por día</b>.</li><li>El monitoreo Premium se reparte a lo largo del día, por lo que un aviso puede llegar con algunas horas de demora.</li></ul></div></details>
+<details class="ayuda-det"><summary>Qué NO es OpenCheck</summary><div class="ayuda-cuerpo"><ul><li>No es asesoramiento financiero ni una garantía de cobro.</li><li>No reemplaza tu criterio ni otras verificaciones.</li><li>Un CUIT sin datos no significa buen o mal pagador: puede no tener historial.</li><li>La información depende de lo que informen las entidades al BCRA.</li></ul></div></details>
+<details class="ayuda-det"><summary>Planes</summary><div class="ayuda-cuerpo"><p>La consulta básica es gratuita. <b>Premium</b> suma monto de cheques, Centro de alertas, Cartera y monitoreo automático de libradores y clientes.</p></div></details>
+</div>
 
           <div class="institucional-panel" data-panel="contacto">
             <p style="margin-bottom:16px; color:var(--ink-soft); font-size:13.5px; line-height:1.5;">Contacto con la empresa por inquietudes, consultas o sugerencias. Completá el formulario y te respondemos a la brevedad.</p>
