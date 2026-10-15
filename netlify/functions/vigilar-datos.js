@@ -22,7 +22,7 @@ const FILAS = [
   { id: "latest",       nombre: "Datos sectoriales INDEC",             job: "actualizar-contexto-sectorial" }
 ];
 
-async function enviarAviso(problemas){
+async function enviarAviso(problemas, resumenVigilante){
   if (!process.env.RESEND_API_KEY){
     console.error("[vigilar-datos] Hay problemas pero falta RESEND_API_KEY:", problemas.join(" | "));
     return;
@@ -35,7 +35,7 @@ async function enviarAviso(problemas){
       to: [DESTINO],
       subject: "OpenCheck: alerta, datos sin actualizar",
       text: "El vigilante diario de OpenCheck detectó un problema:\n\n- " + problemas.join("\n- ") +
-            "\n\nQué hacer: entrá a Netlify > Logs > Functions, abrí la función indicada y mirá el último error." +
+            (resumenVigilante ? "\n\n" + resumenVigilante : "") + "\n\nQué hacer: entrá a Netlify > Logs > Functions, abrí la función indicada y mirá el último error." +
             "\nLa app sigue funcionando con el último dato guardado, pero conviene revisarlo hoy."
     })
   });
@@ -66,9 +66,39 @@ export default async () => {
     }
   }
 
+  // Estadísticas del vigilante de cartera (ayer, hora argentina)
+  let resumenVigilante = "";
+  try {
+    const ayer = new Date(Date.now() - 27 * 3600000).toISOString().slice(0, 10);
+    const { data: e, error } = await supabase.from("vigilante_estadisticas").select("*").eq("dia", ayer).maybeSingle();
+    if (error){
+      problemas.push(`Vigilante de cartera: no se pudieron leer las estadísticas (${error.message}).`);
+    } else if (!e){
+      // Sin fila de ayer: solo es problema si la tabla ya tenía registros de días anteriores
+      const { count } = await supabase.from("vigilante_estadisticas").select("dia", { count: "exact", head: true }).lt("dia", ayer);
+      if (count > 0) problemas.push(`Vigilante de cartera: no hay registro de corridas del ${ayer}. Puede no haber corrido. Función: monitorear-cartera`);
+    } else {
+      // El primer día registrado suele estar incompleto (se activó a mitad del día)
+      const { count: previos } = await supabase.from("vigilante_estadisticas").select("dia", { count: "exact", head: true }).lt("dia", ayer);
+      const diaCompleto = previos > 0;
+      const h = e.http || {};
+      const totalHttp = Object.values(h).reduce((a, b) => a + b, 0);
+      const fallos = (h.error || 0) + (e.n429 || 0);
+      resumenVigilante = `Vigilante de cartera, ${ayer}: ${e.corridas} corridas de 72, ${e.cuits_vigilados} CUITs vigilados, ` +
+        `${e.cuits_revisados} CUITs y ${e.cheques_revisados} cheques revisados, ${e.alertas_nuevas} alertas nuevas, ` +
+        `${totalHttp} consultas al BCRA (${fallos} fallidas o limitadas, ${e.n429} con 429), CUITs sin revisar al cierre: ${e.restantes_final}.`;
+      console.log("[vigilar-datos] " + resumenVigilante);
+      if (diaCompleto && e.corridas < 60) problemas.push(`Vigilante de cartera: solo corrió ${e.corridas} de 72 veces el ${ayer}. Función: monitorear-cartera`);
+      if (totalHttp >= 10 && fallos / totalHttp > 0.2) problemas.push(`Vigilante de cartera: ${fallos} de ${totalHttp} consultas al BCRA fallaron o fueron limitadas el ${ayer} (más del 20%). Puede ser un corte del BCRA o un límite de uso.`);
+      if (e.restantes_final > 0) problemas.push(`Vigilante de cartera: quedaron ${e.restantes_final} CUITs sin revisar al cierre del ${ayer}. Si se repite varios días, el volumen supera la capacidad (ver plan de escalado).`);
+    }
+  } catch (err){
+    console.error("[vigilar-datos] No se pudieron leer las estadísticas del vigilante:", err.message);
+  }
+
   if (problemas.length){
     console.error("[vigilar-datos] Problemas:", problemas.join(" | "));
-    try { await enviarAviso(problemas); } catch (e){ console.error("[vigilar-datos] No se pudo enviar el aviso:", e.message); }
+    try { await enviarAviso(problemas, resumenVigilante); } catch (e){ console.error("[vigilar-datos] No se pudo enviar el aviso:", e.message); }
     return new Response("Problemas detectados", { status: 200 });
   }
   console.log("[vigilar-datos] Todo al día.");
