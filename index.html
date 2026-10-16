@@ -950,7 +950,7 @@
 <details class="ayuda-det"><summary>Clientes y asignación de cheques<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><ol><li>En la sección de clientes, creá un cliente con su nombre y, si lo tenés, su <b>CUIT propio</b>.</li><li>Al consultar un cheque, asignalo al cliente para que se sume a su cartera.</li></ol><p>Si cargás el CUIT del cliente, lo monitoreamos automáticamente. Sin CUIT aparece como “Sin CUIT propio”.</p></div></details>
 <details class="ayuda-det"><summary>Cuenta corriente y tope de exposición<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><ol><li>Entrá a <b>Clientes</b> y abrí un cliente.</li><li>En <b>Cuenta corriente</b> tocá <b>+ Factura</b> cada vez que le vendas a cuenta, y <b>+ Pago</b> cuando te pague (efectivo, transferencia o cheque recibido). Las notas de crédito también restan.</li><li>En <b>Editar cliente</b> podés fijar un <b>tope de exposición</b> en pesos (opcional).</li></ol><p><b>Exposición total</b> = saldo de cuenta corriente (facturas − pagos) + cheques de ese cliente que todavía no se cobraron. Si supera el tope, te avisamos en <b>Alertas</b> y en la lista de clientes. Es solo un aviso: no bloquea nada.</p></div></details>
 <details class="ayuda-det"><summary>Calendario de cobranzas<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>En <b>Alertas &gt; Calendario</b> ves, ordenado por fecha, todo lo que esperás cobrar: tus <b>cheques</b> (por su fecha de vencimiento) y las <b>facturas</b> de tus clientes que todavía no fueron saldadas.</p><ul><li>Se agrupan en: vencidos, hoy, próximos 7 días, de 8 a 30 días y más adelante, con el total de cada grupo.</li><li>Para que una factura aparezca, cargala con su <b>fecha de vencimiento</b> (campo opcional "Vence el").</li><li>Los pagos y notas de crédito del cliente se descuentan primero de sus facturas más antiguas.</li><li>Los cheques necesitan monto y fecha de vencimiento para figurar.</li></ul></div></details>
-<details class="ayuda-det"><summary>Resumen semanal por mail<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Los lunes a la mañana te mandamos un mail con lo que conviene mirar esa semana: alertas nuevas, cobros que vencen en los próximos 7 días, lo vencido sin cobrar y los clientes que superaron su tope.</p><ul><li>Si no hay ninguna novedad, no te mandamos nada.</li><li>Cada mail trae al pie un link para <b>dejar de recibirlo</b>.</li><li>Si cambiás de idea, escribinos desde Contacto y lo reactivamos.</li></ul></div></details>
+<details class="ayuda-det"><summary>Resumen semanal por mail<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Los lunes a la mañana te mandamos un mail con lo que conviene mirar esa semana: alertas nuevas, cobros que vencen en los próximos 7 días, lo vencido sin cobrar y los clientes que superaron su tope.</p><ul><li>Si no hay ninguna novedad, no te mandamos nada.</li><li>Cada mail trae al pie un link para <b>dejar de recibirlo</b>.</li><li>Podés activarlo o desactivarlo cuando quieras desde <b>Cuenta &gt; Resumen semanal</b>.</li></ul></div></details>
 <details class="ayuda-det"><summary>Centro de alertas<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Tocá <b>Alertas</b> en la barra inferior. Ahí aparecen los avisos nuevos (con un número rojo si hay sin leer).</p><ul><li><b>Cheque rechazado nuevo</b> del librador o de un cliente.</li><li><b>Cheque propio rechazado / denunciado.</b></li><li><b>Situación BCRA</b> que empeora o mejora.</li><li><b>Deuda que salta</b>: aumento del 30% o más respecto del período anterior.</li></ul><p>Podés marcarlas como leídas. Cada aviso indica a quién corresponde y cuándo se detectó.</p></div></details>
 <details class="ayuda-det"><summary>Cartera<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>En <b>Alertas &gt; Cartera</b> ves el panel de tus cheques abiertos: montos totales, distribución por categoría de riesgo y concentración por librador.</p></div></details>
 <details class="ayuda-det"><summary>“En monitoreo”<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Significa que vigilamos automáticamente a ese CUIT: los cheques abiertos que cargaste y los clientes con CUIT propio. No tenés que hacer nada; si algo cambia, te llega una alerta.</p></div></details>
@@ -5939,6 +5939,22 @@ function exportarHistorialCSV(){
   URL.revokeObjectURL(url);
 }
 
+/* ---- Resumen semanal por mail (Premium): activar / desactivar ---- */
+async function alternarResumenSemanal(){
+  if (!state.user) return;
+  const nuevo = state.user.resumen_semanal === false; // si estaba desactivado, se activa
+  const { data, error } = await supabaseClient.from("usuarios")
+    .update({ resumen_semanal: nuevo }).eq("id", state.user.id).select().single();
+  if (error){
+    console.warn("[OpenCheck Score] No se pudo cambiar el resumen semanal:", error.message);
+    mostrarToast("No pudimos guardar el cambio, probá de nuevo.");
+    return;
+  }
+  state.user = { ...state.user, resumen_semanal: data.resumen_semanal };
+  mostrarToast(nuevo ? "Resumen semanal activado." : "Resumen semanal desactivado.");
+  renderCuenta();
+}
+
 /* ---- Cuenta ---- */
 function renderCuenta(){
   const cont = document.getElementById("cuenta-content");
@@ -5961,6 +5977,12 @@ function renderCuenta(){
       Instalar OpenCheck en este dispositivo
     </button>
     <a href="/opencheck.apk" download class="btn btn-secondary" style="display:block; text-align:center; margin-top:10px; text-decoration:none;">Descargar APK (Android)</a>
+    ${u && (u.plan === "premium" || u.es_admin) ? `
+    <div class="divider-label">Resumen semanal</div>
+    <p class="page-sub" style="margin-top:-4px;">Los lunes a la mañana te mandamos por mail lo que conviene mirar esa semana: alertas, cobros por vencer y topes superados. Si no hay novedades, no te escribimos.</p>
+    <button class="btn btn-secondary" id="btn-resumen-semanal" onclick="alternarResumenSemanal()">
+      ${u.resumen_semanal === false ? "Resumen semanal desactivado · Activar" : "Resumen semanal activado ✓ · Desactivar"}
+    </button>` : ""}
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">
       <h2>OpenCheck Premium</h2>
