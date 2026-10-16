@@ -156,6 +156,19 @@
   }
   .institucional-bullets li b{ color:var(--green-ink); }
 
+  /* ---- Calendario de cobranzas ---- */
+  .cal-grupo{ display:flex; justify-content:space-between; align-items:baseline; margin:18px 0 6px; font-size:12px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); }
+  .cal-grupo b{ font-size:13px; letter-spacing:0; text-transform:none; color:var(--ink); }
+  .cal-grupo.venc{ color:#A63D3D; } .cal-grupo.venc b{ color:#A63D3D; }
+  .cal-item{ display:flex; gap:10px; align-items:flex-start; background:#fff; border:1px solid var(--hairline); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
+  .cal-fecha{ min-width:44px; text-align:center; border-radius:10px; background:#EEF3F8; padding:5px 4px; line-height:1.1; }
+  .cal-fecha b{ display:block; font-size:17px; } .cal-fecha span{ font-size:10.5px; text-transform:uppercase; color:var(--ink-soft); }
+  .cal-item.venc .cal-fecha{ background:#FBECEC; }
+  .cal-cuerpo{ flex:1; font-size:13px; } .cal-cuerpo small{ display:block; color:var(--ink-soft); font-size:11.5px; margin-top:2px; }
+  .cal-monto{ font-weight:700; font-size:13px; white-space:nowrap; }
+  .cal-tipo{ display:inline-block; font-size:10px; font-weight:800; border-radius:6px; padding:1px 5px; margin-right:5px; background:#EEF3F8; color:var(--green-ink); }
+  .cal-tipo.f{ background:#FFF3DC; color:#8A6A1F; }
+
   /* ---- Cuenta corriente ---- */
   .cc-card{ background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:14px; margin-bottom:14px; }
   .cc-card h3{ margin:0 0 8px; font-size:14px; }
@@ -936,6 +949,7 @@
 <details class="ayuda-det"><summary>Cargar un cheque con su monto</summary><div class="ayuda-cuerpo"><ol><li>En la consulta, completá número de cheque, banco y monto.</li><li>El cheque queda guardado en tu <b>Historial</b>.</li><li>Cuando se resuelva (cobrado o rechazado), marcá el resultado real: nos ayuda a validar el modelo.</li></ol><p>Los cheques abiertos (sin resultado) quedan bajo vigilancia automática en Premium.</p></div></details>
 <details class="ayuda-det"><summary>Clientes y asignación de cheques<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><ol><li>En la sección de clientes, creá un cliente con su nombre y, si lo tenés, su <b>CUIT propio</b>.</li><li>Al consultar un cheque, asignalo al cliente para que se sume a su cartera.</li></ol><p>Si cargás el CUIT del cliente, lo monitoreamos automáticamente. Sin CUIT aparece como “Sin CUIT propio”.</p></div></details>
 <details class="ayuda-det"><summary>Cuenta corriente y tope de exposición<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><ol><li>Entrá a <b>Clientes</b> y abrí un cliente.</li><li>En <b>Cuenta corriente</b> tocá <b>+ Factura</b> cada vez que le vendas a cuenta, y <b>+ Pago</b> cuando te pague (efectivo, transferencia o cheque recibido). Las notas de crédito también restan.</li><li>En <b>Editar cliente</b> podés fijar un <b>tope de exposición</b> en pesos (opcional).</li></ol><p><b>Exposición total</b> = saldo de cuenta corriente (facturas − pagos) + cheques de ese cliente que todavía no se cobraron. Si supera el tope, te avisamos en <b>Alertas</b> y en la lista de clientes. Es solo un aviso: no bloquea nada.</p></div></details>
+<details class="ayuda-det"><summary>Calendario de cobranzas<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>En <b>Alertas &gt; Calendario</b> ves, ordenado por fecha, todo lo que esperás cobrar: tus <b>cheques</b> (por su fecha de vencimiento) y las <b>facturas</b> de tus clientes que todavía no fueron saldadas.</p><ul><li>Se agrupan en: vencidos, hoy, próximos 7 días, de 8 a 30 días y más adelante, con el total de cada grupo.</li><li>Para que una factura aparezca, cargala con su <b>fecha de vencimiento</b> (campo opcional "Vence el").</li><li>Los pagos y notas de crédito del cliente se descuentan primero de sus facturas más antiguas.</li><li>Los cheques necesitan monto y fecha de vencimiento para figurar.</li></ul></div></details>
 <details class="ayuda-det"><summary>Centro de alertas<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Tocá <b>Alertas</b> en la barra inferior. Ahí aparecen los avisos nuevos (con un número rojo si hay sin leer).</p><ul><li><b>Cheque rechazado nuevo</b> del librador o de un cliente.</li><li><b>Cheque propio rechazado / denunciado.</b></li><li><b>Situación BCRA</b> que empeora o mejora.</li><li><b>Deuda que salta</b>: aumento del 30% o más respecto del período anterior.</li></ul><p>Podés marcarlas como leídas. Cada aviso indica a quién corresponde y cuándo se detectó.</p></div></details>
 <details class="ayuda-det"><summary>Cartera<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>En <b>Alertas &gt; Cartera</b> ves el panel de tus cheques abiertos: montos totales, distribución por categoría de riesgo y concentración por librador.</p></div></details>
 <details class="ayuda-det"><summary>“En monitoreo”<span class=ayuda-prem>PREMIUM</span></summary><div class="ayuda-cuerpo"><p>Significa que vigilamos automáticamente a ese CUIT: los cheques abiertos que cargaste y los clientes con CUIT propio. No tenés que hacer nada; si algo cambia, te llega una alerta.</p></div></details>
@@ -1355,6 +1369,7 @@
       <div class="ge-tabs">
         <div class="ge-tab active" id="ge-tab-alertas" onclick="mostrarTabGestion('alertas')">Alertas<span class="ge-n" id="ge-tab-n" style="display:none;"></span></div>
         <div class="ge-tab" id="ge-tab-cartera" onclick="mostrarTabGestion('cartera')">Cartera</div>
+        <div class="ge-tab" id="ge-tab-calendario" onclick="mostrarTabGestion('calendario')">Calendario</div>
       </div>
       <div id="alertas-content"></div>
     </div>
@@ -1420,6 +1435,11 @@
       <div class="field">
         <label>Fecha</label>
         <input type="date" id="input-mov-fecha">
+      </div>
+      <div class="field" id="field-mov-vence">
+        <label>Vence el (opcional)</label>
+        <input type="date" id="input-mov-vence">
+        <div class="field-hint">Si la cargás, la factura aparece en el Calendario de cobranzas.</div>
       </div>
       <div class="field">
         <label>Detalle (opcional)</label>
@@ -5209,7 +5229,119 @@ function mostrarTabGestion(tab){
   state.tabGestion = tab;
   document.getElementById("ge-tab-alertas").classList.toggle("active", tab === "alertas");
   document.getElementById("ge-tab-cartera").classList.toggle("active", tab === "cartera");
-  if (tab === "alertas") renderAlertas(); else renderCartera();
+  document.getElementById("ge-tab-calendario").classList.toggle("active", tab === "calendario");
+  if (tab === "alertas") renderAlertas(); else if (tab === "calendario") renderCalendario(); else renderCartera();
+}
+
+/* ---- Calendario de cobranzas (Premium) ---- */
+// Junta lo que se espera cobrar: cheques abiertos (por su vencimiento) y
+// facturas con vencimiento que todavía no están saldadas. Los pagos y notas
+// de crédito de cada cliente se imputan a sus facturas más viejas primero.
+function facturasPendientes(movimientos){
+  const porCliente = {};
+  for (const m of movimientos){ (porCliente[m.cliente_id] = porCliente[m.cliente_id] || []).push(m); }
+  const out = [];
+  for (const [clienteId, lista] of Object.entries(porCliente)){
+    let creditos = lista.filter(m => m.tipo !== "factura").reduce((s, m) => s + Number(m.monto || 0), 0);
+    const facs = lista.filter(m => m.tipo === "factura")
+      .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || String(a.creado_en).localeCompare(String(b.creado_en)));
+    for (const f of facs){
+      let pendiente = Number(f.monto || 0);
+      const usado = Math.min(pendiente, creditos);
+      pendiente -= usado; creditos -= usado;
+      if (pendiente > 0.005) out.push({ ...f, clienteId, pendiente });
+    }
+  }
+  return out;
+}
+
+async function renderCalendario(){
+  const cont = document.getElementById("alertas-content");
+  cont.innerHTML = `<div class="empty-state"><p>Armando tu calendario…</p></div>`;
+  const desde = new Date(Date.now() - 365 * 86400000).toISOString();
+  const [rCh, rMov] = await Promise.all([
+    supabaseClient.from("consultas")
+      .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real")
+      .eq("usuario_id", state.user.id).not("numero_cheque_consultado", "is", null).is("resultado_real", null)
+      .gte("creado_en", desde).limit(2000),
+    supabaseClient.from("movimientos").select("*").eq("usuario_id", state.user.id).limit(5000)
+  ]);
+  if (rCh.error){
+    console.warn("[OpenCheck Score] Error trayendo calendario:", rCh.error.message);
+    cont.innerHTML = `<div class="empty-state"><p>No pudimos armar tu calendario. Probá de nuevo en un rato.</p></div>`;
+    return;
+  }
+  let clientes = [];
+  try { clientes = await obtenerClientesUsuario(state.user.id); } catch (e) {}
+  const nombreCliente = {};
+  clientes.forEach(cl => nombreCliente[cl.id] = cl.nombre);
+
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const fechaDe = (iso) => new Date(iso + "T00:00:00");
+  const items = [];
+  let chequesSinFecha = 0, chequesSinMonto = 0;
+  for (const c of (rCh.data || [])){
+    if (c.cheque_denunciado === true) continue;
+    if (!c.fecha_vencimiento_cheque){ chequesSinFecha++; continue; }
+    if (!(Number(c.monto_cheque) > 0)){ chequesSinMonto++; continue; }
+    items.push({
+      tipo: "cheque", f: fechaDe(c.fecha_vencimiento_cheque), monto: Number(c.monto_cheque),
+      titulo: c.razon_social || c.cuit_consultado,
+      detalle: `Cheque N° ${c.numero_cheque_consultado}${c.categoria ? " · " + c.categoria : ""}${c.cliente_id && nombreCliente[c.cliente_id] ? " · cliente " + nombreCliente[c.cliente_id] : ""}`
+    });
+  }
+  let facturasSinVence = 0;
+  if (!rMov.error){
+    for (const f of facturasPendientes(rMov.data || [])){
+      if (!f.vence){ facturasSinVence++; continue; }
+      items.push({
+        tipo: "factura", f: fechaDe(f.vence), monto: f.pendiente,
+        titulo: nombreCliente[f.clienteId] || "Cliente",
+        detalle: `Factura${f.detalle ? " " + f.detalle : ""}${f.pendiente < Number(f.monto) - 0.005 ? " (saldo pendiente)" : ""}`
+      });
+    }
+  }
+  if (!items.length){
+    cont.innerHTML = `<div class="empty-state" style="padding:40px 20px;"><div class="ico">🗓️</div><p>Todavía no hay cobros con fecha.<br>Cargá cheques con monto y vencimiento, o facturas con fecha de vencimiento, y los vas a ver acá ordenados por fecha.</p></div>`;
+    return;
+  }
+  items.sort((a, b) => a.f - b.f);
+  const dias = (it) => Math.round((it.f - hoy) / 86400000);
+  const grupos = [
+    { n: "Vencidos", cls: "venc", f: it => dias(it) < 0 },
+    { n: "Hoy", f: it => dias(it) === 0 },
+    { n: "Próximos 7 días", f: it => dias(it) >= 1 && dias(it) <= 7 },
+    { n: "De 8 a 30 días", f: it => dias(it) >= 8 && dias(it) <= 30 },
+    { n: "Más adelante", f: it => dias(it) > 30 }
+  ];
+  const MES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const prox30 = items.filter(it => dias(it) >= 0 && dias(it) <= 30).reduce((s, it) => s + it.monto, 0);
+  const vencidos = items.filter(it => dias(it) < 0).reduce((s, it) => s + it.monto, 0);
+  const notas = [];
+  if (chequesSinFecha) notas.push(`${chequesSinFecha} cheque${chequesSinFecha === 1 ? "" : "s"} sin fecha de vencimiento`);
+  if (chequesSinMonto) notas.push(`${chequesSinMonto} cheque${chequesSinMonto === 1 ? "" : "s"} sin monto`);
+  if (facturasSinVence) notas.push(`${facturasSinVence} factura${facturasSinVence === 1 ? "" : "s"} pendiente${facturasSinVence === 1 ? "" : "s"} sin fecha de vencimiento`);
+
+  cont.innerHTML = `
+    <div class="ge-kpis">
+      <div class="ge-kpi"><b>${formatearPesos(prox30)}</b><span>a cobrar en 30 días</span></div>
+      <div class="ge-kpi"><b>${formatearPesos(vencidos)}</b><span>vencido sin cobrar</span></div>
+    </div>
+    ${vencidos > 0 ? `<div class="ge-aviso">Tenés cobros vencidos. Confirmá los cheques desde el Historial y reclamá las facturas.</div>` : ""}
+    ${grupos.map(g => {
+      const lista = items.filter(g.f);
+      if (!lista.length) return "";
+      const total = lista.reduce((s, it) => s + it.monto, 0);
+      return `<div class="cal-grupo ${g.cls || ""}"><span>${g.n}</span><b>${formatearPesos(total)}</b></div>` +
+        lista.map(it => `
+          <div class="cal-item ${g.cls || ""}">
+            <div class="cal-fecha"><b>${it.f.getDate()}</b><span>${MES[it.f.getMonth()]}</span></div>
+            <div class="cal-cuerpo"><span class="cal-tipo ${it.tipo === "factura" ? "f" : ""}">${it.tipo === "factura" ? "FACTURA" : "CHEQUE"}</span>${escHtml(it.titulo)}<small>${escHtml(it.detalle)}</small></div>
+            <div class="cal-monto">${formatearPesos(it.monto)}</div>
+          </div>`).join("");
+    }).join("")}
+    ${notas.length ? `<div class="field-hint" style="margin-top:14px;">No aparecen en el calendario: ${notas.join("; ")}.</div>` : ""}
+    <div class="field-hint" style="margin-top:10px;">Los pagos y notas de crédito de cada cliente se descuentan primero de sus facturas más antiguas.</div>`;
 }
 
 function renderGestion(){
@@ -5535,7 +5667,7 @@ function construirBloqueCuentaCorriente(cliente, movimientos){
   const ETQ = { factura: "Factura", pago: "Pago", nota_credito: "Nota de crédito" };
   const filas = movimientos.map(m => `
     <div class="cc-mov">
-      <div>${ETQ[m.tipo] || m.tipo}${m.detalle ? " · " + escHtml(m.detalle) : ""}<small>${new Date(m.fecha + "T00:00:00").toLocaleDateString("es-AR")}</small></div>
+      <div>${ETQ[m.tipo] || m.tipo}${m.detalle ? " · " + escHtml(m.detalle) : ""}<small>${new Date(m.fecha + "T00:00:00").toLocaleDateString("es-AR")}${m.vence ? " · vence " + new Date(m.vence + "T00:00:00").toLocaleDateString("es-AR") : ""}</small></div>
       <div><b style="color:${m.tipo === "factura" ? "var(--ink)" : "#2F6B4F"}">${m.tipo === "factura" ? "+" : "−"}${formatearPesos(Number(m.monto))}</b>
         <button class="cc-x" title="Eliminar" onclick="eliminarMovimiento('${m.id}')">✕</button></div>
     </div>`).join("");
@@ -5577,6 +5709,8 @@ function abrirModalMovimiento(tipo){
   document.getElementById("input-mov-monto").value = "";
   document.getElementById("input-mov-detalle").value = "";
   document.getElementById("input-mov-fecha").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("input-mov-vence").value = "";
+  document.getElementById("field-mov-vence").style.display = tipo === "factura" ? "" : "none";
   document.getElementById("modal-movimiento").classList.add("show");
 }
 function cerrarModalMovimiento(){ document.getElementById("modal-movimiento").classList.remove("show"); }
@@ -5588,7 +5722,8 @@ async function confirmarMovimiento(){
   if (!fecha){ mostrarToast("Elegí una fecha."); return; }
   const { error } = await supabaseClient.from("movimientos").insert({
     usuario_id: state.user.id, cliente_id: state.clienteActualId, tipo: state.movTipo,
-    monto, fecha, detalle: detalle || null
+    monto, fecha, detalle: detalle || null,
+    vence: (state.movTipo === "factura" && document.getElementById("input-mov-vence").value) || null
   });
   if (error){
     console.warn("[OpenCheck Score] Error guardando movimiento:", error.message);
