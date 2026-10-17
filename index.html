@@ -3073,6 +3073,7 @@ function construirBloqueRubro(datos, resultado){
       if (ctx.general) textoSector += ` Como referencia, la actividad total del país ${verboVariacion(ctx.general.interanualPct)} ${formatearPctConSigno(ctx.general.interanualPct)}.`;
       // Confirmación cruzada (solo Construcción tiene una hoy, vía ISAC).
       const cc = s.confirmacionCruzada;
+      if (s.fuente) textoSector += ` Medido con el ${s.fuente}, el indicador del INDEC para este sector.`;
       if (sector.letra === "A") textoSector += ` El agro depende de la cosecha y del clima, por lo que esta cifra puede variar bastante de un año a otro.`;
       if (cc) textoSector += ` Otra medición distinta del INDEC (${cc.fuente}, que mide consumo de insumos) da un número parecido: ${verboVariacion(cc.interanualPct)} ${formatearPctConSigno(cc.interanualPct)} en ${formatearPeriodoEMAE(cc.fecha)}.`;
     }
