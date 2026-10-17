@@ -2017,6 +2017,26 @@ function hayTriggerInhabilitacion(d, hoy = new Date()){
 // que forzar un número sin sustento. Chico a propósito: todavía no hay
 // feedback real (Clientes) para calibrar cuánto debería pesar esto de
 // verdad — este rango acota el impacto mientras tanto.
+// Intermediarios y mayoristas de materias primas agropecuarias (corredores y
+// acopiadores de cereales y oleaginosas, consignatarios de hacienda, etc.):
+// en el clasificador de ARCA son "comercio al por mayor" (grupos 461 y 462),
+// pero su negocio depende del ciclo agropecuario (cosecha, clima, hacienda),
+// no del comercio en general. Los pasamos al sector agropecuario del EMAE.
+// 462 = materias primas agrícolas y animales vivos (todo es agro). 461 =
+// comisión/consignación de todo tipo de productos: solo cuando la descripción
+// nombra algo agropecuario, para no tocar el resto.
+function reclasificarAgroIntermediario(act){
+  if (!act || !act.sectorEmae || act.sectorEmae.letra !== "G") return act;
+  const cod = String(act.idActividad || "").replace(/\D/g, "").padStart(6, "0");
+  const grupo = cod.slice(0, 3);
+  const desc = String(act.descripcion || "").toUpperCase();
+  const palabrasAgro = /CEREAL|OLEAGINOS|GRANO|GANADO|HACIENDA|ANIMALES\s+VIVOS|SEMILLA|FORRAJ|AGR[IÍ]COL|PECUARI|\bLANA\b/;
+  if (grupo === "462" || (grupo === "461" && palabrasAgro.test(desc))){
+    return { ...act, sectorEmae: { letra: "A", nombre: "Agricultura, ganadería, caza y silvicultura", porIntermediacionAgro: true } };
+  }
+  return act;
+}
+
 function calcularPenalizacionSectorDeuda(d){
   const sinDesc = { factor: 0, sTier: null, dTier: null };
 
@@ -2032,6 +2052,10 @@ function calcularPenalizacionSectorDeuda(d){
   if (deudaAjustada < 5) return sinDesc;
 
   const sectorInfo = d.rubro && d.rubro.principal && d.rubro.principal.sectorEmae;
+  // El sector agropecuario es muy volátil (cosecha, clima): una caída interanual
+  // de 5 o 10% es normal y no dice nada del cliente. Se muestra como contexto,
+  // pero no se cruza con la deuda ni resta puntos.
+  if (sectorInfo && sectorInfo.letra === "A") return sinDesc;
   const s = sectorInfo && d.contextoSectorial && d.contextoSectorial.sectores && d.contextoSectorial.sectores[sectorInfo.letra];
   if (!s || typeof s.interanualPct !== "number" || s.interanualPct >= 0) return sinDesc; // sin dato, o sector no cae
 
@@ -3047,11 +3071,13 @@ function construirBloqueRubro(datos, resultado){
     const ctx = datos.contextoSectorial;
     s = ctx && ctx.sectores && ctx.sectores[sector.letra];
     let textoSector = `${sector.nombre}.`;
+    if (sector.porIntermediacionAgro) textoSector += ` Esta actividad (intermediación o comercio de productos agropecuarios) se asocia al sector agropecuario porque su negocio depende del ciclo de la producción.`;
     if (s){
       textoSector += ` La actividad de este sector en todo el país ${verboVariacion(s.interanualPct)} <b>${formatearPctConSigno(s.interanualPct)}</b> interanual en ${formatearPeriodoEMAE(s.fecha)} (promedio de los últimos 3 meses: ${formatearPctConSigno(s.promedio3mPct)}).`;
       if (ctx.general) textoSector += ` Como referencia, la actividad total del país ${verboVariacion(ctx.general.interanualPct)} ${formatearPctConSigno(ctx.general.interanualPct)}.`;
       // Confirmación cruzada (solo Construcción tiene una hoy, vía ISAC).
       const cc = s.confirmacionCruzada;
+      if (sector.letra === "A") textoSector += ` El sector agropecuario varía mucho de un año a otro por la cosecha y el clima, por eso esta cifra es solo contexto y no se usa para ajustar el puntaje.`;
       if (cc) textoSector += ` Otra medición distinta del INDEC (${cc.fuente}, que mide consumo de insumos) da un número parecido: ${verboVariacion(cc.interanualPct)} ${formatearPctConSigno(cc.interanualPct)} en ${formatearPeriodoEMAE(cc.fecha)}.`;
     }
     filas += `
@@ -3216,7 +3242,7 @@ async function construirDatosLibradorReal(cuit){
       antiguedadCuitAnios = dataArca.aniosAntiguedad;
     }
     if (dataArca.ok && dataArca.encontrado && dataArca.actividadPrincipal){
-      rubro = { principal: dataArca.actividadPrincipal, actividades: dataArca.actividades || [] };
+      rubro = { principal: reclasificarAgroIntermediario(dataArca.actividadPrincipal), actividades: dataArca.actividades || [] };
     }
   } else if (arcaR.status === "rejected"){
     console.warn("[OpenCheck Score] Falló consultar-antiguedad-arca:", arcaR.reason && arcaR.reason.message);
