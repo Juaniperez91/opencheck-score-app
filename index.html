@@ -2052,10 +2052,6 @@ function calcularPenalizacionSectorDeuda(d){
   if (deudaAjustada < 5) return sinDesc;
 
   const sectorInfo = d.rubro && d.rubro.principal && d.rubro.principal.sectorEmae;
-  // El sector agropecuario es muy volátil (cosecha, clima): una caída interanual
-  // de 5 o 10% es normal y no dice nada del cliente. Se muestra como contexto,
-  // pero no se cruza con la deuda ni resta puntos.
-  if (sectorInfo && sectorInfo.letra === "A") return sinDesc;
   const s = sectorInfo && d.contextoSectorial && d.contextoSectorial.sectores && d.contextoSectorial.sectores[sectorInfo.letra];
   if (!s || typeof s.interanualPct !== "number" || s.interanualPct >= 0) return sinDesc; // sin dato, o sector no cae
 
@@ -3077,7 +3073,7 @@ function construirBloqueRubro(datos, resultado){
       if (ctx.general) textoSector += ` Como referencia, la actividad total del país ${verboVariacion(ctx.general.interanualPct)} ${formatearPctConSigno(ctx.general.interanualPct)}.`;
       // Confirmación cruzada (solo Construcción tiene una hoy, vía ISAC).
       const cc = s.confirmacionCruzada;
-      if (sector.letra === "A") textoSector += ` El sector agropecuario varía mucho de un año a otro por la cosecha y el clima, por eso esta cifra es solo contexto y no se usa para ajustar el puntaje.`;
+      if (sector.letra === "A") textoSector += ` El agro depende de la cosecha y del clima, por lo que esta cifra puede variar bastante de un año a otro.`;
       if (cc) textoSector += ` Otra medición distinta del INDEC (${cc.fuente}, que mide consumo de insumos) da un número parecido: ${verboVariacion(cc.interanualPct)} ${formatearPctConSigno(cc.interanualPct)} en ${formatearPeriodoEMAE(cc.fecha)}.`;
     }
     filas += `
