@@ -40,6 +40,7 @@ const API_SERIES = "https://apis.datos.gob.ar/series/api/series/";
 // subimos de 15s a 24s por si algún día está lenta pero viva. Tope duro: Netlify
 // corta las funciones programadas a los 30s, así que no conviene pasarse.
 const TIMEOUT_MS = 24000;
+const VENTANA = 30; // meses pedidos: margen por si alguna serie publica con meses de atraso
 const TANDA_MAX = 8; // ids por pedido — margen cómodo por debajo de donde falló con 46
 
 const SERIE_GENERAL = "143.3_NO_PR_2004_A_21"; // EMAE original, nivel general
@@ -172,7 +173,7 @@ function enTandas(arr, n){
 // Lanza si la tanda falla — el llamador decide qué hacer con esa tanda
 // puntual (el resto de las tandas siguen su curso igual, vía Promise.allSettled).
 async function pedirTanda(ids, signal){
-  const url = `${API_SERIES}?ids=${ids.join(",")}&last=15&format=json`;
+  const url = `${API_SERIES}?ids=${ids.join(",")}&last=${VENTANA}&format=json`;
   let r;
   try {
     r = await fetch(url, { headers: { Accept: "application/json" }, signal });
@@ -209,7 +210,16 @@ export default async () => {
     ...Object.entries(SERIES_SECTOR).map(([letra, id]) => ({ id, tipo: "sector", letra })),
     ...Object.entries(SERIES_IPI).map(([titulo, id]) => ({ id, tipo: "ipi", titulo }))
   ];
-  const tandas = enTandas(pedidos, TANDA_MAX);
+  // Las tandas se arman por tipo de dato y NO mezclan series de distintos
+  // conjuntos del INDEC (EMAE general, ISAC, aperturas sectoriales, IPI): al
+  // mezclarlas la API las alinea en una sola tabla con meses de más y columnas
+  // vacías, y algunos sectores terminaban sin resultado sin dar ningún error.
+  const tandas = [
+    ...enTandas(pedidos.filter(p => p.tipo === "general"), TANDA_MAX),
+    ...enTandas(pedidos.filter(p => p.tipo === "isac"), TANDA_MAX),
+    ...enTandas(pedidos.filter(p => p.tipo === "sector"), TANDA_MAX),
+    ...enTandas(pedidos.filter(p => p.tipo === "ipi"), TANDA_MAX)
+  ];
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -223,6 +233,7 @@ export default async () => {
     const sectores = {};
     const ipi = {};
     let tandasFallidas = 0;
+    const sinDato = []; // series que llegaron vacías o no se pudieron resumir
 
     resultadosTandas.forEach((resultado, i) => {
       if (resultado.status === "rejected"){
@@ -247,9 +258,11 @@ export default async () => {
         } else if (pedido.tipo === "sector"){
           const resumen = resumirSerie(fechas, columnaPorId(idx));
           if (resumen) sectores[pedido.letra] = { nombre: NOMBRES_SECTOR[pedido.letra], ...resumen };
+          else { sinDato.push(pedido.letra); console.warn(`[actualizar-contexto-sectorial] Sector ${pedido.letra} (${pedido.id}) sin dato utilizable.`); }
         } else if (pedido.tipo === "ipi"){
           const resumen = resumirSerie(fechas, columnaPorId(idx));
           if (resumen) ipi[pedido.titulo] = resumen;
+          else { sinDato.push("ipi:" + pedido.titulo); console.warn(`[actualizar-contexto-sectorial] IPI ${pedido.titulo} (${pedido.id}) sin dato utilizable.`); }
         }
       });
     });
@@ -273,7 +286,7 @@ export default async () => {
     // su tanda puntual falló — gana el dato de hoy donde haya, y se completa
     // con el de ayer donde falte.
     let generalFinal = general, sectoresFinal = sectores, ipiFinal = ipi;
-    if (tandasFallidas > 0){
+    if (tandasFallidas > 0 || sinDato.length > 0){
       const { data: anterior } = await supabaseAdmin
         .from("contexto_sectorial")
         .select("datos")
@@ -289,7 +302,8 @@ export default async () => {
     const datos = {
       ok: true,
       fuente: "INDEC — EMAE apertura sectorial, base 2004; IPI manufacturero por producto; ISAC construcción (vía datos.gob.ar)",
-      parcial: tandasFallidas > 0, // avisa si alguna tanda falló, para no ocultarlo
+      parcial: tandasFallidas > 0 || sinDato.length > 0, // avisa si algo falló o vino vacío, para no ocultarlo
+      sinDato, // qué series no se pudieron resumir hoy (para diagnosticar)
       general: generalFinal,
       sectores: sectoresFinal,
       ipi: ipiFinal
@@ -304,7 +318,7 @@ export default async () => {
       return new Response("error guardando en Supabase: " + error.message, { status: 500 });
     }
 
-    const resumen = `guardado ok (parcial:${datos.parcial}, tandas_fallidas:${tandasFallidas}/${tandas.length})`;
+    const resumen = `guardado ok (parcial:${datos.parcial}, tandas_fallidas:${tandasFallidas}/${tandas.length}, sin_dato:[${sinDato.join(",")}])`;
     console.log("[actualizar-contexto-sectorial]", resumen);
     return new Response(resumen);
   } catch (e){
