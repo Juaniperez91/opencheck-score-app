@@ -254,7 +254,11 @@ export default async () => {
           // no como número de porcentaje — hay que multiplicar por 100, igual
           // que hacemos con el interanual del EMAE. Confirmado contra el
           // reporte real del INDEC: julio 2026 dio -4,5%, no 0%.
-          isac = ult >= 0 ? { fecha: String(fechas[ult]).slice(0, 7), interanualPct: redondear1(valores[ult] * 100) } : null;
+          if (ult >= 0){
+            const ultimos3 = [0, 1, 2].map(k => valores[ult - k]).filter(v => v !== null && v !== undefined);
+            const prom3 = ultimos3.reduce((a, b) => a + b, 0) / ultimos3.length;
+            isac = { fecha: String(fechas[ult]).slice(0, 7), interanualPct: redondear1(valores[ult] * 100), promedio3mPct: redondear1(prom3 * 100) };
+          }
         } else if (pedido.tipo === "sector"){
           const resumen = resumirSerie(fechas, columnaPorId(idx));
           if (resumen) sectores[pedido.letra] = { nombre: NOMBRES_SECTOR[pedido.letra], ...resumen };
@@ -269,7 +273,15 @@ export default async () => {
 
     // Adjuntamos el ISAC al sector F (Construcción) como una confirmación
     // cruzada adicional, con su propia fuente aclarada.
-    if (isac && sectores.F) sectores.F.confirmacionCruzada = { fuente: "ISAC (INDEC)", ...isac };
+    if (isac && sectores.F) sectores.F.confirmacionCruzada = { fuente: "ISAC (INDEC)", fecha: isac.fecha, interanualPct: isac.interanualPct };
+    // Si la serie de Construcción del EMAE no vino (hoy llega vacía), el ISAC
+    // —el indicador oficial del INDEC para la construcción— pasa a ser la
+    // medición del sector, así nadie de este rubro queda sin dato.
+    if (isac && !sectores.F){
+      sectores.F = { nombre: NOMBRES_SECTOR.F, fecha: isac.fecha, interanualPct: isac.interanualPct, promedio3mPct: isac.promedio3mPct, fuente: "ISAC (INDEC)" };
+      const i = sinDato.indexOf("F");
+      if (i >= 0) sinDato.splice(i, 1);
+    }
 
     // Si ninguna tanda funcionó, mejor NO pisar lo que ya había guardado de
     // un día anterior (eso seguiría siendo útil) — se deja la fila como
