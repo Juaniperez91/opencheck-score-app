@@ -2023,6 +2023,14 @@ function calcularPenalizacionSectorDeuda(d){
   const cambio = (d.deudaVsInflacion && d.deudaVsInflacion.disponible) ? d.deudaVsInflacion.cambioTotalRelativo : null;
   if (cambio === null || cambio < 0.25) return sinDesc; // por debajo del primer tramo de deuda
 
+  // Mismo piso de materialidad que la variable "Deuda real vs. inflación": con
+  // deuda baja (menos de $5M ajustados por inflación) el % de crecimiento no es
+  // una señal confiable, así que tampoco se cruza con el sector. Sin esto, una
+  // deuda chica que "creció mucho en %" tenía 10/10 en su variable pero igual
+  // restaba puntos acá (incoherente).
+  const deudaAjustada = (d.endeudamientoMillones || 0) / (d.factorAjusteEndeudamiento || 1);
+  if (deudaAjustada < 5) return sinDesc;
+
   const sectorInfo = d.rubro && d.rubro.principal && d.rubro.principal.sectorEmae;
   const s = sectorInfo && d.contextoSectorial && d.contextoSectorial.sectores && d.contextoSectorial.sectores[sectorInfo.letra];
   if (!s || typeof s.interanualPct !== "number" || s.interanualPct >= 0) return sinDesc; // sin dato, o sector no cae
