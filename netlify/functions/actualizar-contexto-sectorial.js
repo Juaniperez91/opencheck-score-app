@@ -218,7 +218,9 @@ export default async () => {
     ...enTandas(pedidos.filter(p => p.tipo === "general"), TANDA_MAX),
     ...enTandas(pedidos.filter(p => p.tipo === "isac"), TANDA_MAX),
     ...enTandas(pedidos.filter(p => p.tipo === "sector"), TANDA_MAX),
-    ...enTandas(pedidos.filter(p => p.tipo === "ipi"), TANDA_MAX)
+    // IPI: una serie por pedido. Al pedir varias juntas, la API alinea las
+    // columnas y dejaba series con datos (ej. calzado) marcadas como vacías.
+    ...enTandas(pedidos.filter(p => p.tipo === "ipi"), 1)
   ];
 
   const controller = new AbortController();
