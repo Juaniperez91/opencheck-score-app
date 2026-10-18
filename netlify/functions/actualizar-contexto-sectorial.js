@@ -182,8 +182,20 @@ function enTandas(arr, n){
 // Pide una tanda de ids a la API y devuelve { fechas, columnaPorId(idx) }.
 // Lanza si la tanda falla — el llamador decide qué hacer con esa tanda
 // puntual (el resto de las tandas siguen su curso igual, vía Promise.allSettled).
+const INTENTOS_VACIO = 3;      // la API a veces responde vacío para series que sí tienen datos
+const PAUSA_VACIO_MS = 700;
 async function pedirTanda(ids, signal){
-  const url = `${API_SERIES}?ids=${ids.join(",")}&start_date=${fechaInicio()}&format=json`;
+  let ultima = null;
+  for (let intento = 1; intento <= INTENTOS_VACIO; intento++){
+    ultima = await pedirTandaUnaVez(ids, signal, intento % 2 === 0); // alterna start_date / last
+    if (ultima.fechas.length > 0) return ultima;           // llegó con datos
+    if (intento < INTENTOS_VACIO) await new Promise(r => setTimeout(r, PAUSA_VACIO_MS * intento));
+  }
+  return ultima; // sigue vacía tras varios intentos: se tratará como "sin dato"
+}
+
+async function pedirTandaUnaVez(ids, signal, usarLast){
+  const url = `${API_SERIES}?ids=${ids.join(",")}${usarLast ? '&last=36' : '&start_date=' + fechaInicio()}&format=json`;
   let r;
   try {
     r = await fetch(url, { headers: { Accept: "application/json" }, signal });
