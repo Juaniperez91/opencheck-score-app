@@ -230,6 +230,14 @@ export default async () => {
     const resultadosTandas = await Promise.allSettled(
       tandas.map(t => pedirTanda(t.map(p => p.id), controller.signal))
     );
+    // Los pedidos que fallaron (típico: la API del INDEC limita cuando le llegan
+    // muchos a la vez) se reintentan una vez, ya con menos carga.
+    const aReintentar = resultadosTandas.map((r, i) => r.status === "rejected" ? i : -1).filter(i => i >= 0);
+    if (aReintentar.length){
+      console.warn(`[actualizar-contexto-sectorial] Reintentando ${aReintentar.length} pedidos que fallaron.`);
+      const reintentos = await Promise.allSettled(aReintentar.map(i => pedirTanda(tandas[i].map(p => p.id), controller.signal)));
+      reintentos.forEach((r, k) => { resultadosTandas[aReintentar[k]] = r; });
+    }
 
     let general = null, isac = null;
     const sectores = {};
