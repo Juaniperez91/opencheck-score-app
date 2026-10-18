@@ -40,7 +40,12 @@ const API_SERIES = "https://apis.datos.gob.ar/series/api/series/";
 // subimos de 15s a 24s por si algún día está lenta pero viva. Tope duro: Netlify
 // corta las funciones programadas a los 30s, así que no conviene pasarse.
 const TIMEOUT_MS = 24000;
-const VENTANA = 30; // meses pedidos: margen por si alguna serie publica con meses de atraso
+const VENTANA_MESES = 36; // se piden por fecha de inicio (no "últimos N"): más robusto con series con meses vacíos
+function fechaInicio(){
+  const d = new Date();
+  d.setUTCMonth(d.getUTCMonth() - VENTANA_MESES);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
 const TANDA_MAX = 8; // ids por pedido — margen cómodo por debajo de donde falló con 46
 
 const SERIE_GENERAL = "143.3_NO_PR_2004_A_21"; // EMAE original, nivel general
@@ -140,24 +145,39 @@ function interanual(valores, i){
   return actual / previo - 1;
 }
 
-// Resume una serie mensual: interanual del último mes con dato + promedio
-// de los últimos 3 (más estable que un solo mes).
+// Resume una serie mensual. Trabaja por FECHA (no por posición): busca los
+// últimos meses que tienen dato y también el dato del mismo mes un año antes,
+// así tolera series con meses vacíos intercalados o con atraso de publicación.
+function mesAnterior(ym, k){
+  let [y, m] = ym.split("-").map(Number);
+  m -= k;
+  while (m <= 0){ m += 12; y--; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+const MESES_MAX_ATRASO = 9; // si el último dato comparable es más viejo, mejor no mostrarlo
 function resumirSerie(fechas, valores){
-  let ult = valores.length - 1;
-  while (ult >= 0 && (valores[ult] === null || valores[ult] === undefined)) ult--;
-  if (ult < 12) return null;
+  const mapa = new Map();
+  fechas.forEach((f, i) => {
+    const v = valores[i];
+    if (v !== null && v !== undefined) mapa.set(String(f).slice(0, 7), v);
+  });
+  const puntos = [];
+  [...mapa.keys()].sort().forEach(ym => {
+    const previo = mapa.get(mesAnterior(ym, 12));
+    if (previo !== undefined && previo !== 0) puntos.push({ ym, v: mapa.get(ym) / previo - 1 });
+  });
+  if (!puntos.length) return null;
 
-  const ultimo = interanual(valores, ult);
-  if (ultimo === null) return null;
+  const ultimo = puntos[puntos.length - 1];
+  const hoy = new Date();
+  const hoyYm = `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, "0")}`;
+  if (mesAnterior(hoyYm, MESES_MAX_ATRASO) > ultimo.ym) return null;
 
-  const ultimos3 = [0, 1, 2]
-    .map(k => interanual(valores, ult - k))
-    .filter(v => v !== null);
-  const promedio3m = ultimos3.reduce((a, b) => a + b, 0) / ultimos3.length;
-
+  const ult3 = puntos.slice(-3).map(p => p.v);
+  const promedio3m = ult3.reduce((a, b) => a + b, 0) / ult3.length;
   return {
-    fecha: String(fechas[ult]).slice(0, 7), // "2026-07"
-    interanualPct: redondear1(ultimo * 100),
+    fecha: ultimo.ym, // "2026-07"
+    interanualPct: redondear1(ultimo.v * 100),
     promedio3mPct: redondear1(promedio3m * 100)
   };
 }
@@ -173,7 +193,7 @@ function enTandas(arr, n){
 // Lanza si la tanda falla — el llamador decide qué hacer con esa tanda
 // puntual (el resto de las tandas siguen su curso igual, vía Promise.allSettled).
 async function pedirTanda(ids, signal){
-  const url = `${API_SERIES}?ids=${ids.join(",")}&last=${VENTANA}&format=json`;
+  const url = `${API_SERIES}?ids=${ids.join(",")}&start_date=${fechaInicio()}&format=json`;
   let r;
   try {
     r = await fetch(url, { headers: { Accept: "application/json" }, signal });
@@ -186,7 +206,10 @@ async function pedirTanda(ids, signal){
   if (!r.ok) throw new Error(`Series de Tiempo respondió ${r.status} para [${ids.join(",")}]`);
   const json = await r.json();
   const filas = json && json.data;
-  if (!Array.isArray(filas) || filas.length < 13) throw new Error(`Respuesta inesperada para [${ids.join(",")}]`);
+  if (!Array.isArray(filas)) throw new Error(`Respuesta inesperada para [${ids.join(",")}]`);
+  // Serie sin ningún dato publicado: no es una falla del pedido, simplemente
+  // no hay nada que resumir (queda anotada como "sin dato").
+  if (filas.length === 0) return { fechas: [], columnaPorId: () => [] };
 
   const fechas = filas.map(f => f[0]);
   return {
