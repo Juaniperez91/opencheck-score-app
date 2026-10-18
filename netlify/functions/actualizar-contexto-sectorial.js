@@ -46,7 +46,6 @@ function fechaInicio(){
   d.setUTCMonth(d.getUTCMonth() - VENTANA_MESES);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
-const TANDA_MAX = 8; // ids por pedido — margen cómodo por debajo de donde falló con 46
 
 const SERIE_GENERAL = "143.3_NO_PR_2004_A_21"; // EMAE original, nivel general
 
@@ -136,15 +135,6 @@ const SERIES_IPI = {
 
 function redondear1(n){ return Math.round(n * 10) / 10; }
 
-// Variación interanual en la posición i (compara contra 12 meses antes).
-function interanual(valores, i){
-  if (i < 12) return null;
-  const actual = valores[i];
-  const previo = valores[i - 12];
-  if (actual === null || actual === undefined || previo === null || previo === undefined || previo === 0) return null;
-  return actual / previo - 1;
-}
-
 // Resume una serie mensual. Trabaja por FECHA (no por posición): busca los
 // últimos meses que tienen dato y también el dato del mismo mes un año antes,
 // así tolera series con meses vacíos intercalados o con atraso de publicación.
@@ -233,18 +223,12 @@ export default async () => {
     ...Object.entries(SERIES_SECTOR).map(([letra, id]) => ({ id, tipo: "sector", letra })),
     ...Object.entries(SERIES_IPI).map(([titulo, id]) => ({ id, tipo: "ipi", titulo }))
   ];
-  // Las tandas se arman por tipo de dato y NO mezclan series de distintos
-  // conjuntos del INDEC (EMAE general, ISAC, aperturas sectoriales, IPI): al
-  // mezclarlas la API las alinea en una sola tabla con meses de más y columnas
-  // vacías, y algunos sectores terminaban sin resultado sin dar ningún error.
-  const tandas = [
-    ...enTandas(pedidos.filter(p => p.tipo === "general"), TANDA_MAX),
-    ...enTandas(pedidos.filter(p => p.tipo === "isac"), TANDA_MAX),
-    ...enTandas(pedidos.filter(p => p.tipo === "sector"), TANDA_MAX),
-    // IPI: una serie por pedido. Al pedir varias juntas, la API alinea las
-    // columnas y dejaba series con datos (ej. calzado) marcadas como vacías.
-    ...enTandas(pedidos.filter(p => p.tipo === "ipi"), 1)
-  ];
+  // Una serie por pedido, para TODAS. Al pedir varias juntas la API del INDEC
+  // alinea las columnas en una sola tabla y, si alguna tiene meses vacíos (ej. el
+  // sector O), las demás pueden venir con huecos o directamente vacías. Pedidas de
+  // a una vienen limpias. Se lanzan todas a la vez, así el tiempo total es el del
+  // pedido más lento y no la suma.
+  const tandas = pedidos.map(p => [p]);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -309,13 +293,12 @@ export default async () => {
     // Adjuntamos el ISAC al sector F (Construcción) como una confirmación
     // cruzada adicional, con su propia fuente aclarada.
     if (isac && sectores.F) sectores.F.confirmacionCruzada = { fuente: "ISAC (INDEC)", fecha: isac.fecha, interanualPct: isac.interanualPct };
-    // Si la serie de Construcción del EMAE no vino (hoy llega vacía), el ISAC
-    // —el indicador oficial del INDEC para la construcción— pasa a ser la
-    // medición del sector, así nadie de este rubro queda sin dato.
+    // Si la serie de Construcción del EMAE no vino, el ISAC —el indicador oficial
+    // del INDEC para la construcción— pasa a ser la medición del sector.
     if (isac && !sectores.F){
       sectores.F = { nombre: NOMBRES_SECTOR.F, fecha: isac.fecha, interanualPct: isac.interanualPct, promedio3mPct: isac.promedio3mPct, fuente: "ISAC (INDEC)" };
-      const i = sinDato.indexOf("F");
-      if (i >= 0) sinDato.splice(i, 1);
+      const iF = sinDato.indexOf("F");
+      if (iF >= 0) sinDato.splice(iF, 1);
     }
 
     // Si ninguna tanda funcionó, mejor NO pisar lo que ya había guardado de
