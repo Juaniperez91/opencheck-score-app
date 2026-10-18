@@ -243,12 +243,14 @@ export default async () => {
     const sectores = {};
     const ipi = {};
     let tandasFallidas = 0;
+    const detalleFallos = []; // mensaje de cada pedido que falló (también tras el reintento)
     const sinDato = []; // series que llegaron vacías o no se pudieron resumir
 
     resultadosTandas.forEach((resultado, i) => {
       if (resultado.status === "rejected"){
         console.error("[actualizar-contexto-sectorial] Falló una tanda:", resultado.reason && resultado.reason.message);
         tandasFallidas++;
+        detalleFallos.push(String((resultado.reason && resultado.reason.message) || resultado.reason).slice(0, 160));
         return; // el resto de las tandas igual se procesa — mejor parcial que nada
       }
       const { fechas, columnaPorId } = resultado.value;
@@ -340,7 +342,7 @@ export default async () => {
       return new Response("error guardando en Supabase: " + error.message, { status: 500 });
     }
 
-    const resumen = `guardado ok (parcial:${datos.parcial}, tandas_fallidas:${tandasFallidas}/${tandas.length}, sin_dato:[${sinDato.join(",")}])`;
+    const resumen = `guardado ok (parcial:${datos.parcial}, tandas_fallidas:${tandasFallidas}/${tandas.length}, sin_dato:[${sinDato.join(",")}])` + (detalleFallos.length ? ` fallos:${JSON.stringify(detalleFallos)}` : "");
     console.log("[actualizar-contexto-sectorial]", resumen);
     return new Response(resumen);
   } catch (e){
