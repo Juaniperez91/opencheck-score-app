@@ -185,13 +185,20 @@ function enTandas(arr, n){
 const INTENTOS_VACIO = 3;      // la API a veces responde vacío para series que sí tienen datos
 const PAUSA_VACIO_MS = 700;
 async function pedirTanda(ids, signal){
-  let ultima = null;
+  // Una respuesta sirve si la serie trae al menos 13 meses con valor (hace falta
+  // un dato y el de 12 meses antes para el interanual). Se prueba primero con
+  // last=36 (la forma más confiable con esta API) y se alterna con start_date.
+  const MIN_CON_VALOR = 13;
+  const conValor = (r) => r.fechas.length ? r.columnaPorId(0).filter(v => v !== null && v !== undefined).length : 0;
+  let mejor = null, mejorN = -1;
   for (let intento = 1; intento <= INTENTOS_VACIO; intento++){
-    ultima = await pedirTandaUnaVez(ids, signal, intento % 2 === 0); // alterna start_date / last
-    if (ultima.fechas.length > 0) return ultima;           // llegó con datos
-    if (intento < INTENTOS_VACIO) await new Promise(r => setTimeout(r, PAUSA_VACIO_MS * intento));
+    const r = await pedirTandaUnaVez(ids, signal, intento % 2 === 1); // 1: last, 2: start_date, 3: last
+    const n = conValor(r);
+    if (n > mejorN){ mejor = r; mejorN = n; }
+    if (n >= MIN_CON_VALOR) return r;
+    if (intento < INTENTOS_VACIO) await new Promise(res => setTimeout(res, PAUSA_VACIO_MS * intento));
   }
-  return ultima; // sigue vacía tras varios intentos: se tratará como "sin dato"
+  return mejor; // la mejor respuesta que hubo (si ninguna sirvió, quedará "sin dato")
 }
 
 async function pedirTandaUnaVez(ids, signal, usarLast){
