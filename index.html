@@ -904,8 +904,7 @@
             <div class="institucional-card">
               <button class="btn btn-primary" id="btn-institucional-principal" onclick="irA('login')" style="width:100%; margin-bottom:12px;">Iniciar sesión</button>
               <button class="btn btn-secondary" id="btn-institucional-registro" onclick="irA('registro')" style="width:100%;">Crear cuenta</button>
-              <a href="/opencheck.apk" download style="display:block; text-align:center; margin-top:14px; font-size:12.5px; color:var(--ink-soft); text-decoration:underline;">¿Usás Android? Descargá el APK directo</a>
-              <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin:6px 0 0; line-height:1.4;">Android puede mostrar un aviso de "origen desconocido" antes de instalar — es normal, tocá "Instalar de todos modos".</p>
+              <a href="https://play.google.com/store/apps/details?id=com.opencheckscore.app" target="_blank" rel="noopener" style="display:block; text-align:center; margin-top:14px; font-size:12.5px; color:var(--ink-soft); text-decoration:underline;">¿Usás Android? Descargá la app en Google Play</a>
             </div>
           </div>
         </div>
@@ -1053,7 +1052,7 @@
 
       <div class="checkbox-row">
         <input type="checkbox" id="reg-tc">
-        <p>Acepto los <a href="#">Términos y Condiciones</a> y la <a href="#">Política de Privacidad</a> de OpenCheck, conforme a la Ley 25.326 de Protección de Datos Personales.</p>
+        <p>Acepto los <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a> de OpenCheck, conforme a la Ley 25.326 de Protección de Datos Personales.</p>
       </div>
       <div class="tc-meta" id="tc-meta">Documento v1.0 · registrado</div>
 
@@ -3645,7 +3644,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-16-v24-calendario-resumen-y-texto-premium";
+const VERSION_APP = "2026-10-22-v25-enlaces-legales-y-play";
 
 const state = {
   user: null,
@@ -6007,7 +6006,7 @@ function renderCuenta(){
     <button class="btn btn-primary" id="btn-instalar-app" onclick="instalarApp()" style="display:none; margin-top:10px; align-items:center; justify-content:center; gap:8px;">
       Instalar OpenCheck en este dispositivo
     </button>
-    <a href="/opencheck.apk" download class="btn btn-secondary" style="display:block; text-align:center; margin-top:10px; text-decoration:none;">Descargar APK (Android)</a>
+    ${(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ? "" : `<a href="https://play.google.com/store/apps/details?id=com.opencheckscore.app" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-align:center; margin-top:10px; text-decoration:none;">Descargar en Google Play (Android)</a>`}
     ${u && (u.plan === "premium" || u.es_admin) ? `
     <div class="divider-label">Resumen semanal</div>
     <p class="page-sub" style="margin-top:-4px;">Los lunes a la mañana te mandamos por mail lo que conviene mirar esa semana: alertas, cobros por vencer y topes superados. Si no hay novedades, no te escribimos.</p>
