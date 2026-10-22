@@ -50,7 +50,7 @@ function facturasPendientes(movs){
 }
 
 function armarDatos(usuario, d, hoy){
-  const cheques = d.consultas.filter(c => c.numero_cheque_consultado && !c.resultado_real && c.cheque_denunciado !== true);
+  const cheques = d.consultas.filter(c => c.numero_cheque_consultado && !c.resultado_real && c.cheque_denunciado !== true && c.estado_cheque !== "endosado");
   const conMonto = cheques.filter(c => Number(c.monto_cheque) > 0);
   const nombreCliente = new Map(d.clientes.map(c => [c.id, c.nombre]));
   const cobros = [];
@@ -163,7 +163,7 @@ export async function correrResumen({ forzar = false, soloEmail = null } = {}){
     if (Date.now() - t0 > PRESUPUESTO_MS){ resumen.errores.push("Se cortó por tiempo; quedaron usuarios sin procesar"); break; }
     try {
       const [rc, rm, rcl, ra] = await Promise.all([
-        supabase.from("consultas").select("cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real")
+        supabase.from("consultas").select("cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real, estado_cheque")
           .eq("usuario_id", u.id).not("numero_cheque_consultado", "is", null).is("resultado_real", null).gte("creado_en", desdeConsultas).limit(2000),
         supabase.from("movimientos").select("cliente_id, tipo, monto, fecha, vence, detalle, creado_en").eq("usuario_id", u.id).limit(5000),
         supabase.from("clientes").select("id, nombre, limite_exposicion").eq("usuario_id", u.id).limit(1000),
