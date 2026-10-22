@@ -3644,7 +3644,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-22-v25-enlaces-legales-y-play";
+const VERSION_APP = "2026-10-22-v26-estados-de-cheque";
 
 const state = {
   user: null,
@@ -5286,13 +5286,56 @@ function facturasPendientes(movimientos){
   return out;
 }
 
+/* ---- Estado del cheque desde la agenda ---- */
+function selectorEstadoCheque(id, estado){
+  const op = (v, t) => `<option value="${v}"${(estado || "") === v ? " selected" : ""}>${t}</option>`;
+  return `<div style="margin-top:6px;">
+    <select class="select-estado-cheque" style="font-size:12px; padding:4px 6px; border:1px solid var(--hairline); border-radius:8px; background:#fff;" onchange="cambiarEstadoCheque('${id}', this)">
+      ${op("", "En cartera")}${op("depositado", "Depositado")}${op("endosado", "Endosado a…")}${op("cobrado", "Cobrado")}${op("rechazado", "Rechazado")}
+    </select>
+    <div id="end-${id}" style="display:none; margin-top:6px;">
+      <input type="text" inputmode="numeric" id="end-cuit-${id}" placeholder="CUIT de a quién lo endosaste" style="font-size:12px; padding:5px 8px; border:1px solid var(--hairline); border-radius:8px; width:210px; max-width:100%;">
+      <button class="btn btn-secondary" style="font-size:12px; padding:5px 10px; margin-left:4px;" onclick="guardarEndoso('${id}')">Guardar</button>
+    </div>
+  </div>`;
+}
+async function guardarEstadoCheque(id, cambios){
+  try {
+    const { error } = await supabaseClient.from("consultas")
+      .update({ ...cambios, estado_fecha: new Date().toISOString() })
+      .eq("id", id).eq("usuario_id", state.user.id);
+    if (error) throw error;
+    mostrarToast("Estado del cheque actualizado");
+    renderCalendario();
+  } catch (e){
+    console.warn("[OpenCheck Score] Error guardando estado del cheque:", e.message);
+    mostrarToast("No pudimos guardar el cambio, probá de nuevo.");
+    renderCalendario();
+  }
+}
+function cambiarEstadoCheque(id, sel){
+  const v = sel.value;
+  const caja = document.getElementById("end-" + id);
+  if (v === "endosado"){ if (caja) caja.style.display = "block"; return; }
+  if (caja) caja.style.display = "none";
+  if (v === "") return guardarEstadoCheque(id, { estado_cheque: null, endosado_cuit: null, resultado_real: null });
+  if (v === "depositado") return guardarEstadoCheque(id, { estado_cheque: "depositado", endosado_cuit: null, resultado_real: null });
+  if (v === "cobrado") return guardarEstadoCheque(id, { estado_cheque: "cobrado", resultado_real: "pagado", resultado_real_fuente: "usuario_app" });
+  if (v === "rechazado") return guardarEstadoCheque(id, { estado_cheque: "rechazado", resultado_real: "rechazado", resultado_real_fuente: "usuario_app" });
+}
+function guardarEndoso(id){
+  const cuit = limpiarCuit((document.getElementById("end-cuit-" + id) || {}).value);
+  if (cuit.length !== 11){ mostrarToast("Ingresá un CUIT de 11 dígitos."); return; }
+  guardarEstadoCheque(id, { estado_cheque: "endosado", endosado_cuit: cuit, resultado_real: null });
+}
+
 async function renderCalendario(){
   const cont = document.getElementById("alertas-content");
   cont.innerHTML = `<div class="empty-state"><p>Armando tu calendario…</p></div>`;
   const desde = new Date(Date.now() - 365 * 86400000).toISOString();
   const [rCh, rMov] = await Promise.all([
     supabaseClient.from("consultas")
-      .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real")
+      .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real, estado_cheque, endosado_cuit")
       .eq("usuario_id", state.user.id).not("numero_cheque_consultado", "is", null).is("resultado_real", null)
       .gte("creado_en", desde).limit(2000),
     supabaseClient.from("movimientos").select("*").eq("usuario_id", state.user.id).limit(5000)
@@ -5311,12 +5354,14 @@ async function renderCalendario(){
   const fechaDe = (iso) => new Date(iso + "T00:00:00");
   const items = [];
   let chequesSinFecha = 0, chequesSinMonto = 0;
+  const endosados = [];
   for (const c of (rCh.data || [])){
     if (c.cheque_denunciado === true) continue;
+    if (c.estado_cheque === "endosado"){ endosados.push(c); continue; }
     if (!c.fecha_vencimiento_cheque){ chequesSinFecha++; continue; }
     if (!(Number(c.monto_cheque) > 0)){ chequesSinMonto++; continue; }
     items.push({
-      tipo: "cheque", f: fechaDe(c.fecha_vencimiento_cheque), monto: Number(c.monto_cheque),
+      tipo: "cheque", id: c.id, estado: c.estado_cheque || "", f: fechaDe(c.fecha_vencimiento_cheque), monto: Number(c.monto_cheque),
       titulo: c.razon_social || c.cuit_consultado,
       detalle: `Cheque N° ${c.numero_cheque_consultado}${c.categoria ? " · " + c.categoria : ""}${c.cliente_id && nombreCliente[c.cliente_id] ? " · cliente " + nombreCliente[c.cliente_id] : ""}`
     });
@@ -5332,7 +5377,7 @@ async function renderCalendario(){
       });
     }
   }
-  if (!items.length){
+  if (!items.length && !endosados.length){
     cont.innerHTML = `<div class="empty-state" style="padding:40px 20px;"><div class="ico">🗓️</div><p>Todavía no hay cobros con fecha.<br>Cargá cheques con monto y vencimiento, o facturas con fecha de vencimiento, y los vas a ver acá ordenados por fecha.</p></div>`;
     return;
   }
@@ -5358,7 +5403,7 @@ async function renderCalendario(){
       <div class="ge-kpi"><b>${formatearPesos(prox30)}</b><span>a cobrar en 30 días</span></div>
       <div class="ge-kpi"><b>${formatearPesos(vencidos)}</b><span>vencido sin cobrar</span></div>
     </div>
-    ${vencidos > 0 ? `<div class="ge-aviso">Tenés cobros vencidos. Confirmá los cheques desde el Historial y reclamá las facturas.</div>` : ""}
+    ${vencidos > 0 ? `<div class="ge-aviso">Tenés cobros vencidos. Marcá el estado de cada cheque en su desplegable (cobrado, depositado, endosado o rechazado) y reclamá las facturas.</div>` : ""}
     ${grupos.map(g => {
       const lista = items.filter(g.f);
       if (!lista.length) return "";
@@ -5367,10 +5412,17 @@ async function renderCalendario(){
         lista.map(it => `
           <div class="cal-item ${g.cls || ""}">
             <div class="cal-fecha"><b>${it.f.getDate()}</b><span>${MES[it.f.getMonth()]}</span></div>
-            <div class="cal-cuerpo"><span class="cal-tipo ${it.tipo === "factura" ? "f" : ""}">${it.tipo === "factura" ? "FACTURA" : "CHEQUE"}</span>${escHtml(it.titulo)}<small>${escHtml(it.detalle)}</small></div>
+            <div class="cal-cuerpo"><span class="cal-tipo ${it.tipo === "factura" ? "f" : ""}">${it.tipo === "factura" ? "FACTURA" : "CHEQUE"}</span>${escHtml(it.titulo)}<small>${escHtml(it.detalle)}</small>${it.tipo === "cheque" ? selectorEstadoCheque(it.id, it.estado) : ""}</div>
             <div class="cal-monto">${formatearPesos(it.monto)}</div>
           </div>`).join("");
     }).join("")}
+    ${endosados.length ? `<div class="cal-grupo"><span>Endosados a terceros</span><b>${endosados.length}</b></div>` +
+      endosados.map(c => `
+        <div class="cal-item">
+          <div class="cal-fecha"><b>${c.fecha_vencimiento_cheque ? fechaDe(c.fecha_vencimiento_cheque).getDate() : "–"}</b><span>${c.fecha_vencimiento_cheque ? MES[fechaDe(c.fecha_vencimiento_cheque).getMonth()] : ""}</span></div>
+          <div class="cal-cuerpo"><span class="cal-tipo">CHEQUE</span>${escHtml(c.razon_social || c.cuit_consultado)}<small>Cheque N° ${escHtml(c.numero_cheque_consultado)} · endosado a ${escHtml(formatearCuit(c.endosado_cuit || "") || "—")}</small>${selectorEstadoCheque(c.id, "endosado")}</div>
+          <div class="cal-monto">${Number(c.monto_cheque) > 0 ? formatearPesos(c.monto_cheque) : ""}</div>
+        </div>`).join("") : ""}
     ${notas.length ? `<div class="field-hint" style="margin-top:14px;">No aparecen en el calendario: ${notas.join("; ")}.</div>` : ""}
     <div class="field-hint" style="margin-top:10px;">Los pagos y notas de crédito de cada cliente se descuentan primero de sus facturas más antiguas.</div>`;
 }
@@ -5462,7 +5514,7 @@ async function renderCartera(){
   cont.innerHTML = `<div class="empty-state"><p>Calculando cartera…</p></div>`;
   const desde = new Date(Date.now() - 365 * 86400000).toISOString();
   const { data, error } = await supabaseClient.from("consultas")
-    .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real")
+    .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real, estado_cheque")
     .eq("usuario_id", state.user.id)
     .not("numero_cheque_consultado", "is", null)
     .is("resultado_real", null)
@@ -5474,7 +5526,7 @@ async function renderCartera(){
     cont.innerHTML = `<div class="empty-state"><p>No pudimos calcular tu cartera. Probá de nuevo en un rato.</p></div>`;
     return;
   }
-  const cheques = (data || []).filter(c => c.cheque_denunciado !== true);
+  const cheques = (data || []).filter(c => c.cheque_denunciado !== true && c.estado_cheque !== "endosado");
   if (!cheques.length){
     cont.innerHTML = `<div class="empty-state"><div class="ico">💼</div><p>Todavía no tenés cheques en cartera.<br>Cuando consultes un CUIT cargando número de cheque, fecha de vencimiento y monto, aparece acá.</p></div>`;
     return;
