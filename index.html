@@ -1109,9 +1109,35 @@
       </div>
 
       <button class="btn btn-primary" id="btn-login" onclick="iniciarSesion()">Entrar</button>
-      <div class="link-line" style="justify-content:center; margin-top:14px;" onclick="irA('registro')">
+      <div class="link-line" style="justify-content:center; margin-top:14px;" onclick="recuperarClave()">
+        <span>¿Olvidaste tu contraseña? <b>Recuperarla</b></span>
+      </div>
+      <div class="link-line" style="justify-content:center; margin-top:10px;" onclick="irA('registro')">
         <span>¿No tenés cuenta? <b>Registrate</b></span>
       </div>
+    </div>
+  </div>
+
+  <!-- ===================== NUEVA CONTRASEÑA (recuperación) ===================== -->
+  <div class="screen" id="screen-nueva-clave">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div class="brand-name">Open<span>Check</span></div>
+      </div>
+    </div>
+    <div class="content">
+      <h1 class="page-title">Nueva contraseña</h1>
+      <p class="page-sub">Elegí una contraseña nueva para tu cuenta.</p>
+      <div class="field">
+        <label class="field-label">Contraseña nueva</label>
+        <input type="password" id="nueva-clave-1" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="field">
+        <label class="field-label">Repetí la contraseña</label>
+        <input type="password" id="nueva-clave-2" placeholder="Repetila">
+      </div>
+      <button class="btn btn-primary" id="btn-nueva-clave" onclick="guardarNuevaClave()">Guardar contraseña</button>
     </div>
   </div>
 
@@ -3644,7 +3670,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-22-v26-estados-de-cheque";
+const VERSION_APP = "2026-10-22-v28-email-duplicado";
 
 const state = {
   user: null,
@@ -3853,11 +3879,23 @@ btnRegistrar.addEventListener("click", async () => {
       // contraseña que acaba de tipear, y si no tiene perfil, se lo
       // creamos ahora en vez de dejarlo trabado.
       const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (loginError) throw new Error("Ese email ya está registrado, pero con otra contraseña. Iniciá sesión normalmente o usá otro email.");
+      if (loginError) throw new Error("Ese email ya tiene una cuenta. Iniciá sesión, o tocá “Recuperarla” si no recordás la contraseña.");
+      // Si ese usuario ya tiene perfil, es una cuenta real: no se "registra" de nuevo.
+      const perfilExistente = await obtenerPerfilUsuario();
+      if (perfilExistente){
+        await supabaseClient.auth.signOut();
+        throw new Error("Ese email ya tiene una cuenta. Iniciá sesión, o tocá “Recuperarla” si no recordás la contraseña.");
+      }
       authData = { user: loginData.user, session: loginData.session };
       authError = null;
     } else if (authError){
       throw authError;
+    }
+
+    // Con "Confirm email" activado, Supabase no da error si el mail ya existe:
+    // devuelve un usuario sin identidades. Lo detectamos y avisamos.
+    if (authData && authData.user && Array.isArray(authData.user.identities) && authData.user.identities.length === 0){
+      throw new Error("Ese email ya tiene una cuenta. Iniciá sesión, o tocá “Recuperarla” si no recordás la contraseña.");
     }
 
     if (!authData.session){
@@ -3972,6 +4010,57 @@ async function iniciarSesion(){
     btn.textContent = "Entrar";
   }
 }
+
+/* ---- Recuperar contraseña ---- */
+async function recuperarClave(){
+  const email = (document.getElementById("login-email").value || "").trim();
+  if (!email){
+    mostrarToast("Escribí tu email arriba y volvé a tocar “Recuperarla”.");
+    return;
+  }
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: "https://opencheck.pro/" });
+    if (error) throw error;
+    // Mismo mensaje exista o no la cuenta (no revelamos qué mails están registrados).
+    mostrarToast("Si ese email tiene cuenta, te enviamos un enlace para elegir una contraseña nueva. Revisá también el spam.");
+  } catch (e){
+    console.warn("[OpenCheck Score] Error pidiendo recuperación:", e.message);
+    mostrarToast("No pudimos enviar el mail ahora. Probá de nuevo en unos minutos.");
+  }
+}
+async function guardarNuevaClave(){
+  const a = document.getElementById("nueva-clave-1").value;
+  const b = document.getElementById("nueva-clave-2").value;
+  if (a.length < 6){ mostrarToast("La contraseña debe tener al menos 6 caracteres."); return; }
+  if (a !== b){ mostrarToast("Las contraseñas no coinciden."); return; }
+  const btn = document.getElementById("btn-nueva-clave");
+  btn.disabled = true; btn.textContent = "Guardando…";
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: a });
+    if (error) throw error;
+    try { history.replaceState(null, "", window.location.pathname); } catch (e) {}
+    const perfil = await obtenerPerfilUsuario();
+    if (perfil){
+      state.user = perfil;
+      document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
+      mostrarToast("Contraseña actualizada. ¡Ya estás adentro!");
+      irA("home");
+      verificarConfirmacionesPendientes();
+      actualizarBadgeAlertas();
+    } else {
+      mostrarToast("Contraseña actualizada. Iniciá sesión.");
+      irA("login");
+    }
+  } catch (e){
+    mostrarToast("No pudimos guardar la contraseña: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Guardar contraseña";
+  }
+}
+// Cuando la persona vuelve desde el mail de recuperación, Supabase avisa con este evento.
+supabaseClient.auth.onAuthStateChange((evento) => {
+  if (evento === "PASSWORD_RECOVERY") irA("nueva-clave");
+});
 
 /* ---- Solicitar plan Premium ---- */
 async function solicitarPlanPremium(){
