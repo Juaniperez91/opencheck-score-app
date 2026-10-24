@@ -905,6 +905,7 @@
               <button class="btn btn-primary" id="btn-institucional-principal" onclick="irA('login')" style="width:100%; margin-bottom:12px;">Iniciar sesión</button>
               <button class="btn btn-secondary" id="btn-institucional-registro" onclick="irA('registro')" style="width:100%;">Crear cuenta</button>
               <a href="https://play.google.com/store/apps/details?id=com.opencheckscore.app" target="_blank" rel="noopener" style="display:block; text-align:center; margin-top:14px; font-size:12.5px; color:var(--ink-soft); text-decoration:underline;">¿Usás Android? Descargá la app en Google Play</a>
+              <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin:10px 0 0; line-height:1.4;">OpenCheck es un servicio privado e independiente. No es una app oficial ni representa a ningún organismo del Estado.</p>
             </div>
           </div>
         </div>
@@ -936,8 +937,9 @@
 
           <div class="institucional-panel" data-panel="datos">
             <ul class="institucional-bullets">
-              <li>Todo sale de fuentes <b>públicas</b>: BCRA y ARCA.</li>
-              <li>Nada de informes comerciales de terceros — solo información oficial, verificable y trazable.</li>
+              <li>Todo sale de fuentes <b>públicas</b>: BCRA, ARCA e INDEC. Podés verificarlas en: <a href="https://www.bcra.gob.ar" target="_blank" rel="noopener">bcra.gob.ar</a> · <a href="https://www.arca.gob.ar" target="_blank" rel="noopener">arca.gob.ar</a> · <a href="https://www.indec.gob.ar" target="_blank" rel="noopener">indec.gob.ar</a> · <a href="https://datos.gob.ar" target="_blank" rel="noopener">datos.gob.ar</a>.</li>
+              <li>Nada de informes comerciales de terceros — solo información pública, verificable y trazable.</li>
+              <li><b>OpenCheck es un servicio privado e independiente: no es una aplicación oficial ni representa al BCRA, a ARCA, al INDEC ni a ningún organismo del Estado.</b></li>
               <li>La misma fuente de información para cada consulta, sin excepciones.</li>
             </ul>
           </div>
@@ -3670,7 +3672,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-22-v28-email-duplicado";
+const VERSION_APP = "2026-10-24-v29-aviso-no-oficial";
 
 const state = {
   user: null,
@@ -6169,7 +6171,8 @@ function renderCuenta(){
         <button class="btn btn-primary" style="background:var(--ink);">Panel de Admin</button>
       </a>
     ` : ""}
-    <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:24px;">Versión ${VERSION_APP}</p>
+    <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:24px; line-height:1.45;">OpenCheck es un servicio privado e independiente: no es una aplicación oficial ni representa al BCRA, ARCA, INDEC ni a ningún organismo del Estado. Fuentes: <a href="https://www.bcra.gob.ar" target="_blank" rel="noopener">bcra.gob.ar</a> · <a href="https://www.arca.gob.ar" target="_blank" rel="noopener">arca.gob.ar</a> · <a href="https://www.indec.gob.ar" target="_blank" rel="noopener">indec.gob.ar</a> · <a href="https://datos.gob.ar" target="_blank" rel="noopener">datos.gob.ar</a>.</p>
+    <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:8px;">Versión ${VERSION_APP}</p>
   `;
 }
 
