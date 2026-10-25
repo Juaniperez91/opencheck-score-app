@@ -3703,7 +3703,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-25-v36-aviso-spam";
+const VERSION_APP = "2026-10-25-v37-endoso-nombre";
 
 const state = {
   user: null,
@@ -5588,7 +5588,7 @@ function selectorEstadoCheque(id, estado){
       ${op("", "En cartera")}${op("depositado", "Depositado")}${op("endosado", "Endosado a…")}${op("cobrado", "Cobrado")}${op("rechazado", "Rechazado")}
     </select>
     <div id="end-${id}" style="display:none; margin-top:6px;">
-      <input type="text" inputmode="numeric" id="end-cuit-${id}" placeholder="CUIT de a quién lo endosaste" style="font-size:12px; padding:5px 8px; border:1px solid var(--hairline); border-radius:8px; width:210px; max-width:100%;">
+      <input type="text" id="end-cuit-${id}" maxlength="80" placeholder="A quién lo endosaste (nombre o CUIT)" style="font-size:12px; padding:5px 8px; border:1px solid var(--hairline); border-radius:8px; width:210px; max-width:100%;">
       <button class="btn btn-secondary" style="font-size:12px; padding:5px 10px; margin-left:4px;" onclick="guardarEndoso('${id}')">Guardar</button>
     </div>
   </div>`;
@@ -5612,15 +5612,24 @@ function cambiarEstadoCheque(id, sel){
   const caja = document.getElementById("end-" + id);
   if (v === "endosado"){ if (caja) caja.style.display = "block"; return; }
   if (caja) caja.style.display = "none";
-  if (v === "") return guardarEstadoCheque(id, { estado_cheque: null, endosado_cuit: null, resultado_real: null });
-  if (v === "depositado") return guardarEstadoCheque(id, { estado_cheque: "depositado", endosado_cuit: null, resultado_real: null });
+  if (v === "") return guardarEstadoCheque(id, { estado_cheque: null, endosado_cuit: null, endosado_nombre: null, resultado_real: null });
+  if (v === "depositado") return guardarEstadoCheque(id, { estado_cheque: "depositado", endosado_cuit: null, endosado_nombre: null, resultado_real: null });
   if (v === "cobrado") return guardarEstadoCheque(id, { estado_cheque: "cobrado", resultado_real: "pagado", resultado_real_fuente: "usuario_app" });
   if (v === "rechazado") return guardarEstadoCheque(id, { estado_cheque: "rechazado", resultado_real: "rechazado", resultado_real_fuente: "usuario_app" });
 }
 function guardarEndoso(id){
-  const cuit = limpiarCuit((document.getElementById("end-cuit-" + id) || {}).value);
-  if (cuit.length !== 11){ mostrarToast("Ingresá un CUIT de 11 dígitos."); return; }
-  guardarEstadoCheque(id, { estado_cheque: "endosado", endosado_cuit: cuit, resultado_real: null });
+  // Acepta un CUIT (11 dígitos, con o sin guiones) o un nombre/alias en texto libre.
+  // El dato es solo informativo: no se consulta ni se vigila, así que no se exige CUIT.
+  const texto = String((document.getElementById("end-cuit-" + id) || {}).value || "").trim();
+  if (!texto){ mostrarToast("Escribí a quién lo endosaste (nombre o CUIT)."); return; }
+  const digitos = limpiarCuit(texto);
+  const esCuit = digitos.length === 11 && /^[\d\s.\-]+$/.test(texto);
+  guardarEstadoCheque(id, {
+    estado_cheque: "endosado",
+    endosado_cuit: esCuit ? digitos : null,
+    endosado_nombre: esCuit ? null : texto.slice(0, 80),
+    resultado_real: null
+  });
 }
 
 // ---- Llevar los vencimientos al calendario del usuario (Google, Outlook, teléfono) ----
@@ -5690,7 +5699,7 @@ async function renderCalendario(){
   const desde = new Date(Date.now() - 365 * 86400000).toISOString();
   const [rCh, rMov] = await Promise.all([
     supabaseClient.from("consultas")
-      .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real, estado_cheque, endosado_cuit")
+      .select("id, cuit_consultado, razon_social, categoria, numero_cheque_consultado, monto_cheque, fecha_vencimiento_cheque, cliente_id, cheque_denunciado, resultado_real, estado_cheque, endosado_cuit, endosado_nombre")
       .eq("usuario_id", state.user.id).not("numero_cheque_consultado", "is", null).is("resultado_real", null)
       .gte("creado_en", desde).limit(2000),
     supabaseClient.from("movimientos").select("*").eq("usuario_id", state.user.id).limit(5000)
@@ -5775,7 +5784,7 @@ async function renderCalendario(){
       endosados.map(c => `
         <div class="cal-item">
           <div class="cal-fecha"><b>${c.fecha_vencimiento_cheque ? fechaDe(c.fecha_vencimiento_cheque).getDate() : "–"}</b><span>${c.fecha_vencimiento_cheque ? MES[fechaDe(c.fecha_vencimiento_cheque).getMonth()] : ""}</span></div>
-          <div class="cal-cuerpo"><span class="cal-tipo">CHEQUE</span>${escHtml(c.razon_social || c.cuit_consultado)}<small>Cheque N° ${escHtml(c.numero_cheque_consultado)} · endosado a ${escHtml(formatearCuit(c.endosado_cuit || "") || "—")}</small>${selectorEstadoCheque(c.id, "endosado")}</div>
+          <div class="cal-cuerpo"><span class="cal-tipo">CHEQUE</span>${escHtml(c.razon_social || c.cuit_consultado)}<small>Cheque N° ${escHtml(c.numero_cheque_consultado)} · endosado a ${escHtml(c.endosado_nombre || formatearCuit(c.endosado_cuit || "") || "—")}</small>${selectorEstadoCheque(c.id, "endosado")}</div>
           <div class="cal-monto">${Number(c.monto_cheque) > 0 ? formatearPesos(c.monto_cheque) : ""}</div>
         </div>`).join("") : ""}
     ${notas.length ? `<div class="field-hint" style="margin-top:14px;">No aparecen en el calendario: ${notas.join("; ")}.</div>` : ""}
