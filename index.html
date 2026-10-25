@@ -782,6 +782,20 @@
     cursor:pointer; flex-shrink:0;
   }
   .camara-btn-capturar:active{background:var(--paper-2);}
+  /* Teléfono apaisado: la vista previa pasa a ser imagen + botones al costado,
+     así "Usar esta foto" nunca queda fuera de pantalla. */
+  @media (orientation:landscape){
+    #camara-preview{ flex-direction:row !important; }
+    #camara-preview-img{ min-width:0; height:100%; }
+    #camara-preview .camara-controles{
+      flex-direction:column; justify-content:center; align-items:stretch; gap:18px;
+      width:170px; flex-shrink:0;
+      padding:16px calc(16px + env(safe-area-inset-right)) 16px 16px;
+    }
+    #camara-preview .camara-controles > div{ display:none; }
+    #camara-preview .camara-btn-cancelar{ width:auto; text-align:center; padding:12px 0; }
+    .camara-controles{ padding-top:12px; padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
+  }
   .camara-btn-usar{
     background:var(--green); color:#fff; border:none; padding:12px 22px;
     border-radius:10px; font-family:'DM Sans',sans-serif; font-weight:700; font-size:14px; cursor:pointer;
@@ -1175,6 +1189,11 @@
         </div>
       </button>
 
+      <details id="ocr-debug" style="display:none; margin:-4px 0 14px; font-size:12px; color:var(--ink-soft);">
+        <summary style="cursor:pointer;">Ver qué leyó la cámara</summary>
+        <pre id="ocr-debug-texto" style="white-space:pre-wrap; word-break:break-word; margin:8px 0 0; padding:10px; background:var(--paper-2); border-radius:8px; font-size:11px; max-height:240px; overflow:auto;"></pre>
+      </details>
+
       <div class="field">
         <label class="field-label">CUIT del librador</label>
         <input type="text" class="mono" id="consulta-cuit" placeholder="30-70893479-4" maxlength="13">
@@ -1510,7 +1529,7 @@
     <video id="camara-video" autoplay playsinline muted></video>
     <div class="camara-overlay">
       <div class="camara-marco"></div>
-      <div class="camara-instrucciones">Sostené el teléfono normal (vertical), acercate bien al cheque, y encuadrá el cheque completo dentro del marco, con buena luz</div>
+      <div class="camara-instrucciones">Podés usar el teléfono horizontal o vertical. Acercate al cheque, encuadralo completo dentro del marco y sacalo con buena luz, sin sombras ni reflejos</div>
     </div>
     <div class="camara-controles">
       <button class="camara-btn-cancelar" onclick="cerrarCamaraCheque()">Cancelar</button>
@@ -3672,7 +3691,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-24-v29-aviso-no-oficial";
+const VERSION_APP = "2026-10-25-v33-calendario-externo";
 
 const state = {
   user: null,
@@ -4462,29 +4481,34 @@ function esCuitValido(cuit11){
 
 function extraerCuitDeTexto(texto){
   // Buscamos tokens que YA se ven como un bloque de ~11 dígitos en el
-  // texto original (con guiones/espacios internos opcionales, como los
-  // separadores típicos de un CUIT), en vez de concatenar TODO el texto
-  // en un solo string y deslizar una ventana — eso podía "armar" un CUIT
-  // que pase la validación matemática de pura casualidad, cruzando
-  // dígitos de números que no tienen nada que ver entre sí (sucursal,
-  // cuenta, monto, fecha...).
+  // texto original (con guiones/espacios internos opcionales), en vez de
+  // concatenar todo el texto y deslizar una ventana (eso podía "armar" un
+  // CUIT válido por casualidad con dígitos de números sin relación).
   //
-  // Devuelve {valor, confiable}: si encontramos uno que pasa el dígito
-  // verificador, va con confiable:true. Si no, pero hay un candidato de
-  // 11 dígitos que arranca con un prefijo real de CUIT (probablemente el
-  // OCR erró un solo dígito), lo devolvemos igual con confiable:false —
-  // mejor una sugerencia editable que dejar el campo vacío.
+  // Un cheque puede traer más de un CUIT válido (el del banco arriba, el
+  // del librador abajo, junto a la firma). Si hay varios: preferimos el de
+  // persona humana (20/23/24/27) y, si no, el ÚLTIMO del texto (el del
+  // librador suele estar al pie). Devuelve {valor, confiable, varios}.
+  // Si ninguno pasa el dígito verificador pero hay un candidato de 11
+  // dígitos con prefijo real de CUIT, lo devolvemos con confiable:false.
   const tokens = (texto || "").match(/\d[\d\-\s]{9,14}\d/g) || [];
+  const validos = [];
   let candidatoSinValidar = null;
   for (const token of tokens){
     const digitos = token.replace(/\D/g, "");
     if (digitos.length !== 11) continue;
-    if (esCuitValido(digitos)) return { valor: digitos, confiable: true };
-    if (!candidatoSinValidar && /^(20|23|24|25|26|27|30|33|34)/.test(digitos)){
+    if (esCuitValido(digitos)){
+      if (!validos.includes(digitos)) validos.push(digitos);
+    } else if (!candidatoSinValidar && /^(20|23|24|25|26|27|30|33|34)/.test(digitos)){
       candidatoSinValidar = digitos;
     }
   }
-  if (candidatoSinValidar) return { valor: candidatoSinValidar, confiable: false };
+  if (validos.length){
+    const humanas = validos.filter(c => /^(20|23|24|27)/.test(c));
+    const elegido = humanas.length ? humanas[humanas.length - 1] : validos[validos.length - 1];
+    return { valor: elegido, confiable: true, varios: validos.length > 1 };
+  }
+  if (candidatoSinValidar) return { valor: candidatoSinValidar, confiable: false, varios: false };
   return null;
 }
 
@@ -4492,11 +4516,26 @@ function extraerCuitDeTexto(texto){
 // del CUIT ya encontrado. Es mucho menos confiable que el CUIT (no hay
 // forma de validarlo matemáticamente), así que queda como sugerencia.
 function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
-  const candidatos = (texto || "").match(/\b\d{6,8}\b/g) || [];
-  for (const c of candidatos){
-    if (!cuitEncontrado || !cuitEncontrado.includes(c)) return c.padStart(8, "0");
-  }
-  return null;
+  // 1) Si hay un rótulo ("N°", "Nº", "Nro", "Número") seguido de 6-8 dígitos, es lo más seguro.
+  const rotulado = (texto || "").match(/(?:n[°º˚o]\.?|nro\.?|n[uú]mero)\s*:?\s*(\d{6,8})\b/i);
+  if (rotulado && (!cuitEncontrado || !cuitEncontrado.includes(rotulado[1]))) return rotulado[1].padStart(8, "0");
+  // 2) Si no, un grupo aislado de 6 a 8 dígitos (los números de cheque suelen
+  //    tener 8). Descartamos los pegados a puntos/comas/$ (montos y fechas).
+  const candidatos = ((texto || "").match(/(?<![\d.,$\/\-])\d{6,8}(?![\d.,\/\-])/g) || [])
+    .filter(c => !cuitEncontrado || !cuitEncontrado.includes(c));
+  const ocho = candidatos.find(c => c.length === 8);
+  const elegido = ocho || candidatos[0];
+  return elegido ? elegido.padStart(8, "0") : null;
+}
+
+// Monto: solo si viene precedido de "$" (así no lo confundimos con otros
+// números del cheque). Devuelve un texto listo para el campo, ej. "1.250.000".
+function extraerMontoDeTexto(texto){
+  const m = (texto || "").match(/\$\s*(\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?|\d{4,12}(?:,\d{1,2})?)/);
+  if (!m) return null;
+  const n = parseMontoAR(m[1].replace(/\s/g, "."));
+  if (!n || n < 100) return null;
+  return Math.round(n).toLocaleString("es-AR");
 }
 
 // Busca el nombre/alias del banco impreso en el cheque (suele estar en
@@ -4594,38 +4633,84 @@ function calcularUmbralOtsu(histograma, totalPixeles){
   return umbral;
 }
 
-async function preprocesarImagenCheque(archivo){
+// Preparación de la imagen para el OCR. Probamos varias versiones porque
+// ninguna sirve para todas las fotos: con luz despareja (sombra de la
+// mano, brillo) un solo umbral rompe el texto.
+//   "tinta"      : usa el canal más claro de cada punto, para borrar el fondo de color del cheque
+//   "gris"       : escala de grises con contraste estirado (sin blanco y negro)
+//   "otsu"       : blanco y negro con un umbral global
+//   "adaptativo" : blanco y negro con umbral local (compara cada punto con
+//                  su entorno), el que mejor aguanta sombras y brillos
+async function preprocesarImagenCheque(archivo, modo){
+  modo = modo || "otsu";
   const bitmap = await createImageBitmap(archivo);
-  const escala = Math.min(2.5, Math.max(1, 1800 / Math.max(bitmap.width, bitmap.height)));
+  const escala = Math.min(2.5, Math.max(1, 1500 / Math.max(bitmap.width, bitmap.height)));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * escala);
   canvas.height = Math.round(bitmap.height * escala);
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
 
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const W = canvas.width, H = canvas.height;
+  const imgData = ctx.getImageData(0, 0, W, H);
   const datos = imgData.data;
-  const totalPixeles = canvas.width * canvas.height;
+  const total = W * H;
 
-  // Escala de grises + histograma en un solo recorrido
-  const grises = new Uint8ClampedArray(totalPixeles);
+  const grises = new Uint8ClampedArray(total);
   const histograma = new Array(256).fill(0);
   for (let i = 0, p = 0; i < datos.length; i += 4, p++){
-    const g = Math.round(0.299*datos[i] + 0.587*datos[i+1] + 0.114*datos[i+2]);
+    // "tinta": usamos el canal MÁS CLARO de cada punto (max de R, G, B). La
+    // tinta oscura queda oscura en los tres canales, pero el dibujo de seguridad
+    // de colores claros se vuelve casi blanco y desaparece.
+    const g = (modo === "tinta")
+      ? Math.max(datos[i], datos[i+1], datos[i+2])
+      : Math.round(0.299*datos[i] + 0.587*datos[i+1] + 0.114*datos[i+2]);
     grises[p] = g;
     histograma[g]++;
   }
 
-  const umbral = calcularUmbralOtsu(histograma, totalPixeles);
+  let salida = new Uint8ClampedArray(total);
 
-  // Binarización: blanco y negro puro, como un documento escaneado —
-  // esto es lo que de verdad mejora la lectura, más que solo contraste.
+  if (modo === "gris" || modo === "tinta"){
+    // Estiramos el contraste entre el percentil 2 y el 98
+    let acum = 0, lo = 0, hi = 255;
+    for (let t = 0; t < 256; t++){ acum += histograma[t]; if (acum >= total * 0.02){ lo = t; break; } }
+    acum = 0;
+    for (let t = 255; t >= 0; t--){ acum += histograma[t]; if (acum >= total * 0.02){ hi = t; break; } }
+    const rango = Math.max(1, hi - lo);
+    for (let p = 0; p < total; p++) salida[p] = Math.max(0, Math.min(255, Math.round((grises[p] - lo) * 255 / rango)));
+  } else if (modo === "adaptativo"){
+    // Imagen integral para obtener el promedio local en tiempo constante
+    const ancho = W + 1;
+    const integral = new Float64Array(ancho * (H + 1));
+    for (let y = 0; y < H; y++){
+      let fila = 0;
+      for (let x = 0; x < W; x++){
+        fila += grises[y * W + x];
+        integral[(y + 1) * ancho + (x + 1)] = integral[y * ancho + (x + 1)] + fila;
+      }
+    }
+    const r = Math.max(12, Math.round(Math.min(W, H) / 14));   // radio de la ventana
+    for (let y = 0; y < H; y++){
+      const y0 = Math.max(0, y - r), y1 = Math.min(H - 1, y + r);
+      for (let x = 0; x < W; x++){
+        const x0 = Math.max(0, x - r), x1 = Math.min(W - 1, x + r);
+        const area = (x1 - x0 + 1) * (y1 - y0 + 1);
+        const suma = integral[(y1 + 1) * ancho + (x1 + 1)] - integral[y0 * ancho + (x1 + 1)]
+                   - integral[(y1 + 1) * ancho + x0] + integral[y0 * ancho + x0];
+        const media = suma / area;
+        salida[y * W + x] = grises[y * W + x] < media * 0.88 ? 0 : 255;
+      }
+    }
+  } else {
+    const umbral = calcularUmbralOtsu(histograma, total);
+    for (let p = 0; p < total; p++) salida[p] = grises[p] > umbral ? 255 : 0;
+  }
+
   for (let i = 0, p = 0; i < datos.length; i += 4, p++){
-    const v = grises[p] > umbral ? 255 : 0;
-    datos[i] = datos[i+1] = datos[i+2] = v;
+    datos[i] = datos[i+1] = datos[i+2] = salida[p];
   }
   ctx.putImageData(imgData, 0, 0);
-
   return new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.95));
 }
 
@@ -4647,6 +4732,7 @@ async function abrirCamaraCheque(){
     document.getElementById("camara-modal").style.display = "flex";
   } catch (e){
     console.warn("[OpenCheck Score] No se pudo abrir la cámara en vivo:", e.message);
+    mostrarToast("No pudimos abrir la cámara con marco. Se abre la cámara común: sacá el cheque horizontal, de cerca y con buena luz.");
     document.getElementById("ocr-file-input").click();
   }
 }
@@ -4666,15 +4752,38 @@ let fotoCapturadaBlob = null;
 function capturarFotoCheque(){
   const video = document.getElementById("camara-video");
   const canvas = document.getElementById("camara-canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+  const vw = video.videoWidth, vh = video.videoHeight;
+
+  // Recortamos al recuadro de la pantalla: así el OCR lee solo el cheque
+  // (sin mesa, fondo ni sombras). El video se ve con object-fit:cover, así
+  // que pasamos las coordenadas del recuadro a coordenadas del video real.
+  let sx = 0, sy = 0, sw = vw, sh = vh;
+  try {
+    const rv = video.getBoundingClientRect();
+    const rm = document.querySelector(".camara-marco").getBoundingClientRect();
+    const k = Math.max(rv.width / vw, rv.height / vh);          // escala del cover
+    const offX = (vw * k - rv.width) / 2, offY = (vh * k - rv.height) / 2;
+    const margenX = rm.width * 0.03, margenY = rm.height * 0.05;  // un poco de aire
+    sx = (rm.left - rv.left - margenX + offX) / k;
+    sy = (rm.top - rv.top - margenY + offY) / k;
+    sw = (rm.width + margenX * 2) / k;
+    sh = (rm.height + margenY * 2) / k;
+    sx = Math.max(0, sx); sy = Math.max(0, sy);
+    sw = Math.min(vw - sx, sw); sh = Math.min(vh - sy, sh);
+    if (!(sw > 50 && sh > 50)) throw new Error("recorte inválido");
+  } catch (e){
+    console.warn("[OpenCheck Score] No se pudo recortar al marco, uso el cuadro completo:", e.message);
+    sx = 0; sy = 0; sw = vw; sh = vh;
+  }
+  canvas.width = Math.round(sw);
+  canvas.height = Math.round(sh);
+  canvas.getContext("2d").drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
   canvas.toBlob((blob) => {
     fotoCapturadaBlob = blob;
     document.getElementById("camara-preview-img").src = URL.createObjectURL(blob);
     document.getElementById("camara-preview").style.display = "flex";
-  }, "image/jpeg", 0.92);
+  }, "image/jpeg", 0.95);
 }
 
 function volverASacarFoto(){
@@ -4700,39 +4809,89 @@ async function procesarFotoCheque(archivo){
   label.textContent = "Leyendo el cheque…";
   mostrarToast("Analizando la foto, puede tardar unos segundos…");
 
+  let worker = null, workerDigitos = null;
   try {
-    let imagenParaOCR = archivo;
-    try {
-      imagenParaOCR = await preprocesarImagenCheque(archivo);
-    } catch (e){
-      console.warn("[OpenCheck Score] No se pudo preprocesar la imagen, uso la original:", e.message);
+    worker = await Tesseract.createWorker("spa");
+
+    // Varias pasadas con distinto tratamiento de la imagen; cortamos en
+    // cuanto tenemos CUIT confirmado, número y banco.
+    const modos = ["tinta", "gris", "adaptativo"];
+    let cuit = null, numero = null, fecha = null, banco = null, monto = null, varios = false;
+    const textosLeidos = [];
+    const imagenes = {};
+
+    for (let n = 0; n < modos.length; n++){
+      const modo = modos[n];
+      label.textContent = `Leyendo el cheque… (${n + 1}/${modos.length})`;
+      let img = archivo;
+      try { img = await preprocesarImagenCheque(archivo, modo); }
+      catch (e){ console.warn("[OpenCheck Score] No se pudo preprocesar (" + modo + "):", e.message); }
+      imagenes[modo] = img;
+
+      const r = await worker.recognize(img);
+      const texto = (r && r.data && r.data.text) || "";
+      console.info("[OpenCheck Score] Texto OCR crudo (" + modo + "):", texto);
+      textosLeidos.push("— pasada " + modo + " —\n" + texto.trim());
+
+      const c = extraerCuitDeTexto(texto);
+      if (c && (!cuit || (c.confiable && !cuit.confiable))){ cuit = c; varios = !!c.varios; }
+      if (!numero) numero = extraerNumeroChequeDeTexto(texto, cuit ? cuit.valor : null);
+      if (!fecha) fecha = extraerFechaDeTexto(texto);
+      if (!banco) banco = extraerBancoDeTexto(texto);
+      if (!monto) monto = extraerMontoDeTexto(texto);
+
+      // Con el CUIT confirmado cortamos: tras la primera pasada solo seguimos
+      // a una segunda si todavía falta número o banco.
+      if (cuit && cuit.confiable && ((numero && banco) || n >= 1)) break;
     }
 
-    const resultado = await Tesseract.recognize(imagenParaOCR, "spa", { logger: () => {} });
-    const texto = resultado.data.text || "";
-    console.info("[OpenCheck Score] Texto OCR crudo:", texto);
-
-    const cuit = extraerCuitDeTexto(texto);
-    const numeroEncontrado = extraerNumeroChequeDeTexto(texto, cuit ? cuit.valor : null);
-    const fechaEncontrada = extraerFechaDeTexto(texto);
-    const codigoBanco = extraerBancoDeTexto(texto);
+    // Pasada extra solo de dígitos, si todavía no hay un CUIT confirmado
+    if (!cuit || !cuit.confiable){
+      try {
+        label.textContent = "Leyendo el cheque… (CUIT)";
+        workerDigitos = await Tesseract.createWorker("spa");
+        await workerDigitos.setParameters({ tessedit_char_whitelist: "0123456789-/. ", tessedit_pageseg_mode: "11" });
+        for (const modo of ["tinta", "gris"]){
+          if (!imagenes[modo]) continue;
+          const r = await workerDigitos.recognize(imagenes[modo]);
+          const texto = (r && r.data && r.data.text) || "";
+          console.info("[OpenCheck Score] Texto OCR solo dígitos (" + modo + "):", texto);
+          textosLeidos.push("— solo dígitos " + modo + " —\n" + texto.trim());
+          const c = extraerCuitDeTexto(texto);
+          if (c && (!cuit || (c.confiable && !cuit.confiable))){ cuit = c; varios = !!c.varios; }
+          if (cuit && cuit.confiable) break;
+        }
+      } catch (e){
+        console.warn("[OpenCheck Score] Falló la pasada de dígitos:", e.message);
+      }
+    }
 
     if (cuit) setCuit(formatearCuit(cuit.valor));
-    if (numeroEncontrado) document.getElementById("consulta-numero-cheque").value = numeroEncontrado;
-    if (fechaEncontrada) document.getElementById("consulta-fecha-vencimiento").value = fechaEncontrada;
-    if (codigoBanco) document.getElementById("consulta-banco-cheque").value = codigoBanco;
+    if (numero) document.getElementById("consulta-numero-cheque").value = numero;
+    if (fecha) document.getElementById("consulta-fecha-vencimiento").value = fecha;
+    if (banco) document.getElementById("consulta-banco-cheque").value = banco;
+    if (monto) document.getElementById("consulta-monto-cheque").value = monto;
+
+    try {
+      document.getElementById("ocr-debug-texto").textContent = textosLeidos.join("\n\n");
+      document.getElementById("ocr-debug").style.display = "block";
+    } catch (e){}
 
     if (cuit && !cuit.confiable){
       mostrarToast("Encontramos un CUIT parecido pero no lo pudimos confirmar del todo — revisalo antes de consultar.");
-    } else if (cuit || numeroEncontrado || fechaEncontrada || codigoBanco){
+    } else if (cuit && varios){
+      mostrarToast("Había más de un CUIT en la foto: elegimos el del librador (el del pie). Revisalo antes de consultar.");
+    } else if (cuit || numero || fecha || banco || monto){
       mostrarToast("Revisá los datos leídos antes de consultar — el OCR no siempre acierta.");
     } else {
-      mostrarToast("No pudimos leer datos del cheque. Probá con más luz y bien encuadrado, o completá los campos a mano.");
+      mostrarToast("No pudimos leer datos del cheque. Probá con más luz, de cerca y con el cheque horizontal dentro del marco, o completá los campos a mano.");
     }
   } catch (e){
     console.warn("[OpenCheck Score] Falló el OCR:", e.message);
     mostrarToast("No pudimos procesar la foto. Completá los datos a mano.");
   } finally {
+    try { if (worker) await worker.terminate(); } catch (e){}
+    try { if (workerDigitos) await workerDigitos.terminate(); } catch (e){}
     btn.style.opacity = "1";
     btn.style.pointerEvents = "auto";
     label.textContent = "Sacar foto del cheque";
@@ -5420,6 +5579,67 @@ function guardarEndoso(id){
   guardarEstadoCheque(id, { estado_cheque: "endosado", endosado_cuit: cuit, resultado_real: null });
 }
 
+// ---- Llevar los vencimientos al calendario del usuario (Google, Outlook, teléfono) ----
+// Cada usuario Premium tiene un enlace privado (token aleatorio en usuarios.calendario_token)
+// que apunta a una función del servidor (calendario-ics) que arma el .ics con sus cheques abiertos.
+const URL_CALENDARIO_ICS = "https://opencheck-app.netlify.app/.netlify/functions/calendario-ics";
+
+function urlCalendarioUsuario(descarga){
+  const t = state.user && state.user.calendario_token;
+  if (!t) return "";
+  return URL_CALENDARIO_ICS + "?t=" + t + (descarga ? "&descarga=1" : "");
+}
+
+function bloqueCalendarioExterno(){
+  const tiene = !!(state.user && state.user.calendario_token);
+  const aviso = `<div class="field-hint" style="margin-top:8px;">El enlace es privado: quien lo tenga puede ver los vencimientos de tus cheques (librador y monto). No lo compartas. Si lo compartiste por error, generá uno nuevo y el anterior deja de funcionar.</div>`;
+  if (!tiene){
+    return `<div class="ge-aviso" style="margin-top:16px; background:var(--white);">
+      <b>Llevar mis cheques a mi calendario</b>
+      <div class="field-hint" style="margin:6px 0 10px;">Mirá los vencimientos de tus cheques abiertos en Google Calendar, Outlook o el calendario de tu teléfono, con aviso el día anterior.</div>
+      <button class="btn btn-secondary" onclick="crearEnlaceCalendario(false)">Crear mi enlace privado</button>
+    </div>`;
+  }
+  return `<div class="ge-aviso" style="margin-top:16px; background:var(--white);">
+    <b>Llevar mis cheques a mi calendario</b>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+      <a class="btn btn-secondary" style="text-align:center; text-decoration:none;" href="${urlCalendarioUsuario(true)}" target="_blank" rel="noopener">Descargar archivo (.ics) para importar una vez</a>
+      <button class="btn btn-secondary" onclick="copiarEnlaceCalendario()">Copiar enlace para suscribirme (se actualiza solo)</button>
+    </div>
+    <div class="field-hint" style="margin-top:10px;"><b>Google Calendar (en la computadora):</b> “Otros calendarios” (+) → “Desde URL” → pegá el enlace. Se actualiza cada varias horas: los cheques que marques como cobrados, endosados o rechazados salen, y los nuevos entran. Las suscripciones por enlace no traen avisos; con el archivo importado sí se agregan.</div>
+    <div class="field-hint" style="margin-top:6px;">Aparecen los cheques abiertos con fecha de vencimiento de hoy en adelante.</div>
+    ${aviso}
+    <button class="btn btn-secondary" style="margin-top:10px;" onclick="crearEnlaceCalendario(true)">Generar un enlace nuevo (anula el anterior)</button>
+  </div>`;
+}
+
+async function crearEnlaceCalendario(regenerar){
+  if (regenerar && !confirm("El enlace anterior dejará de funcionar y tendrás que volver a suscribirte. ¿Continuar?")) return;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const token = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  const { data, error } = await supabaseClient.from("usuarios")
+    .update({ calendario_token: token }).eq("id", state.user.id).select().single();
+  if (error){
+    console.warn("[OpenCheck Score] No se pudo crear el enlace de calendario:", error.message);
+    mostrarToast("No pudimos crear el enlace, probá de nuevo.");
+    return;
+  }
+  state.user = { ...state.user, calendario_token: data.calendario_token };
+  mostrarToast(regenerar ? "Enlace nuevo creado. El anterior ya no funciona." : "Enlace creado.");
+  renderCalendario();
+}
+
+async function copiarEnlaceCalendario(){
+  const url = urlCalendarioUsuario(false);
+  try {
+    await navigator.clipboard.writeText(url);
+    mostrarToast("Enlace copiado. Pegalo en tu calendario.");
+  } catch (e){
+    window.prompt("Copiá este enlace y pegalo en tu calendario:", url);
+  }
+}
+
 async function renderCalendario(){
   const cont = document.getElementById("alertas-content");
   cont.innerHTML = `<div class="empty-state"><p>Armando tu calendario…</p></div>`;
@@ -5515,7 +5735,8 @@ async function renderCalendario(){
           <div class="cal-monto">${Number(c.monto_cheque) > 0 ? formatearPesos(c.monto_cheque) : ""}</div>
         </div>`).join("") : ""}
     ${notas.length ? `<div class="field-hint" style="margin-top:14px;">No aparecen en el calendario: ${notas.join("; ")}.</div>` : ""}
-    <div class="field-hint" style="margin-top:10px;">Los pagos y notas de crédito de cada cliente se descuentan primero de sus facturas más antiguas.</div>`;
+    <div class="field-hint" style="margin-top:10px;">Los pagos y notas de crédito de cada cliente se descuentan primero de sus facturas más antiguas.</div>
+    ${bloqueCalendarioExterno()}`;
 }
 
 function renderGestion(){
