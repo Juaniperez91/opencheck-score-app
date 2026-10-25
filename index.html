@@ -168,6 +168,9 @@
   .cal-monto{ font-weight:700; font-size:13px; white-space:nowrap; }
   .cal-tipo{ display:inline-block; font-size:10px; font-weight:800; border-radius:6px; padding:1px 5px; margin-right:5px; background:#EEF3F8; color:var(--green-ink); }
   .cal-tipo.f{ background:#FFF3DC; color:#8A6A1F; }
+  .cal-endoso{ display:inline-block; margin-top:5px; padding:3px 9px; border-radius:8px; background:#E8F1FA; color:var(--green-ink); font-size:12.5px; }
+  .cal-endoso b{ font-weight:700; }
+  .cal-cambiar{ margin-left:8px; font-size:12px; color:var(--green); text-decoration:underline; cursor:pointer; }
 
   /* ---- Cuenta corriente ---- */
   .cc-card{ background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:14px; margin-bottom:14px; }
@@ -3703,7 +3706,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-25-v37-endoso-nombre";
+const VERSION_APP = "2026-10-25-v38-endoso-visible";
 
 const state = {
   user: null,
@@ -5581,17 +5584,26 @@ function facturasPendientes(movimientos){
 }
 
 /* ---- Estado del cheque desde la agenda ---- */
-function selectorEstadoCheque(id, estado){
-  const op = (v, t) => `<option value="${v}"${(estado || "") === v ? " selected" : ""}>${t}</option>`;
+function selectorEstadoCheque(id, estado, detalleEndoso){
+  const det = String(detalleEndoso || "");
+  const corto = det.length > 18 ? det.slice(0, 17) + "…" : det;
+  const op = (v, t) => `<option value="${v}"${(estado || "") === v ? " selected" : ""}>${escHtml(t)}</option>`;
+  const etiquetaEndoso = (estado === "endosado" && det) ? "Endosado a " + corto : "Endosado a…";
   return `<div style="margin-top:6px;">
-    <select class="select-estado-cheque" style="font-size:12px; padding:4px 6px; border:1px solid var(--hairline); border-radius:8px; background:#fff;" onchange="cambiarEstadoCheque('${id}', this)">
-      ${op("", "En cartera")}${op("depositado", "Depositado")}${op("endosado", "Endosado a…")}${op("cobrado", "Cobrado")}${op("rechazado", "Rechazado")}
-    </select>
+    <select class="select-estado-cheque" style="font-size:12px; padding:4px 6px; border:1px solid var(--hairline); border-radius:8px; background:#fff; max-width:100%;" onchange="cambiarEstadoCheque('${id}', this)">
+      ${op("", "En cartera")}${op("depositado", "Depositado")}${op("endosado", etiquetaEndoso)}${op("cobrado", "Cobrado")}${op("rechazado", "Rechazado")}
+    </select>${estado === "endosado" ? `<span class="cal-cambiar" onclick="editarEndoso('${id}')">Cambiar</span>` : ""}
     <div id="end-${id}" style="display:none; margin-top:6px;">
-      <input type="text" id="end-cuit-${id}" maxlength="80" placeholder="A quién lo endosaste (nombre o CUIT)" style="font-size:12px; padding:5px 8px; border:1px solid var(--hairline); border-radius:8px; width:210px; max-width:100%;">
+      <input type="text" id="end-cuit-${id}" maxlength="80" value="${escHtml(det)}" placeholder="A quién lo endosaste (nombre o CUIT)" style="font-size:12px; padding:5px 8px; border:1px solid var(--hairline); border-radius:8px; width:210px; max-width:100%;">
       <button class="btn btn-secondary" style="font-size:12px; padding:5px 10px; margin-left:4px;" onclick="guardarEndoso('${id}')">Guardar</button>
     </div>
   </div>`;
+}
+function editarEndoso(id){
+  const caja = document.getElementById("end-" + id);
+  if (caja) caja.style.display = "block";
+  const inp = document.getElementById("end-cuit-" + id);
+  if (inp){ inp.focus(); inp.select(); }
 }
 async function guardarEstadoCheque(id, cambios){
   try {
@@ -5784,7 +5796,7 @@ async function renderCalendario(){
       endosados.map(c => `
         <div class="cal-item">
           <div class="cal-fecha"><b>${c.fecha_vencimiento_cheque ? fechaDe(c.fecha_vencimiento_cheque).getDate() : "–"}</b><span>${c.fecha_vencimiento_cheque ? MES[fechaDe(c.fecha_vencimiento_cheque).getMonth()] : ""}</span></div>
-          <div class="cal-cuerpo"><span class="cal-tipo">CHEQUE</span>${escHtml(c.razon_social || c.cuit_consultado)}<small>Cheque N° ${escHtml(c.numero_cheque_consultado)} · endosado a ${escHtml(c.endosado_nombre || formatearCuit(c.endosado_cuit || "") || "—")}</small>${selectorEstadoCheque(c.id, "endosado")}</div>
+          <div class="cal-cuerpo"><span class="cal-tipo">CHEQUE</span>${escHtml(c.razon_social || c.cuit_consultado)}<small>Cheque N° ${escHtml(c.numero_cheque_consultado)}</small><div class="cal-endoso">Endosado a <b>${escHtml(c.endosado_nombre || formatearCuit(c.endosado_cuit || "") || "—")}</b></div>${selectorEstadoCheque(c.id, "endosado", c.endosado_nombre || formatearCuit(c.endosado_cuit || ""))}</div>
           <div class="cal-monto">${Number(c.monto_cheque) > 0 ? formatearPesos(c.monto_cheque) : ""}</div>
         </div>`).join("") : ""}
     ${notas.length ? `<div class="field-hint" style="margin-top:14px;">No aparecen en el calendario: ${notas.join("; ")}.</div>` : ""}
