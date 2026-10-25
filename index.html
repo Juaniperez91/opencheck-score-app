@@ -447,6 +447,10 @@
     display:block; margin:0 auto 3px; width:21px; height:21px;
   }
   .nav-item.active{color:var(--green-ink);}
+  /* La barra cambia según el plan: Premium ve "Calendario"; el plan gratuito ve "Historial". */
+  .nav-premium{display:none !important;}
+  body.plan-premium .nav-premium{display:block !important;}
+  body.plan-premium .nav-gratis{display:none !important;}
   .nav-badge{
     position:absolute; top:5px; right:calc(50% - 20px);
     width:8px; height:8px; border-radius:50%;
@@ -1242,10 +1246,11 @@
     </div>
     <div class="navbar">
       <div class="nav-item active" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
-      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
-      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
+      <div class="nav-item nav-gratis" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-premium" data-nav="calendario" onclick="irACalendario()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Calendario</div>
       <div class="nav-item" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
-      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-1" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="alertas" onclick="irAAlertas()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-1" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
 
@@ -1357,10 +1362,11 @@
     </div>
     <div class="navbar">
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
-      <div class="nav-item active" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
-      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
+      <div class="nav-item active nav-gratis" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-premium" data-nav="calendario" onclick="irACalendario()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Calendario</div>
       <div class="nav-item" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
-      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-2" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="alertas" onclick="irAAlertas()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-2" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
 
@@ -1375,10 +1381,11 @@
     <div class="content" id="cuenta-content"></div>
     <div class="navbar">
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
-      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
-      <div class="nav-item active" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
+      <div class="nav-item nav-gratis" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-premium" data-nav="calendario" onclick="irACalendario()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Calendario</div>
       <div class="nav-item active" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
-      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-3" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="alertas" onclick="irAAlertas()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-3" style="display:none;"></span></div>
+      <div class="nav-item active" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
 
@@ -1397,9 +1404,10 @@
     </div>
     <div class="navbar">
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
-      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-gratis" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-premium" data-nav="calendario" onclick="irACalendario()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Calendario</div>
       <div class="nav-item active" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
-      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-4" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="alertas" onclick="irAAlertas()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-4" style="display:none;"></span></div>
       <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
@@ -1409,22 +1417,22 @@
     <div class="topbar">
       <div class="brand" onclick="irA('institucional')" style="cursor:pointer;">
         <div class="brand-mark">OC</div>
-        <div class="brand-name">Alertas</div>
+        <div class="brand-name" id="alertas-titulo">Alertas</div>
       </div>
     </div>
     <div class="content">
-      <div class="ge-tabs">
+      <div class="ge-tabs" id="ge-tabs">
         <div class="ge-tab active" id="ge-tab-alertas" onclick="mostrarTabGestion('alertas')">Alertas<span class="ge-n" id="ge-tab-n" style="display:none;"></span></div>
         <div class="ge-tab" id="ge-tab-cartera" onclick="mostrarTabGestion('cartera')">Cartera</div>
-        <div class="ge-tab" id="ge-tab-calendario" onclick="mostrarTabGestion('calendario')">Calendario</div>
       </div>
       <div id="alertas-content"></div>
     </div>
     <div class="navbar">
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
-      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-gratis" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-premium" data-nav="calendario" onclick="irACalendario()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Calendario</div>
       <div class="nav-item" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
-      <div class="nav-item active" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-5" style="display:none;"></span></div>
+      <div class="nav-item active" data-nav="alertas" onclick="irAAlertas()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-5" style="display:none;"></span></div>
       <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
@@ -1438,9 +1446,10 @@
     <div class="content" id="cliente-detalle-content"></div>
     <div class="navbar">
       <div class="nav-item" data-nav="home" onclick="irA('home')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</div>
-      <div class="nav-item" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-gratis" data-nav="historial" onclick="irA('historial')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Historial<span class="nav-badge" id="nav-badge-historial" style="display:none;"></span></div>
+      <div class="nav-item nav-premium" data-nav="calendario" onclick="irACalendario()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Calendario</div>
       <div class="nav-item active" data-nav="clientes" onclick="irA('clientes')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 19c.2-2.4 1.7-4.2 4-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Clientes</div>
-      <div class="nav-item" data-nav="alertas" onclick="irA('alertas')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-6" style="display:none;"></span></div>
+      <div class="nav-item" data-nav="alertas" onclick="irAAlertas()"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15L6 17Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Alertas<span class="nav-badge" id="nav-badge-alertas-6" style="display:none;"></span></div>
       <div class="nav-item" data-nav="cuenta" onclick="irA('cuenta')"><svg class="nav-ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cuenta</div>
     </div>
   </div>
@@ -3691,7 +3700,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-25-v34-gestion-premium";
+const VERSION_APP = "2026-10-25-v35-barra-calendario";
 
 const state = {
   user: null,
@@ -3753,10 +3762,32 @@ function ocultarAvisoBCRA(){
 }
 
 /* ---- Navegación ---- */
+// La barra de abajo cambia según el plan: Premium ve "Calendario" (donde opera sus cobros
+// del día a día) y el plan gratuito ve "Historial". El historial sigue accesible para todos
+// desde la tarjeta "Ver historial de consultas" del Inicio.
+function aplicarNavPorPlan(){
+  document.body.classList.toggle("plan-premium", !!(state.user && (state.user.plan === "premium" || state.user.es_admin)));
+}
+function actualizarNavActivo(){
+  let clave = state.pantallaActual || "home";
+  if (clave === "alertas" && state.tabGestion === "calendario") clave = "calendario";
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.nav === clave));
+}
+function irAAlertas(){
+  if (state.tabGestion === "calendario") state.tabGestion = "alertas";
+  irA("alertas");
+}
+function irACalendario(){
+  state.tabGestion = "calendario";
+  irA("alertas");
+}
+
 function irA(pantalla){
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + pantalla).classList.add("active");
-  document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.nav === pantalla));
+  state.pantallaActual = pantalla;
+  aplicarNavPorPlan();
+  actualizarNavActivo();
   document.body.classList.toggle("pantalla-institucional", pantalla === "institucional");
   if (pantalla === "historial") renderHistorial();
   if (pantalla === "cuenta") renderCuenta();
@@ -5511,9 +5542,14 @@ function mostrarTabGestion(tab){
   // alcanza, se muestra el cartel de acceso en lugar del contenido.
   if (!esUsuarioPremium()){ renderGestion(); return; }
   state.tabGestion = tab;
+  const enCalendario = tab === "calendario";
   document.getElementById("ge-tab-alertas").classList.toggle("active", tab === "alertas");
   document.getElementById("ge-tab-cartera").classList.toggle("active", tab === "cartera");
-  document.getElementById("ge-tab-calendario").classList.toggle("active", tab === "calendario");
+  const barraTabs = document.getElementById("ge-tabs");
+  if (barraTabs) barraTabs.style.display = enCalendario ? "none" : "flex";
+  const titulo = document.getElementById("alertas-titulo");
+  if (titulo) titulo.textContent = enCalendario ? "Calendario" : "Alertas";
+  actualizarNavActivo();
   if (tab === "alertas") renderAlertas(); else if (tab === "calendario") renderCalendario(); else renderCartera();
 }
 
