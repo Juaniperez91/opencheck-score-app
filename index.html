@@ -1132,6 +1132,9 @@
       <div class="link-line" style="justify-content:center; margin-top:14px;" onclick="recuperarClave()">
         <span>¿Olvidaste tu contraseña? <b>Recuperarla</b></span>
       </div>
+      <div id="recuperar-aviso" style="display:none; margin-top:12px; padding:10px 12px; background:var(--white); border:1px solid var(--hairline); border-radius:10px; font-size:12.5px; color:var(--ink-soft); line-height:1.45;">
+        Si ese email tiene cuenta, te enviamos un enlace para elegir una contraseña nueva. <b>Revisá también la carpeta de spam o correo no deseado</b>: a veces el primer mail cae ahí (en Hotmail y Outlook pasa seguido). Si lo encontrás, marcalo como “No es spam”.
+      </div>
       <div class="link-line" style="justify-content:center; margin-top:10px;" onclick="irA('registro')">
         <span>¿No tenés cuenta? <b>Registrate</b></span>
       </div>
@@ -3700,7 +3703,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-25-v35-barra-calendario";
+const VERSION_APP = "2026-10-25-v36-aviso-spam";
 
 const state = {
   user: null,
@@ -4074,7 +4077,9 @@ async function recuperarClave(){
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: "https://opencheck.pro/" });
     if (error) throw error;
     // Mismo mensaje exista o no la cuenta (no revelamos qué mails están registrados).
-    mostrarToast("Si ese email tiene cuenta, te enviamos un enlace para elegir una contraseña nueva. Revisá también el spam.");
+    mostrarToast("Si ese email tiene cuenta, te enviamos un enlace. Revisá también la carpeta de spam.");
+    const aviso = document.getElementById("recuperar-aviso");
+    if (aviso) aviso.style.display = "block";
   } catch (e){
     console.warn("[OpenCheck Score] Error pidiendo recuperación:", e.message);
     mostrarToast("No pudimos enviar el mail ahora. Probá de nuevo en unos minutos.");
