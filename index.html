@@ -3691,7 +3691,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-25-v33-calendario-externo";
+const VERSION_APP = "2026-10-25-v34-gestion-premium";
 
 const state = {
   user: null,
@@ -5507,6 +5507,9 @@ async function actualizarBadgeAlertas(){
 }
 
 function mostrarTabGestion(tab){
+  // Las tres pestañas (Alertas, Cartera, Calendario) son Premium: si el plan no
+  // alcanza, se muestra el cartel de acceso en lugar del contenido.
+  if (!esUsuarioPremium()){ renderGestion(); return; }
   state.tabGestion = tab;
   document.getElementById("ge-tab-alertas").classList.toggle("active", tab === "alertas");
   document.getElementById("ge-tab-cartera").classList.toggle("active", tab === "cartera");
@@ -5749,7 +5752,7 @@ function renderGestion(){
     cont.innerHTML = `
       <div class="empty-state">
         <div class="ico">⭐</div>
-        <p>Las alertas y el panel de cartera son funciones Premium.<br>Con Premium te avisamos cuando un librador de tus cheques tiene un cheque rechazado nuevo, cuando empeora su situación en el BCRA o cuando uno de tus cheques figura denunciado. Y ves cuánto dinero tenés en cheques, por categoría y por librador.</p>
+        <p>Las alertas, el panel de cartera y el calendario de cobranzas son funciones Premium.<br>Con Premium te avisamos cuando un librador de tus cheques tiene un cheque rechazado nuevo, cuando empeora su situación en el BCRA o cuando uno de tus cheques figura denunciado. Y ves cuánto dinero tenés en cheques, por categoría y por librador.</p>
         <button class="btn btn-primary" style="margin-top:14px;" onclick="solicitarPlanPremium()">Solicitar acceso</button>
       </div>`;
     return;
