@@ -1552,7 +1552,7 @@
       <div style="width:64px;"></div>
     </div>
 
-    <div id="camara-preview" style="display:none; position:absolute; inset:0; background:#000; flex-direction:column;">
+    <div id="camara-preview" style="display:none; position:absolute; inset:0; z-index:5; background:#000; flex-direction:column;">
       <img id="camara-preview-img" style="flex:1; width:100%; object-fit:contain; background:#000;">
       <div class="camara-controles">
         <button class="camara-btn-cancelar" onclick="volverASacarFoto()">Volver a sacar</button>
@@ -3706,7 +3706,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-25-v38-endoso-visible";
+const VERSION_APP = "2026-10-26-v41-lectura-paralela";
 
 const state = {
   user: null,
@@ -4542,6 +4542,12 @@ function extraerCuitDeTexto(texto){
       candidatoSinValidar = digitos;
     }
   }
+  // En muchos cheques el CUIT del librador va rotulado "CT" / "CUIT".
+  const rotulado = (texto || "").match(/\b(?:CT|CUIT|C\.U\.I\.T\.?)\s*:?\s*(\d{2}[\-\s]?\d{8}[\-\s]?\d)\b/i);
+  if (rotulado){
+    const d = rotulado[1].replace(/\D/g, "");
+    if (esCuitValido(d)) return { valor: d, confiable: true, varios: false };
+  }
   if (validos.length){
     const humanas = validos.filter(c => /^(20|23|24|27)/.test(c));
     const elegido = humanas.length ? humanas[humanas.length - 1] : validos[validos.length - 1];
@@ -4549,6 +4555,15 @@ function extraerCuitDeTexto(texto){
   }
   if (candidatoSinValidar) return { valor: candidatoSinValidar, confiable: false, varios: false };
   return null;
+}
+
+// Cuenta los grupos aislados de 8 dígitos (posibles números de cheque) de
+// una lectura; el que más se repite entre pasadas suele ser el correcto.
+function votarNumeroCheque(texto, votos){
+  const grupos = (texto || "").match(/(?<![\d.,$\/\-])\d{8}(?![\d.,\/\-])/g) || [];
+  for (const g of grupos){
+    votos.set(g, (votos.get(g) || 0) + 1);
+  }
 }
 
 // Best-effort: busca un grupo de 6 a 8 dígitos aislado que no sea parte
@@ -4570,7 +4585,7 @@ function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
 // Monto: solo si viene precedido de "$" (así no lo confundimos con otros
 // números del cheque). Devuelve un texto listo para el campo, ej. "1.250.000".
 function extraerMontoDeTexto(texto){
-  const m = (texto || "").match(/\$\s*(\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?|\d{4,12}(?:,\d{1,2})?)/);
+  const m = (texto || "").match(/[$sS5][\s|\[\]!:=\-_>.]{0,3}(\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?|\d{4,12}(?:,\d{1,2})?)/);
   if (!m) return null;
   const n = parseMontoAR(m[1].replace(/\s/g, "."));
   if (!n || n < 100) return null;
@@ -4631,11 +4646,36 @@ function extraerFechaDeTexto(texto){
     }
   }
 
-  const textual = (texto || "").toLowerCase().match(/(\d{1,2})\s+de\s+([a-zñ]+)\s+de\s+(\d{4})/);
-  if (textual){
-    const mm = meses[textual[2]];
-    if (mm) return `${textual[3]}-${String(mm).padStart(2,"0")}-${textual[1].padStart(2,"0")}`;
+  // Fecha escrita a mano ("22 de Octubre de 2026"): el OCR suele deformar el
+  // mes, así que comparamos con tolerancia. Si hay dos fechas (emisión y
+  // pago en un cheque diferido), usamos la más tardía = vencimiento.
+  const dist = (a, b) => {
+    const m = a.length, n = b.length; if (Math.abs(m - n) > 2) return 9;
+    let prev = Array.from({length: n + 1}, (_, k) => k);
+    for (let i = 1; i <= m; i++){
+      const cur = [i];
+      for (let k = 1; k <= n; k++) cur[k] = Math.min(prev[k] + 1, cur[k - 1] + 1, prev[k - 1] + (a[i - 1] === b[k - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[n];
+  };
+  const encontradas = [];
+  const reTxt = /(\d{1,2})\s*(?:de|d[eo]|e)?\s+([a-zñ]{3,11})\s+(?:de\s+|d[eo]\s+)?(20\d{2})/gi;
+  let mt;
+  const bajo = (texto || "").toLowerCase();
+  while ((mt = reTxt.exec(bajo))){
+    let mejor = null, mejorD = 9;
+    for (const nombre of Object.keys(meses)){
+      const d = dist(mt[2], nombre);
+      if (d < mejorD){ mejorD = d; mejor = nombre; }
+    }
+    const limite = mt[2].length >= 6 ? 2 : 1;
+    const dd = parseInt(mt[1], 10);
+    if (mejor && mejorD <= limite && dd >= 1 && dd <= 31){
+      encontradas.push(`${mt[3]}-${String(meses[mejor]).padStart(2,"0")}-${String(dd).padStart(2,"0")}`);
+    }
   }
+  if (encontradas.length) return encontradas.sort().pop();
 
   return null;
 }
@@ -4754,6 +4794,50 @@ async function preprocesarImagenCheque(archivo, modo){
 }
 
 let camaraStream = null;
+let camaraVertical = null;
+
+// Pide la cámara con las medidas según cómo esté el teléfono (apaisado o
+// vertical). Si no, en algunos Samsung la vista queda "dura" al girar.
+async function iniciarStreamCamara(){
+  if (camaraStream){ camaraStream.getTracks().forEach(t => t.stop()); camaraStream = null; }
+  camaraVertical = window.innerHeight > window.innerWidth;
+  const ancho = camaraVertical ? 1080 : 1920, alto = camaraVertical ? 1920 : 1080;
+  camaraStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: "environment" }, width: { ideal: ancho }, height: { ideal: alto } }
+  });
+  const video = document.getElementById("camara-video");
+  video.srcObject = camaraStream;
+  try { await video.play(); } catch (e){}
+}
+
+let _temporizadorGiro = null;
+function alGirarPantalla(){
+  clearTimeout(_temporizadorGiro);
+  _temporizadorGiro = setTimeout(async () => {
+    const modal = document.getElementById("camara-modal");
+    if (!modal || modal.style.display === "none" || !camaraStream) return;
+    if ((window.innerHeight > window.innerWidth) === camaraVertical) return;
+    try { await iniciarStreamCamara(); } catch (e){ console.warn("[OpenCheck Score] No se pudo reiniciar la cámara al girar:", e.message); }
+  }, 350);
+}
+window.addEventListener("resize", alGirarPantalla);
+window.addEventListener("orientationchange", alGirarPantalla);
+
+// Lector OCR único y reutilizable: crearlo es lo más lento (baja y carga el
+// idioma), así que se prepara al abrir la cámara y se reusa entre cheques.
+let _ocrWorkerPromesa = null, _ocrWorker2Promesa = null;
+function precalentarOcr2(){
+  if (!_ocrWorker2Promesa){
+    _ocrWorker2Promesa = Tesseract.createWorker("spa").catch(e => { _ocrWorker2Promesa = null; throw e; });
+  }
+  return _ocrWorker2Promesa;
+}
+function precalentarOcr(){
+  if (!_ocrWorkerPromesa){
+    _ocrWorkerPromesa = Tesseract.createWorker("spa").catch(e => { _ocrWorkerPromesa = null; throw e; });
+  }
+  return _ocrWorkerPromesa;
+}
 
 async function abrirCamaraCheque(){
   // Si el navegador no soporta cámara en vivo (o el permiso falla),
@@ -4763,12 +4847,9 @@ async function abrirCamaraCheque(){
     return;
   }
   try {
-    camaraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-    });
-    const video = document.getElementById("camara-video");
-    video.srcObject = camaraStream;
+    await iniciarStreamCamara();
     document.getElementById("camara-modal").style.display = "flex";
+    precalentarOcr(); precalentarOcr2();   // carga los lectores mientras se encuadra el cheque
   } catch (e){
     console.warn("[OpenCheck Score] No se pudo abrir la cámara en vivo:", e.message);
     mostrarToast("No pudimos abrir la cámara con marco. Se abre la cámara común: sacá el cheque horizontal, de cerca y con buena luz.");
@@ -4848,51 +4929,67 @@ async function procesarFotoCheque(archivo){
   label.textContent = "Leyendo el cheque…";
   mostrarToast("Analizando la foto, puede tardar unos segundos…");
 
-  let worker = null, workerDigitos = null;
+  let worker = null, textosLeidos0 = [];
+  const tInicio = Date.now();
   try {
-    worker = await Tesseract.createWorker("spa");
+    const t0 = Date.now();
+    worker = await precalentarOcr();
+    textosLeidos0 = ["Lector listo en " + Math.round((Date.now() - t0) / 1000) + " s"];
 
     // Varias pasadas con distinto tratamiento de la imagen; cortamos en
     // cuanto tenemos CUIT confirmado, número y banco.
-    const modos = ["tinta", "gris", "adaptativo"];
+    const modos = ["tinta", "adaptativo"];
     let cuit = null, numero = null, fecha = null, banco = null, monto = null, varios = false;
-    const textosLeidos = [];
+    const textosLeidos = textosLeidos0;
+    const votosNumero = new Map();
     const imagenes = {};
 
-    for (let n = 0; n < modos.length; n++){
-      const modo = modos[n];
-      label.textContent = `Leyendo el cheque… (${n + 1}/${modos.length})`;
+    // Dos pasadas EN PARALELO (cada una en su propio lector): en un celular con
+    // varios núcleos tarda casi lo mismo que una sola.
+    label.textContent = "Leyendo el cheque…";
+    const worker2 = await precalentarOcr2();
+    const trabajadores = [worker, worker2];
+    const preparadas = await Promise.all(modos.map(async (modo) => {
       let img = archivo;
       try { img = await preprocesarImagenCheque(archivo, modo); }
       catch (e){ console.warn("[OpenCheck Score] No se pudo preprocesar (" + modo + "):", e.message); }
       imagenes[modo] = img;
+      return img;
+    }));
+    textosLeidos.push("(imagen preparada: " + Math.round((Date.now() - tInicio) / 1000) + " s)");
+    const lecturas = await Promise.all(modos.map(async (modo, n) => {
+      try {
+        const r = await trabajadores[n].recognize(preparadas[n]);
+        textosLeidos.push("(" + modo + " lista: " + Math.round((Date.now() - tInicio) / 1000) + " s)");
+        return (r && r.data && r.data.text) || "";
+      } catch (e){
+        console.warn("[OpenCheck Score] Falló la pasada " + modo + ":", e.message);
+        return "";
+      }
+    }));
 
-      const r = await worker.recognize(img);
-      const texto = (r && r.data && r.data.text) || "";
+    for (let n = 0; n < modos.length; n++){
+      const modo = modos[n], texto = lecturas[n];
       console.info("[OpenCheck Score] Texto OCR crudo (" + modo + "):", texto);
       textosLeidos.push("— pasada " + modo + " —\n" + texto.trim());
 
       const c = extraerCuitDeTexto(texto);
       if (c && (!cuit || (c.confiable && !cuit.confiable))){ cuit = c; varios = !!c.varios; }
+      votarNumeroCheque(texto, votosNumero);
       if (!numero) numero = extraerNumeroChequeDeTexto(texto, cuit ? cuit.valor : null);
       if (!fecha) fecha = extraerFechaDeTexto(texto);
       if (!banco) banco = extraerBancoDeTexto(texto);
       if (!monto) monto = extraerMontoDeTexto(texto);
-
-      // Con el CUIT confirmado cortamos: tras la primera pasada solo seguimos
-      // a una segunda si todavía falta número o banco.
-      if (cuit && cuit.confiable && ((numero && banco) || n >= 1)) break;
     }
 
     // Pasada extra solo de dígitos, si todavía no hay un CUIT confirmado
     if (!cuit || !cuit.confiable){
       try {
         label.textContent = "Leyendo el cheque… (CUIT)";
-        workerDigitos = await Tesseract.createWorker("spa");
-        await workerDigitos.setParameters({ tessedit_char_whitelist: "0123456789-/. ", tessedit_pageseg_mode: "11" });
-        for (const modo of ["tinta", "gris"]){
+        await worker.setParameters({ tessedit_char_whitelist: "0123456789-/. ", tessedit_pageseg_mode: "11" });
+        for (const modo of ["tinta"]){
           if (!imagenes[modo]) continue;
-          const r = await workerDigitos.recognize(imagenes[modo]);
+          const r = await worker.recognize(imagenes[modo]);
           const texto = (r && r.data && r.data.text) || "";
           console.info("[OpenCheck Score] Texto OCR solo dígitos (" + modo + "):", texto);
           textosLeidos.push("— solo dígitos " + modo + " —\n" + texto.trim());
@@ -4903,7 +5000,15 @@ async function procesarFotoCheque(archivo){
       } catch (e){
         console.warn("[OpenCheck Score] Falló la pasada de dígitos:", e.message);
       }
+      try { await worker.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" }); } catch (e){}
     }
+
+    // El número de cheque se imprime varias veces (arriba, en el cuerpo y en la
+    // banda inferior): si un grupo de 8 dígitos se repite, ese gana.
+    try {
+      const masVotado = [...votosNumero.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (masVotado && masVotado[1] >= 2) numero = masVotado[0];
+    } catch (e){}
 
     if (cuit) setCuit(formatearCuit(cuit.valor));
     if (numero) document.getElementById("consulta-numero-cheque").value = numero;
@@ -4929,8 +5034,6 @@ async function procesarFotoCheque(archivo){
     console.warn("[OpenCheck Score] Falló el OCR:", e.message);
     mostrarToast("No pudimos procesar la foto. Completá los datos a mano.");
   } finally {
-    try { if (worker) await worker.terminate(); } catch (e){}
-    try { if (workerDigitos) await workerDigitos.terminate(); } catch (e){}
     btn.style.opacity = "1";
     btn.style.pointerEvents = "auto";
     label.textContent = "Sacar foto del cheque";
