@@ -3706,7 +3706,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-26-v41-lectura-paralela";
+const VERSION_APP = "2026-10-26-v42-avisos-vencimiento";
 
 const state = {
   user: null,
@@ -3773,6 +3773,66 @@ function ocultarAvisoBCRA(){
 // desde la tarjeta "Ver historial de consultas" del Inicio.
 function aplicarNavPorPlan(){
   document.body.classList.toggle("plan-premium", !!(state.user && (state.user.plan === "premium" || state.user.es_admin)));
+  registrarPushNativo();
+}
+
+/* ---- Avisos de vencimiento de cheques (notificaciones del celular, app Android, Premium) ----
+   El servidor (avisos-vencimiento.js) manda un aviso diario a las 8:00 con lo que vence
+   hoy, mañana, en 3 y en 7 días. Acá solo registramos el celular y llevamos al Calendario
+   cuando se toca la notificación. */
+let _pushRegistrado = false, _pushEscuchas = false;
+function esAppNativaAndroid(){
+  try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+  catch (e){ return false; }
+}
+async function registrarPushNativo(){
+  try {
+    if (_pushRegistrado || !esAppNativaAndroid() || !state.user) return;
+    if (!(state.user.plan === "premium" || state.user.es_admin)) return;
+    if (state.user.avisos_vencimiento === false) return;
+    const Push = window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+    if (!Push) return;
+    _pushRegistrado = true;
+
+    if (!_pushEscuchas){
+      _pushEscuchas = true;
+      Push.addListener("registration", async (t) => {
+        try {
+          if (!state.user || !t || !t.value) return;
+          const { error } = await supabaseClient.from("dispositivos_push").upsert(
+            { usuario_id: state.user.id, token: t.value, plataforma: "android", ultimo_uso: new Date().toISOString() },
+            { onConflict: "token" });
+          if (error) console.warn("[OpenCheck Score] No se pudo guardar el celular para avisos:", error.message);
+        } catch (e){ console.warn("[OpenCheck Score] Error guardando el celular:", e.message); }
+      });
+      Push.addListener("registrationError", (e) => console.warn("[OpenCheck Score] Error de registro push:", JSON.stringify(e)));
+      Push.addListener("pushNotificationActionPerformed", () => { try { irACalendario(); } catch (e){} });
+    }
+    try { await Push.createChannel({ id: "avisos_cheques", name: "Vencimientos de cheques", description: "Aviso de cheques que vencen", importance: 4 }); } catch (e){}
+
+    let permiso = await Push.checkPermissions();
+    if (permiso.receive === "prompt" || permiso.receive === "prompt-with-rationale") permiso = await Push.requestPermissions();
+    if (permiso.receive !== "granted"){ _pushRegistrado = false; return; }
+    await Push.register();
+  } catch (e){
+    _pushRegistrado = false;
+    console.warn("[OpenCheck Score] No se pudieron activar los avisos de vencimiento:", e.message);
+  }
+}
+async function alternarAvisosVencimiento(){
+  if (!state.user) return;
+  const nuevo = state.user.avisos_vencimiento === false;   // si estaba desactivado, se activa
+  const { data, error } = await supabaseClient.from("usuarios")
+    .update({ avisos_vencimiento: nuevo }).eq("id", state.user.id).select().single();
+  if (error){
+    console.warn("[OpenCheck Score] No se pudo cambiar los avisos de vencimiento:", error.message);
+    mostrarToast("No pudimos guardar el cambio, probá de nuevo.");
+    return;
+  }
+  state.user = { ...state.user, avisos_vencimiento: data.avisos_vencimiento };
+  if (nuevo){ _pushRegistrado = false; registrarPushNativo(); }
+  mostrarToast(nuevo ? "Avisos de vencimiento activados." : "Avisos de vencimiento desactivados.");
+  renderCuenta();
 }
 function actualizarNavActivo(){
   let clave = state.pantallaActual || "home";
@@ -6540,6 +6600,11 @@ function renderCuenta(){
     </button>
     ${(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ? "" : `<a href="https://play.google.com/store/apps/details?id=com.opencheckscore.app" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-align:center; margin-top:10px; text-decoration:none;">Descargar en Google Play (Android)</a>`}
     ${u && (u.plan === "premium" || u.es_admin) ? `
+    <div class="divider-label">Avisos de vencimiento</div>
+    <p class="page-sub" style="margin-top:-4px;">En el celular con la app instalada, te avisamos a la mañana cuando un cheque vence hoy, mañana, en 3 o en 7 días. El aviso no incluye nombres ni montos: el detalle lo ves al abrir el Calendario.</p>
+    <button class="btn btn-secondary" id="btn-avisos-vencimiento" onclick="alternarAvisosVencimiento()">
+      ${u.avisos_vencimiento === false ? "Avisos de vencimiento desactivados · Activar" : "Avisos de vencimiento activados ✓ · Desactivar"}
+    </button>
     <div class="divider-label">Resumen semanal</div>
     <p class="page-sub" style="margin-top:-4px;">Los lunes a la mañana te mandamos por mail lo que conviene mirar esa semana: alertas, cobros por vencer y topes superados. Si no hay novedades, no te escribimos.</p>
     <button class="btn btn-secondary" id="btn-resumen-semanal" onclick="alternarResumenSemanal()">
