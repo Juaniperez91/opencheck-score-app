@@ -454,6 +454,16 @@
   .nav-premium{display:none !important;}
   body.plan-premium .nav-premium{display:block !important;}
   body.plan-premium .nav-gratis{display:none !important;}
+  /* Usuario de equipo (vendedor de calle): solo Inicio (consultar) y Cuenta */
+  body.rol-calle .nav-item[data-nav="historial"],
+  body.rol-calle .nav-item[data-nav="calendario"],
+  body.rol-calle .nav-item[data-nav="clientes"],
+  body.rol-calle .nav-item[data-nav="alertas"]{display:none !important;}
+  .equipo-fila{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 0; border-bottom:1px solid var(--hairline); font-size:13px;}
+  .equipo-fila small{display:block; color:var(--ink-soft); font-size:11.5px;}
+  .equipo-acciones{display:flex; gap:6px; flex-shrink:0;}
+  .equipo-acciones button{font-size:11.5px; padding:6px 9px; border-radius:8px; border:1px solid var(--hairline); background:var(--white); color:var(--ink); cursor:pointer;}
+  .clave-temporal{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:20px; letter-spacing:1px; text-align:center; padding:12px; border:1px dashed var(--hairline); border-radius:10px; margin:10px 0; user-select:all;}
   .nav-badge{
     position:absolute; top:5px; right:calc(50% - 20px);
     width:8px; height:8px; border-radius:50%;
@@ -1120,11 +1130,11 @@
     </div>
     <div class="content">
       <h1 class="page-title">Iniciar sesión</h1>
-      <p class="page-sub">Entrá con tu email y contraseña.</p>
+      <p class="page-sub">Entrá con tu email (o con tu DNI, si tu empresa te dio un usuario) y tu contraseña.</p>
 
       <div class="field">
-        <label class="field-label">Email</label>
-        <input type="email" id="login-email" placeholder="vos@empresa.com">
+        <label class="field-label">Email o DNI</label>
+        <input type="text" id="login-email" placeholder="vos@empresa.com o tu DNI" autocomplete="username" autocapitalize="none" spellcheck="false">
       </div>
       <div class="field">
         <label class="field-label">Contraseña</label>
@@ -1482,6 +1492,54 @@
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="cerrarModalNuevoCliente()">Cancelar</button>
         <button class="btn btn-primary" id="btn-confirmar-cliente" onclick="confirmarNuevoCliente()">Crear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== EQUIPO (usuarios de calle) ===================== -->
+  <div class="modal-overlay" id="modal-cambio-clave">
+    <div class="modal-caja">
+      <h3>Elegí tu contraseña</h3>
+      <p>Es tu primer ingreso. Para seguir tenés que cambiar la clave temporal por una propia que solo vos conozcas.</p>
+      <div class="field"><label>Contraseña nueva (mínimo 8 caracteres)</label>
+        <input type="password" id="cc-clave1" autocomplete="new-password"></div>
+      <div class="field"><label>Repetí la contraseña</label>
+        <input type="password" id="cc-clave2" autocomplete="new-password"></div>
+      <label style="display:flex; gap:8px; align-items:flex-start; font-size:12.5px; line-height:1.4; margin:6px 0 12px;">
+        <input type="checkbox" id="cc-acepto" style="margin-top:3px;">
+        <span>Acepto los <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a> de OpenCheck.</span>
+      </label>
+      <div class="modal-botones">
+        <button class="btn btn-primary" id="btn-cambio-clave" onclick="confirmarCambioClave()">Guardar y entrar</button>
+        <button class="btn btn-secondary" onclick="cerrarSesion(); document.getElementById('modal-cambio-clave').classList.remove('show');">Salir</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-nuevo-miembro">
+    <div class="modal-caja">
+      <h3>Agregar vendedor</h3>
+      <p>Va a entrar con su DNI y una clave temporal que se la das vos. En su primer ingreso el sistema le pide que la cambie.</p>
+      <div class="field"><label>Nombre y apellido</label>
+        <input type="text" id="miembro-nombre" placeholder="Ej: Marcos Pérez" autocomplete="off"></div>
+      <div class="field"><label>DNI (será su usuario)</label>
+        <input type="text" id="miembro-dni" placeholder="Solo números" inputmode="numeric" autocomplete="off"></div>
+      <div class="modal-botones">
+        <button class="btn btn-primary" id="btn-crear-miembro" onclick="crearMiembroEquipo()">Crear usuario</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-nuevo-miembro').classList.remove('show')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-clave-temporal">
+    <div class="modal-caja">
+      <h3 id="ct-titulo">Usuario creado</h3>
+      <p id="ct-texto"></p>
+      <div class="clave-temporal" id="ct-clave"></div>
+      <p style="font-size:12px;">Anotala o copiala ahora: <b>no se vuelve a mostrar</b>. Si se pierde, generás una nueva con "Nueva clave".</p>
+      <div class="modal-botones">
+        <button class="btn btn-secondary" onclick="copiarClaveTemporal()">Copiar usuario y clave</button>
+        <button class="btn btn-primary" onclick="document.getElementById('modal-clave-temporal').classList.remove('show')">Listo</button>
       </div>
     </div>
   </div>
@@ -3706,7 +3764,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-29-v45-lectura-cheque";
+const VERSION_APP = "2026-11-02-v46-equipo";
 
 const state = {
   user: null,
@@ -3765,6 +3823,146 @@ function mostrarAvisoBCRA(btnId){
 function ocultarAvisoBCRA(){
   const d = document.getElementById("aviso-bcra");
   if (d) d.remove();
+}
+
+/* ---- Equipo: roles y consulta bloqueada ---- */
+function esUsuarioEquipo(){ return !!(state.user && state.user.rol === "calle"); }
+// Un usuario de equipo consulta sin cupo mensual mientras la empresa tenga Premium.
+function consultaBloqueada(usadasEsteMes){
+  const u = state.user;
+  if (!u) return false;
+  if (esUsuarioEquipo()) return state.empresaPremium !== true;
+  return !!(!u.es_admin && !u.es_tester && u.plan === "free" && usadasEsteMes >= state.queriesLimit);
+}
+// Se llama justo después de cargar el perfil (al entrar o al recargar la página).
+async function aplicarRolUsuario(){
+  const u = state.user;
+  document.body.classList.toggle("rol-calle", !!(u && u.rol === "calle"));
+  state.empresaPremium = true;
+  if (!u || u.rol !== "calle") return true;
+  if (u.activo === false){
+    await supabaseClient.auth.signOut();
+    state.user = null;
+    document.body.classList.remove("rol-calle");
+    mostrarToast("Tu usuario fue dado de baja. Consultá con tu empresa.");
+    return false;
+  }
+  try {
+    const { data } = await supabaseClient.rpc("empresa_premium");
+    state.empresaPremium = (data === true);
+  } catch (e){ state.empresaPremium = false; }
+  if (u.debe_cambiar_clave) document.getElementById("modal-cambio-clave").classList.add("show");
+  return true;
+}
+async function confirmarCambioClave(){
+  const c1 = document.getElementById("cc-clave1").value;
+  const c2 = document.getElementById("cc-clave2").value;
+  if (c1.length < 8){ mostrarToast("La contraseña debe tener al menos 8 caracteres."); return; }
+  if (c1 !== c2){ mostrarToast("Las contraseñas no coinciden."); return; }
+  if (!document.getElementById("cc-acepto").checked){ mostrarToast("Tenés que aceptar los Términos y la Política de Privacidad."); return; }
+  const btn = document.getElementById("btn-cambio-clave");
+  btn.disabled = true;
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: c1 });
+    if (error) throw error;
+    await supabaseClient.rpc("clave_cambiada");
+    await registrarAceptacionTC(state.user.id);
+    state.user.debe_cambiar_clave = false;
+    document.getElementById("cc-clave1").value = "";
+    document.getElementById("cc-clave2").value = "";
+    document.getElementById("modal-cambio-clave").classList.remove("show");
+    mostrarToast("Listo, tu contraseña quedó guardada.");
+  } catch (e){
+    mostrarToast("No se pudo cambiar la contraseña: " + (e.message || e));
+  } finally { btn.disabled = false; }
+}
+
+// Llamadas al servidor para administrar el equipo (solo el titular Premium).
+async function llamarEquipo(accion, datos){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) throw new Error("Sesión vencida. Volvé a entrar.");
+  const r = await fetch("/.netlify/functions/equipo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+    body: JSON.stringify({ accion, ...(datos || {}) })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Error del servidor");
+  return j;
+}
+function htmlSeguro(t){ return String(t == null ? "" : t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+async function cargarEquipo(){
+  const cont = document.getElementById("equipo-lista");
+  if (!cont) return;
+  try {
+    const { equipo } = await llamarEquipo("listar");
+    state.equipo = equipo;
+    if (!equipo.length){ cont.innerHTML = '<p class="page-sub" style="margin:4px 0 10px;">Todavía no agregaste a nadie.</p>'; return; }
+    cont.innerHTML = equipo.map(m => `
+      <div class="equipo-fila">
+        <div>${htmlSeguro(m.nombre)}${m.activo ? "" : " <span style='color:#b3261e;'>· de baja</span>"}
+          <small>DNI ${htmlSeguro(m.cuit_dni)} · ${m.debe_cambiar_clave ? "aún no ingresó" : "activo"}</small></div>
+        <div class="equipo-acciones">
+          ${m.activo
+            ? `<button onclick="resetClaveMiembro('${m.id}')">Nueva clave</button><button onclick="bajaMiembro('${m.id}', false)">Dar de baja</button>`
+            : `<button onclick="bajaMiembro('${m.id}', true)">Reactivar</button>`}
+        </div>
+      </div>`).join("");
+  } catch (e){
+    cont.innerHTML = '<p class="page-sub" style="margin:4px 0 10px;">No se pudo cargar el equipo: ' + htmlSeguro(e.message) + '</p>';
+  }
+}
+function abrirModalNuevoMiembro(){
+  document.getElementById("miembro-nombre").value = "";
+  document.getElementById("miembro-dni").value = "";
+  document.getElementById("modal-nuevo-miembro").classList.add("show");
+}
+let _claveTemporalActual = "";
+function mostrarClaveTemporal(titulo, texto, dni, clave){
+  document.getElementById("ct-titulo").textContent = titulo;
+  document.getElementById("ct-texto").textContent = texto;
+  document.getElementById("ct-clave").textContent = "Usuario (DNI): " + dni + "\nClave temporal: " + clave;
+  document.getElementById("ct-clave").style.whiteSpace = "pre-line";
+  _claveTemporalActual = "Usuario (DNI): " + dni + " · Clave temporal: " + clave;
+  document.getElementById("modal-clave-temporal").classList.add("show");
+}
+async function copiarClaveTemporal(){
+  try { await navigator.clipboard.writeText(_claveTemporalActual); mostrarToast("Copiado."); }
+  catch (e){ mostrarToast("No se pudo copiar; anotala a mano."); }
+}
+async function crearMiembroEquipo(){
+  const nombre = document.getElementById("miembro-nombre").value.trim();
+  const dni = document.getElementById("miembro-dni").value.replace(/\D/g, "");
+  if (nombre.length < 3){ mostrarToast("Escribí nombre y apellido."); return; }
+  if (dni.length < 6 || dni.length > 9){ mostrarToast("El DNI debe tener entre 6 y 9 números."); return; }
+  const btn = document.getElementById("btn-crear-miembro");
+  btn.disabled = true;
+  try {
+    const r = await llamarEquipo("crear", { nombre, dni });
+    document.getElementById("modal-nuevo-miembro").classList.remove("show");
+    mostrarClaveTemporal("Usuario creado", "Pasale estos datos a " + nombre + ". En su primer ingreso va a tener que elegir una contraseña propia.", r.dni, r.clave);
+    cargarEquipo();
+  } catch (e){ mostrarToast(e.message); }
+  finally { btn.disabled = false; }
+}
+async function resetClaveMiembro(id){
+  const m = (state.equipo || []).find(x => x.id === id);
+  if (!m || !confirm("¿Generar una clave nueva para " + m.nombre + "? La anterior deja de servir.")) return;
+  try {
+    const r = await llamarEquipo("reset", { id });
+    mostrarClaveTemporal("Clave nueva", "Pasale estos datos a " + m.nombre + ". Va a tener que cambiarla al entrar.", m.cuit_dni, r.clave);
+    cargarEquipo();
+  } catch (e){ mostrarToast(e.message); }
+}
+async function bajaMiembro(id, reactivar){
+  const m = (state.equipo || []).find(x => x.id === id);
+  if (!m) return;
+  if (!reactivar && !confirm("¿Dar de baja a " + m.nombre + "? Pierde el acceso en el acto.")) return;
+  try {
+    await llamarEquipo(reactivar ? "alta" : "baja", { id });
+    mostrarToast(reactivar ? "Usuario reactivado." : "Usuario dado de baja.");
+    cargarEquipo();
+  } catch (e){ mostrarToast(e.message); }
 }
 
 /* ---- Navegación ---- */
@@ -4101,7 +4299,9 @@ document.getElementById("link-reenviar-codigo").addEventListener("click", async 
 });
 
 async function iniciarSesion(){
-  const email = document.getElementById("login-email").value.trim();
+  let email = document.getElementById("login-email").value.trim();
+  // Usuarios de equipo: entran con el DNI (sin "@"); internamente es dni@usuarios.opencheck.pro
+  if (email && !email.includes("@") && /^[\d.\s]+$/.test(email)) email = email.replace(/\D/g, "") + "@usuarios.opencheck.pro";
   const password = document.getElementById("login-password").value;
   if (!email || !password){
     mostrarToast("Completá email y contraseña");
@@ -4116,6 +4316,7 @@ async function iniciarSesion(){
     const perfil = await obtenerPerfilUsuario();
     if (!perfil) throw new Error("No encontramos tu perfil. Probá registrarte de nuevo.");
     state.user = perfil;
+    if (!(await aplicarRolUsuario())) return;
     document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
     mostrarToast("¡Hola de nuevo, " + perfil.nombre.split(" ")[0] + "!");
     irA("home");
@@ -4263,6 +4464,7 @@ async function eliminarCuentaDefinitivamente(){
 async function cerrarSesion(){
   await supabaseClient.auth.signOut();
   state.user = null;
+  document.body.classList.remove("rol-calle");
   mostrarToast("Sesión cerrada");
   irA("registro");
 }
@@ -4273,6 +4475,7 @@ async function cargarSesionExistente(){
   const perfil = await obtenerPerfilUsuario();
   if (perfil){
     state.user = perfil;
+    if (!(await aplicarRolUsuario())) return;
     document.getElementById("user-chip").textContent = perfil.nombre.split(" ")[0];
     // Ya no navegamos directo a "home" — la sesión persiste (no hace
     // falta volver a poner contraseña), pero el usuario entra a la app
@@ -4435,7 +4638,7 @@ async function consultarCuit(){
   }
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
-  const vaABloquear = !!(state.user && !state.user.es_admin && !state.user.es_tester && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit);
+  const vaABloquear = consultaBloqueada(usadasEsteMes);
   if (vaABloquear){
     irA("cuenta");
     return;
@@ -4520,7 +4723,7 @@ async function verEstadoCliente(clienteId){
 
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
-  const vaABloquear = !!(state.user && !state.user.es_admin && !state.user.es_tester && state.user.plan === "free" && usadasEsteMes >= state.queriesLimit);
+  const vaABloquear = consultaBloqueada(usadasEsteMes);
   if (vaABloquear){ irA("cuenta"); return; }
 
   const btn = document.getElementById("btn-ver-estado-cliente");
@@ -6705,6 +6908,17 @@ async function alternarResumenSemanal(){
 function renderCuenta(){
   const cont = document.getElementById("cuenta-content");
   const u = state.user;
+  if (u && u.rol === "calle"){
+    cont.innerHTML = `
+      <h1 class="page-title">Tu cuenta</h1>
+      <p class="page-sub">Usuario de equipo. Podés consultar CUITs y cheques; el resto lo administra tu empresa.</p>
+      <div class="plan-row"><span>Nombre</span><b>${htmlSeguro(u.nombre)}</b></div>
+      <div class="plan-row"><span>DNI</span><b>${htmlSeguro(u.cuit_dni)}</b></div>
+      ${state.empresaPremium === false ? '<p class="page-sub" style="color:#b3261e;">Tu empresa no tiene Premium activo, por eso no podés consultar. Avisale a tu administración.</p>' : ""}
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
+      <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:24px;">Versión ${VERSION_APP}</p>`;
+    return;
+  }
   cont.innerHTML = `
     <h1 class="page-title">Tu cuenta</h1>
     <p class="page-sub">Datos de registro y estado de tu plan.</p>
@@ -6729,6 +6943,10 @@ function renderCuenta(){
     <button class="btn btn-secondary" id="btn-avisos-vencimiento" onclick="alternarAvisosVencimiento()">
       ${u.avisos_vencimiento === false ? "Avisos de vencimiento desactivados · Activar" : "Avisos de vencimiento activados ✓ · Desactivar"}
     </button>
+    <div class="divider-label">Equipo</div>
+    <p class="page-sub" style="margin-top:-4px;">Dale acceso a tus vendedores de calle: entran con su DNI, consultan CUITs y cheques, y vos ves quién consultó. Podés darlos de baja en el acto.</p>
+    <div id="equipo-lista"><p class="page-sub">Cargando…</p></div>
+    <button class="btn btn-secondary" onclick="abrirModalNuevoMiembro()">Agregar vendedor</button>
     <div class="divider-label">Resumen semanal</div>
     <p class="page-sub" style="margin-top:-4px;">Los lunes a la mañana te mandamos por mail lo que conviene mirar esa semana: alertas, cobros por vencer y topes superados. Si no hay novedades, no te escribimos.</p>
     <button class="btn btn-secondary" id="btn-resumen-semanal" onclick="alternarResumenSemanal()">
@@ -6752,6 +6970,7 @@ function renderCuenta(){
     <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:24px; line-height:1.45;">OpenCheck es un servicio privado e independiente: no es una aplicación oficial ni representa al BCRA, ARCA, INDEC ni a ningún organismo del Estado. Fuentes: <a href="https://www.bcra.gob.ar" target="_blank" rel="noopener">bcra.gob.ar</a> · <a href="https://www.arca.gob.ar" target="_blank" rel="noopener">arca.gob.ar</a> · <a href="https://www.indec.gob.ar" target="_blank" rel="noopener">indec.gob.ar</a> · <a href="https://datos.gob.ar" target="_blank" rel="noopener">datos.gob.ar</a>.</p>
     <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:8px;">Versión ${VERSION_APP}</p>
   `;
+  if (u && u.rol !== "calle" && (u.plan === "premium" || u.es_admin)) cargarEquipo();
 }
 
 function renderPaywall(){
