@@ -273,6 +273,15 @@
     transition:border-color .15s;
   }
   input.mono{font-family:'DM Mono', monospace; letter-spacing:.02em;}
+  /* Contraseñas: botón propio "Mostrar/Ocultar" que NO desaparece al escribir */
+  input::-ms-reveal, input::-ms-clear{display:none;}
+  .pw-wrap{position:relative; width:100%;}
+  .pw-wrap input{display:block; width:100%; padding:13px 78px 13px 14px; border:1px solid var(--hairline); border-radius:10px;
+    background:var(--white); font-family:'DM Sans', sans-serif; font-size:14.5px; color:var(--ink); outline:none; box-sizing:border-box;}
+  .pw-toggle{position:absolute; right:6px; top:50%; transform:translateY(-50%); border:0; background:transparent;
+    color:var(--green); font-size:12.5px; font-weight:600; padding:8px 10px; cursor:pointer; font-family:inherit;}
+  .modal-error{display:none; background:#fdecea; color:#b3261e; border-radius:8px; padding:9px 11px; font-size:12.5px; line-height:1.4; margin:0 0 12px;}
+  .modal-error.show{display:block;}
   input:focus{border-color:var(--green);}
   .field-hint{font-size:11.5px; color:var(--ink-soft); margin-top:5px;}
 
@@ -623,7 +632,7 @@
     opacity:0; pointer-events:none;
     transition:opacity .25s, transform .25s;
     transform:translateY(8px);
-    z-index:50;
+    z-index:2000;
   }
   .toast.show{opacity:1; transform:translateY(0);}
 
@@ -1501,14 +1510,15 @@
     <div class="modal-caja">
       <h3>Elegí tu contraseña</h3>
       <p>Es tu primer ingreso. Para seguir tenés que cambiar la clave temporal por una propia que solo vos conozcas.</p>
-      <div class="field"><label>Contraseña nueva (mínimo 8 caracteres)</label>
+      <div class="field"><label class="field-label">Contraseña nueva (mínimo 8 caracteres)</label>
         <input type="password" id="cc-clave1" autocomplete="new-password"></div>
-      <div class="field"><label>Repetí la contraseña</label>
+      <div class="field"><label class="field-label">Repetí la contraseña</label>
         <input type="password" id="cc-clave2" autocomplete="new-password"></div>
-      <label style="display:flex; gap:8px; align-items:flex-start; font-size:12.5px; line-height:1.4; margin:6px 0 12px;">
-        <input type="checkbox" id="cc-acepto" style="margin-top:3px;">
-        <span>Acepto los <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a> de OpenCheck.</span>
-      </label>
+      <div class="modal-error" id="cc-error"></div>
+      <div style="display:flex; gap:10px; align-items:flex-start; margin:4px 0 14px;">
+        <input type="checkbox" id="cc-acepto" style="width:18px; height:18px; flex:none; margin:2px 0 0;">
+        <div style="font-size:12.5px; line-height:1.45; color:var(--ink-soft);">Acepto los <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a> de OpenCheck.</div>
+      </div>
       <div class="modal-botones">
         <button class="btn btn-primary" id="btn-cambio-clave" onclick="confirmarCambioClave()">Guardar y entrar</button>
         <button class="btn btn-secondary" onclick="cerrarSesion(); document.getElementById('modal-cambio-clave').classList.remove('show');">Salir</button>
@@ -1520,10 +1530,11 @@
     <div class="modal-caja">
       <h3>Agregar vendedor</h3>
       <p>Va a entrar con su DNI y una clave temporal que se la das vos. En su primer ingreso el sistema le pide que la cambie.</p>
-      <div class="field"><label>Nombre y apellido</label>
+      <div class="field"><label class="field-label">Nombre y apellido</label>
         <input type="text" id="miembro-nombre" placeholder="Ej: Marcos Pérez" autocomplete="off"></div>
-      <div class="field"><label>DNI (será su usuario)</label>
+      <div class="field"><label class="field-label">DNI (será su usuario)</label>
         <input type="text" id="miembro-dni" placeholder="Solo números" inputmode="numeric" autocomplete="off"></div>
+      <div class="modal-error" id="miembro-error"></div>
       <div class="modal-botones">
         <button class="btn btn-primary" id="btn-crear-miembro" onclick="crearMiembroEquipo()">Crear usuario</button>
         <button class="btn btn-secondary" onclick="document.getElementById('modal-nuevo-miembro').classList.remove('show')">Cancelar</button>
@@ -3764,7 +3775,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-02-v46-equipo";
+const VERSION_APP = "2026-11-02-v47-equipo-clave";
 
 const state = {
   user: null,
@@ -3854,12 +3865,29 @@ async function aplicarRolUsuario(){
   if (u.debe_cambiar_clave) document.getElementById("modal-cambio-clave").classList.add("show");
   return true;
 }
+function mostrarErrorModal(id, msg){
+  const el = document.getElementById(id);
+  if (!el) { mostrarToast(msg); return; }
+  if (msg){ el.textContent = msg; el.classList.add("show"); } else { el.textContent = ""; el.classList.remove("show"); }
+}
+function traducirErrorClave(m){
+  const t = String(m || "");
+  if (/different from the old|same as the old|should be different/i.test(t)) return "La contraseña nueva tiene que ser distinta de la clave temporal.";
+  if (/weak|pwned|leaked|easy to guess|compromised/i.test(t)) return "Esa contraseña es muy fácil de adivinar o ya apareció en filtraciones. Elegí otra.";
+  if (/at least|too short|characters/i.test(t)) return "La contraseña es demasiado corta.";
+  if (/rate|too many|over_/i.test(t)) return "Demasiados intentos. Esperá un minuto y probá de nuevo.";
+  return "No se pudo guardar la contraseña: " + t;
+}
 async function confirmarCambioClave(){
   const c1 = document.getElementById("cc-clave1").value;
   const c2 = document.getElementById("cc-clave2").value;
-  if (c1.length < 8){ mostrarToast("La contraseña debe tener al menos 8 caracteres."); return; }
-  if (c1 !== c2){ mostrarToast("Las contraseñas no coinciden."); return; }
-  if (!document.getElementById("cc-acepto").checked){ mostrarToast("Tenés que aceptar los Términos y la Política de Privacidad."); return; }
+  mostrarErrorModal("cc-error", "");
+  const dni = String((state.user && state.user.cuit_dni) || "").replace(/\D/g, "");
+  if (c1.length < 8) return mostrarErrorModal("cc-error", "La contraseña debe tener al menos 8 caracteres.");
+  if (dni && c1.replace(/\D/g, "") === dni) return mostrarErrorModal("cc-error", "No uses tu DNI como contraseña: es lo primero que probaría cualquiera. Elegí otra.");
+  if (/^(.)\1+$/.test(c1) || /^(0123456789|1234567890|12345678)/.test(c1)) return mostrarErrorModal("cc-error", "Esa contraseña es demasiado fácil. Elegí otra más difícil de adivinar.");
+  if (c1 !== c2) return mostrarErrorModal("cc-error", "Las dos contraseñas no coinciden.");
+  if (!document.getElementById("cc-acepto").checked) return mostrarErrorModal("cc-error", "Tenés que aceptar los Términos y la Política de Privacidad para continuar.");
   const btn = document.getElementById("btn-cambio-clave");
   btn.disabled = true;
   try {
@@ -3873,7 +3901,7 @@ async function confirmarCambioClave(){
     document.getElementById("modal-cambio-clave").classList.remove("show");
     mostrarToast("Listo, tu contraseña quedó guardada.");
   } catch (e){
-    mostrarToast("No se pudo cambiar la contraseña: " + (e.message || e));
+    mostrarErrorModal("cc-error", traducirErrorClave(e.message || e));
   } finally { btn.disabled = false; }
 }
 
@@ -3915,6 +3943,7 @@ async function cargarEquipo(){
 function abrirModalNuevoMiembro(){
   document.getElementById("miembro-nombre").value = "";
   document.getElementById("miembro-dni").value = "";
+  mostrarErrorModal("miembro-error", "");
   document.getElementById("modal-nuevo-miembro").classList.add("show");
 }
 let _claveTemporalActual = "";
@@ -3933,8 +3962,9 @@ async function copiarClaveTemporal(){
 async function crearMiembroEquipo(){
   const nombre = document.getElementById("miembro-nombre").value.trim();
   const dni = document.getElementById("miembro-dni").value.replace(/\D/g, "");
-  if (nombre.length < 3){ mostrarToast("Escribí nombre y apellido."); return; }
-  if (dni.length < 6 || dni.length > 9){ mostrarToast("El DNI debe tener entre 6 y 9 números."); return; }
+  mostrarErrorModal("miembro-error", "");
+  if (nombre.length < 3) return mostrarErrorModal("miembro-error", "Escribí nombre y apellido.");
+  if (dni.length < 6 || dni.length > 9) return mostrarErrorModal("miembro-error", "El DNI debe tener entre 6 y 9 números.");
   const btn = document.getElementById("btn-crear-miembro");
   btn.disabled = true;
   try {
@@ -3942,7 +3972,7 @@ async function crearMiembroEquipo(){
     document.getElementById("modal-nuevo-miembro").classList.remove("show");
     mostrarClaveTemporal("Usuario creado", "Pasale estos datos a " + nombre + ". En su primer ingreso va a tener que elegir una contraseña propia.", r.dni, r.clave);
     cargarEquipo();
-  } catch (e){ mostrarToast(e.message); }
+  } catch (e){ mostrarErrorModal("miembro-error", e.message); }
   finally { btn.disabled = false; }
 }
 async function resetClaveMiembro(id){
@@ -4489,6 +4519,28 @@ async function cargarSesionExistente(){
     actualizarBadgeAlertas();
   }
 }
+// Botón "Mostrar/Ocultar" propio en todos los campos de contraseña (siempre visible, aunque ya haya texto).
+function instalarVerClave(){
+  document.querySelectorAll('input[type="password"]').forEach(inp => {
+    if (inp.dataset.pw) return;
+    inp.dataset.pw = "1";
+    const wrap = document.createElement("div");
+    wrap.className = "pw-wrap";
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "pw-toggle"; b.textContent = "Mostrar";
+    b.setAttribute("aria-label", "Mostrar u ocultar la contraseña");
+    b.addEventListener("mousedown", e => e.preventDefault()); // no le saca el foco al campo
+    b.addEventListener("click", () => {
+      const ver = inp.type === "password";
+      inp.type = ver ? "text" : "password";
+      b.textContent = ver ? "Ocultar" : "Mostrar";
+    });
+    wrap.appendChild(b);
+  });
+}
+instalarVerClave();
 cargarSesionExistente();
 
 /* ---- Consulta CUIT ---- */
