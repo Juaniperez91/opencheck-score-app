@@ -3360,7 +3360,7 @@ const ENTIDADES_CHEQUES = [
   {codigo:17, nombre:"BBVA Argentina"},
   {codigo:97, nombre:"ICBC"},
   {codigo:27, nombre:"Banco Supervielle"},
-  {codigo:338,nombre:"Banco Patagonia"}
+  {codigo:34, nombre:"Banco Patagonia"}
 ];
 const NOMBRES_BANCOS = ENTIDADES_CHEQUES.map(e => e.nombre);
 
@@ -3706,7 +3706,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-10-26-v42-avisos-vencimiento";
+const VERSION_APP = "2026-10-29-v45-lectura-cheque";
 
 const state = {
   user: null,
@@ -4578,6 +4578,21 @@ function esCuitValido(cuit11){
   return verificador === digitos[10];
 }
 
+// El OCR confunde letras con dígitos dentro de un CUIT ("592283b5" por "59228365").
+// Se corrigen solo las letras que quedan ENTRE dígitos o guiones.
+function repararDigitosEnCuit(texto){
+  const mapa = { O:"0", o:"0", D:"0", Q:"0", b:"6", G:"6", B:"8", l:"1", I:"1", i:"1", "|":"1", S:"5", s:"5", Z:"2", z:"2" };
+  return (texto || "").split("\n").map(linea => linea.replace(/[0-9A-Za-z|][0-9A-Za-z|\- ]{8,}[0-9A-Za-z|]/g, (tok) => {
+    if ((tok.match(/\d/g) || []).length < 7) return tok;
+    return tok.split("").map((ch, k) => {
+      if (!(ch in mapa) || k === 0 || k === tok.length - 1) return ch;
+      const a = tok[k - 1], b = tok[k + 1];
+      const vecinoNum = (c) => /[\d\-]/.test(c);
+      return (vecinoNum(a) && vecinoNum(b)) ? mapa[ch] : ch;
+    }).join("");
+  })).join("\n");
+}
+
 function extraerCuitDeTexto(texto){
   // Buscamos tokens que YA se ven como un bloque de ~11 dígitos en el
   // texto original (con guiones/espacios internos opcionales), en vez de
@@ -4590,13 +4605,20 @@ function extraerCuitDeTexto(texto){
   // librador suele estar al pie). Devuelve {valor, confiable, varios}.
   // Si ninguno pasa el dígito verificador pero hay un candidato de 11
   // dígitos con prefijo real de CUIT, lo devolvemos con confiable:false.
+  texto = repararDigitosEnCuit(texto);
   const tokens = (texto || "").match(/\d[\d\-\s]{9,14}\d/g) || [];
   const validos = [];
   let candidatoSinValidar = null;
+  const prefijoReal = (d) => /^(20|23|24|25|26|27|30|33|34)/.test(d);
+  // Bloques exactos de 11 dígitos (aunque haya un número suelto pegado antes, como "1 30717260658")
+  for (const m of ((texto || "").match(/(?<!\d)\d{2}[\- ]?\d{8}[\- ]?\d(?!\d)/g) || [])){
+    const d = m.replace(/\D/g, "");
+    if (prefijoReal(d) && esCuitValido(d) && !validos.includes(d)) validos.push(d);
+  }
   for (const token of tokens){
     const digitos = token.replace(/\D/g, "");
     if (digitos.length !== 11) continue;
-    if (esCuitValido(digitos)){
+    if (prefijoReal(digitos) && esCuitValido(digitos)){
       if (!validos.includes(digitos)) validos.push(digitos);
     } else if (!candidatoSinValidar && /^(20|23|24|25|26|27|30|33|34)/.test(digitos)){
       candidatoSinValidar = digitos;
@@ -4607,6 +4629,18 @@ function extraerCuitDeTexto(texto){
   if (rotulado){
     const d = rotulado[1].replace(/\D/g, "");
     if (esCuitValido(d)) return { valor: d, confiable: true, varios: false };
+  }
+  // Cheques con varios titulares/firmantes en renglones seguidos (la entidad primero, después
+  // quienes firman por ella): el librador es el PRIMERO del bloque, no una persona que firma.
+  const porLinea = [];
+  (texto || "").split("\n").forEach((linea, n) => {
+    for (const m of (linea.match(/(?<!\d)\d{2}[\- ]?\d{8}[\- ]?\d(?!\d)/g) || [])){
+      const d = m.replace(/\D/g, "");
+      if (prefijoReal(d) && esCuitValido(d)) porLinea.push({ d, n });
+    }
+  });
+  if (porLinea.length >= 2 && porLinea[1].n - porLinea[0].n <= 2 && porLinea[1].d !== porLinea[0].d){
+    return { valor: porLinea[0].d, confiable: true, varios: true };
   }
   if (validos.length){
     const humanas = validos.filter(c => /^(20|23|24|27)/.test(c));
@@ -4645,11 +4679,71 @@ function extraerNumeroChequeDeTexto(texto, cuitEncontrado){
 // Monto: solo si viene precedido de "$" (así no lo confundimos con otros
 // números del cheque). Devuelve un texto listo para el campo, ej. "1.250.000".
 function extraerMontoDeTexto(texto){
-  const m = (texto || "").match(/[$sS5][\s|\[\]!:=\-_>.]{0,3}(\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?|\d{4,12}(?:,\d{1,2})?)/);
+  const m = (texto || "").match(/(?<![\p{L}\d])[$sS](?![\p{L}\d])[\s|\[\]!:=\-_>.]{0,3}(\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?|\d{4,12}(?:,\d{1,2})?)/u);
   if (!m) return null;
   const n = parseMontoAR(m[1].replace(/\s/g, "."));
   if (!n || n < 100) return null;
   return Math.round(n).toLocaleString("es-AR");
+}
+
+// Monto en letras ("SETECIENTOS MIL", "Quinientos ochenta y dos mil cuatrocientos
+// setenta"): la letra manuscrita suele leerse mejor que los números escritos a mano.
+// Se comparan las palabras con tolerancia a errores del OCR.
+const PALABRAS_NUM = {
+  uno:1, un:1, dos:2, tres:3, cuatro:4, cinco:5, seis:6, siete:7, ocho:8, nueve:9, diez:10, once:11, doce:12, trece:13,
+  catorce:14, quince:15, dieciseis:16, diecisiete:17, dieciocho:18, diecinueve:19, veinte:20, veintiuno:21, veintidos:22,
+  veintitres:23, veinticuatro:24, veinticinco:25, veintiseis:26, veintisiete:27, veintiocho:28, veintinueve:29,
+  treinta:30, cuarenta:40, cincuenta:50, sesenta:60, setenta:70, ochenta:80, noventa:90,
+  cien:100, ciento:100, doscientos:200, trescientos:300, cuatrocientos:400, quinientos:500, seiscientos:600,
+  setecientos:700, ochocientos:800, novecientos:900
+};
+function distanciaTexto(a, b){
+  const m = a.length, n = b.length; if (Math.abs(m - n) > 2) return 9;
+  let prev = Array.from({length: n + 1}, (_, k) => k);
+  for (let i = 1; i <= m; i++){
+    const cur = [i];
+    for (let k = 1; k <= n; k++) cur[k] = Math.min(prev[k] + 1, cur[k - 1] + 1, prev[k - 1] + (a[i - 1] === b[k - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function palabraNumerica(tok){
+  if (/^(mil|ml|mll|mi1|rnil)$/.test(tok)) return { tipo: "mil" };
+  if (/^(millon|millones)$/.test(tok) || (tok.length >= 6 && distanciaTexto(tok, "millones") <= 2) || (tok.length >= 5 && distanciaTexto(tok, "millon") <= 1)) return { tipo: "millon" };
+  if (PALABRAS_NUM[tok] != null) return { tipo: "n", v: PALABRAS_NUM[tok] };
+  if (tok.length < 5) return null;
+  let mejor = null, mejorD = 9, segundoD = 9;
+  for (const [pal, v] of Object.entries(PALABRAS_NUM)){
+    if (pal.length < 5) continue;
+    const d = distanciaTexto(tok, pal);
+    if (d < mejorD){ segundoD = mejorD; mejorD = d; mejor = v; }
+    else if (d < segundoD && v !== mejor) segundoD = d;
+  }
+  const limite = tok.length >= 8 ? 2 : (tok.length >= 6 ? 2 : 1);
+  return (mejor != null && mejorD <= limite && (mejorD <= 1 || segundoD > mejorD)) ? { tipo: "n", v: mejor } : null;
+}
+function extraerMontoEnLetras(texto){
+  const quitar = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const lineas = quitar(texto || "").split(/\n/).map(l => l.split(/[^a-z0-9]+/).filter(Boolean));
+  const aciertos = lineas.map(toks => toks.filter(t => t !== "un" && t !== "uno" && palabraNumerica(t)).length);
+  let mejor = -1, max = 0;
+  aciertos.forEach((a, k) => { if (a > max){ max = a; mejor = k; } });
+  if (mejor < 0 || max < 2) return null;
+  // la cifra puede seguir en el renglón de abajo ("... cuarenta y" / "cuatro con 66/100")
+  const tokens = [...lineas[mejor], ...(aciertos[mejor + 1] >= 1 ? lineas[mejor + 1] : [])];
+  let total = 0, grupo = 0, hubo = false;
+  for (const t of tokens){
+    if (hubo && t === "con") break;
+    if (t === "y" || t === "de") continue;
+    const w = palabraNumerica(t);
+    if (!w) continue;
+    hubo = true;
+    if (w.tipo === "n") grupo += w.v;
+    else if (w.tipo === "mil"){ total += (grupo || 1) * 1000; grupo = 0; }
+    else if (w.tipo === "millon"){ total += (grupo || 1) * 1000000; grupo = 0; }
+  }
+  total += grupo;
+  return (hubo && total >= 100) ? total : null;
 }
 
 // Busca el nombre/alias del banco impreso en el cheque (suele estar en
@@ -4666,7 +4760,7 @@ const ALIAS_BANCOS = [
   { patron: /bbva/i, codigo: 17 },
   { patron: /icbc/i, codigo: 97 },
   { patron: /supervielle/i, codigo: 27 },
-  { patron: /patagonia/i, codigo: 338 }
+  { patron: /patagonia/i, codigo: 34 }
 ];
 
 function extraerBancoDeTexto(texto){
@@ -4720,7 +4814,7 @@ function extraerFechaDeTexto(texto){
     return prev[n];
   };
   const encontradas = [];
-  const reTxt = /(\d{1,2})\s*(?:de|d[eo]|e)?\s+([a-zñ]{3,11})\s+(?:de\s+|d[eo]\s+)?(20\d{2})/gi;
+  const reTxt = /(\d{1,2})\s*(?:[a-zñ]{1,3}\s+)?([a-zñ]{3,11})\s+(?:[a-zñ]{1,3}\s+)?(20\d{2})/gi;
   let mt;
   const bajo = (texto || "").toLowerCase();
   while ((mt = reTxt.exec(bajo))){
@@ -4729,13 +4823,39 @@ function extraerFechaDeTexto(texto){
       const d = dist(mt[2], nombre);
       if (d < mejorD){ mejorD = d; mejor = nombre; }
     }
-    const limite = mt[2].length >= 6 ? 2 : 1;
+    const limite = mt[2].length >= 8 ? 3 : (mt[2].length >= 6 ? 2 : 1);
     const dd = parseInt(mt[1], 10);
-    if (mejor && mejorD <= limite && dd >= 1 && dd <= 31){
+    const anioOk = Math.abs(parseInt(mt[3], 10) - new Date().getFullYear()) <= 1;
+    if (mejor && mejorD <= limite && dd >= 1 && dd <= 31 && anioOk){
       encontradas.push(`${mt[3]}-${String(meses[mejor]).padStart(2,"0")}-${String(dd).padStart(2,"0")}`);
     }
   }
-  if (encontradas.length) return encontradas.sort().pop();
+  // Un vencimiento ya pasado hace más de 20 días casi seguro es la fecha de emisión: no se completa.
+  const limiteMin = new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10);
+  const vigentes = encontradas.filter(f => f >= limiteMin);
+  if (vigentes.length) return vigentes.sort().pop();
+  if (encontradas.length) return null;
+
+  // Día y mes legibles pero el año manuscrito no: se infiere el año más cercano
+  // (el cheque diferido vence dentro de los 360 días); el campo queda editable.
+  const reSinAnio = /(\d{1,2})\s*(?:[a-zñ]{1,3}\s+)?([a-zñ]{4,11})\b/gi;
+  const hoy = new Date(); const hoyMs = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const candidatas = [];
+  while ((mt = reSinAnio.exec(bajo))){
+    let mejor = null, mejorD = 9;
+    for (const nombre of Object.keys(meses)){
+      const d = dist(mt[2], nombre);
+      if (d < mejorD){ mejorD = d; mejor = nombre; }
+    }
+    const dd = parseInt(mt[1], 10);
+    if (mejor && mejorD <= (mt[2].length >= 8 ? 3 : (mt[2].length >= 6 ? 2 : 1)) && dd >= 1 && dd <= 31){
+      let anio = hoy.getFullYear();
+      if (Date.UTC(anio, meses[mejor] - 1, dd) < hoyMs - 60 * 86400000) anio++;
+      candidatas.push(`${anio}-${String(meses[mejor]).padStart(2,"0")}-${String(dd).padStart(2,"0")}`);
+    }
+  }
+  const candVigentes = candidatas.filter(f => f >= limiteMin);
+  if (candVigentes.length) return candVigentes.sort().pop();
 
   return null;
 }
@@ -4999,7 +5119,7 @@ async function procesarFotoCheque(archivo){
     // Varias pasadas con distinto tratamiento de la imagen; cortamos en
     // cuanto tenemos CUIT confirmado, número y banco.
     const modos = ["tinta", "adaptativo"];
-    let cuit = null, numero = null, fecha = null, banco = null, monto = null, varios = false;
+    let cuit = null, numero = null, fecha = null, banco = null, monto = null, montoLetras = null, varios = false;
     const textosLeidos = textosLeidos0;
     const votosNumero = new Map();
     const imagenes = {};
@@ -5040,6 +5160,7 @@ async function procesarFotoCheque(archivo){
       if (!fecha) fecha = extraerFechaDeTexto(texto);
       if (!banco) banco = extraerBancoDeTexto(texto);
       if (!monto) monto = extraerMontoDeTexto(texto);
+      if (!montoLetras) montoLetras = extraerMontoEnLetras(texto);
     }
 
     // Pasada extra solo de dígitos, si todavía no hay un CUIT confirmado
@@ -5063,6 +5184,9 @@ async function procesarFotoCheque(archivo){
       try { await worker.setParameters({ tessedit_char_whitelist: "", tessedit_pageseg_mode: "3" }); } catch (e){}
     }
 
+    // Si los números del monto no se leyeron, usamos el monto en letras.
+    if (montoLetras) monto = Math.round(montoLetras).toLocaleString("es-AR");   // el monto en letras es el que vale legalmente
+
     // El número de cheque se imprime varias veces (arriba, en el cuerpo y en la
     // banda inferior): si un grupo de 8 dígitos se repite, ese gana.
     try {
@@ -5084,7 +5208,7 @@ async function procesarFotoCheque(archivo){
     if (cuit && !cuit.confiable){
       mostrarToast("Encontramos un CUIT parecido pero no lo pudimos confirmar del todo — revisalo antes de consultar.");
     } else if (cuit && varios){
-      mostrarToast("Había más de un CUIT en la foto: elegimos el del librador (el del pie). Revisalo antes de consultar.");
+      mostrarToast("Había más de un CUIT en la foto: elegimos el del titular de la cuenta. Revisalo antes de consultar.");
     } else if (cuit || numero || fecha || banco || monto){
       mostrarToast("Revisá los datos leídos antes de consultar — el OCR no siempre acierta.");
     } else {
