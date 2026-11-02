@@ -280,6 +280,20 @@
     background:var(--white); font-family:'DM Sans', sans-serif; font-size:14.5px; color:var(--ink); outline:none; box-sizing:border-box;}
   .pw-toggle{position:absolute; right:6px; top:50%; transform:translateY(-50%); border:0; background:transparent;
     color:var(--green); font-size:12.5px; font-weight:600; padding:8px 10px; cursor:pointer; font-family:inherit;}
+  .nav-calle{display:none !important;}
+  body.rol-calle .nav-calle{display:block !important;}
+  .cob-est{display:inline-block; font-size:11px; font-weight:700; padding:3px 8px; border-radius:100px;}
+  .cob-est-pendiente{background:#fff3d6; color:#8a5a00;}
+  .cob-est-confirmada{background:#e1f3e8; color:#1f6b45;}
+  .cob-est-rechazada, .cob-est-anulada{background:#fdecea; color:#b3261e;}
+  .cob-card{background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:14px; margin-bottom:12px;}
+  .cob-card .cob-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-weight:700; font-size:14px;}
+  .cob-card .cob-sub{font-size:12px; color:var(--ink-soft); margin:2px 0 8px;}
+  .cob-card .cob-lin{display:flex; justify-content:space-between; font-size:13px; padding:3px 0;}
+  .cob-card .cob-total{border-top:1px solid var(--hairline); margin-top:6px; padding-top:6px; font-weight:700;}
+  .cob-card .cob-saldo{font-size:12px; color:var(--ink-soft); margin-top:6px;}
+  .cob-acciones{display:flex; gap:8px; margin-top:12px;}
+  .cob-acciones .btn{flex:1; padding:10px 6px; font-size:13px;}
   .modal-error{display:none; background:#fdecea; color:#b3261e; border-radius:8px; padding:9px 11px; font-size:12.5px; line-height:1.4; margin:0 0 12px;}
   .modal-error.show{display:block;}
   input:focus{border-color:var(--green);}
@@ -1463,6 +1477,25 @@
   </div>
 
   <!-- ===================== DETALLE DE CLIENTE (dashboard) ===================== -->
+  <!-- ===================== COBRANZA (vendedor de calle) ===================== -->
+  <div class="screen" id="screen-cobranza">
+    <div class="topbar">
+      <div class="brand"><div class="brand-mark">OC</div><div class="brand-name">Cobranza</div></div>
+    </div>
+    <div class="content" id="cobranza-content"></div>
+    <div class="navbar"></div>
+  </div>
+
+  <!-- ===================== COBRANZAS (administración) ===================== -->
+  <div class="screen" id="screen-cobranzas">
+    <div class="topbar">
+      <span onclick="irA('clientes')" style="cursor:pointer; font-size:19px; line-height:1;">←</span>
+      <div class="brand-name">Cobranzas</div>
+    </div>
+    <div class="content" id="cobranzas-content"></div>
+    <div class="navbar"></div>
+  </div>
+
   <div class="screen" id="screen-cliente-detalle">
     <div class="topbar">
       <span onclick="irA('clientes')" style="cursor:pointer; font-size:19px; line-height:1;">←</span>
@@ -1551,6 +1584,38 @@
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="copiarClaveTemporal()">Copiar usuario y clave</button>
         <button class="btn btn-primary" onclick="document.getElementById('modal-clave-temporal').classList.remove('show')">Listo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-cob-editar">
+    <div class="modal-caja">
+      <h3>Corregir cobranza</h3>
+      <p id="cob-ed-texto"></p>
+      <div class="field"><label class="field-label">Total en cheques ($)</label>
+        <input type="text" id="cob-ed-cheques" inputmode="decimal" autocomplete="off"></div>
+      <div class="field"><label class="field-label">Cantidad de cheques</label>
+        <input type="text" id="cob-ed-cant" inputmode="numeric" autocomplete="off"></div>
+      <div class="field"><label class="field-label">Efectivo ($)</label>
+        <input type="text" id="cob-ed-efectivo" inputmode="decimal" autocomplete="off"></div>
+      <div class="modal-error" id="cob-ed-error"></div>
+      <div class="modal-botones">
+        <button class="btn btn-primary" id="btn-cob-editar" onclick="guardarEdicionCobranza()">Guardar corrección</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-cob-editar').classList.remove('show')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-cob-accion">
+    <div class="modal-caja">
+      <h3 id="cob-ac-titulo"></h3>
+      <p id="cob-ac-texto"></p>
+      <div class="field"><label class="field-label">Motivo (opcional)</label>
+        <input type="text" id="cob-ac-motivo" autocomplete="off" placeholder="Ej: monto mal cargado"></div>
+      <div class="modal-error" id="cob-ac-error"></div>
+      <div class="modal-botones">
+        <button class="btn btn-danger" id="btn-cob-accion" onclick="ejecutarAccionCobranza()">Confirmar</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-cob-accion').classList.remove('show')">Volver</button>
       </div>
     </div>
   </div>
@@ -3775,7 +3840,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-02-v47-equipo-clave";
+const VERSION_APP = "2026-11-02-v48-cobranzas";
 
 const state = {
   user: null,
@@ -3850,6 +3915,7 @@ async function aplicarRolUsuario(){
   const u = state.user;
   document.body.classList.toggle("rol-calle", !!(u && u.rol === "calle"));
   state.empresaPremium = true;
+  if (u && u.rol !== "calle") setTimeout(actualizarBadgeCobranzas, 800);
   if (!u || u.rol !== "calle") return true;
   if (u.activo === false){
     await supabaseClient.auth.signOut();
@@ -3904,6 +3970,277 @@ async function confirmarCambioClave(){
     mostrarErrorModal("cc-error", traducirErrorClave(e.message || e));
   } finally { btn.disabled = false; }
 }
+
+/* ---- Cobranzas (vendedor declara; la administración confirma y se descuenta de la cuenta corriente) ---- */
+function esAdminEmpresa(){ return !!(state.user && state.user.rol !== "calle" && (state.user.plan === "premium" || state.user.es_admin)); }
+function monto0(id){ return parseMontoAR(document.getElementById(id).value) || 0; }
+function fechaHoraCorta(iso){
+  try { return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch (e){ return ""; }
+}
+const ETQ_COBRANZA = { pendiente: "Pendiente", confirmada: "Confirmada", rechazada: "Rechazada", anulada: "Anulada" };
+function chipEstadoCobranza(e){ return `<span class="cob-est cob-est-${e}">${ETQ_COBRANZA[e] || e}</span>`; }
+function textoDetalleCobranza(c){
+  const p = [];
+  if (Number(c.monto_cheques) > 0) p.push(`cheques ${formatearPesos(c.monto_cheques)} (${c.cant_cheques})`);
+  if (Number(c.monto_efectivo) > 0) p.push(`efectivo ${formatearPesos(c.monto_efectivo)}`);
+  return `Cobranza de ${c.vendedor_nombre}: ` + p.join(" + ");
+}
+
+// ---- Vendedor de calle ----
+async function renderCobranzaCalle(){
+  const cont = document.getElementById("cobranza-content");
+  if (!esUsuarioEquipo()){ cont.innerHTML = `<div class="empty-state"><p>Esta pantalla es para los vendedores de calle.</p></div>`; return; }
+  if (state.empresaPremium !== true){
+    cont.innerHTML = `<div class="empty-state"><div class="ico">⭐</div><p>Tu empresa no tiene Premium activo, por eso no podés cargar cobranzas. Avisale a tu administración.</p></div>`;
+    return;
+  }
+  cont.innerHTML = `<div class="empty-state"><p>Cargando…</p></div>`;
+  const { data: clientes, error } = await supabaseClient.rpc("clientes_para_cobranza");
+  if (error){ cont.innerHTML = `<div class="empty-state"><p>No pudimos cargar los clientes: ${escHtml(error.message)}</p></div>`; return; }
+  state.clientesCobranza = clientes || [];
+  cont.innerHTML = `
+    <h1 class="page-title">Cargar cobranza</h1>
+    <p class="page-sub">Declará lo que te entregó un cliente. La administración lo ve en el acto. Una vez enviada <b>no se puede modificar</b>: si te equivocás, avisale a la administración.</p>
+    <div class="field"><label class="field-label">Cliente</label>
+      <input type="text" id="cob-filtro" placeholder="Buscar cliente…" autocomplete="off" oninput="filtrarClientesCobranza()" style="margin-bottom:8px;">
+      <select id="cob-cliente" class="select-banco"></select>
+    </div>
+    <div class="field"><label class="field-label">Total recibido en cheques ($)</label>
+      <input type="text" class="mono" id="cob-cheques" inputmode="decimal" placeholder="Ej: 7.000.000" autocomplete="off" oninput="actualizarTotalCobranza()"></div>
+    <div class="field"><label class="field-label">Cantidad de cheques</label>
+      <input type="text" class="mono" id="cob-cant" inputmode="numeric" placeholder="Ej: 5" autocomplete="off"></div>
+    <div class="field"><label class="field-label">Efectivo recibido ($)</label>
+      <input type="text" class="mono" id="cob-efectivo" inputmode="decimal" placeholder="Ej: 3.200.000" autocomplete="off" oninput="actualizarTotalCobranza()"></div>
+    <div class="field"><label class="field-label">Nota (opcional)</label>
+      <input type="text" id="cob-nota" placeholder="Ej: entrega de la semana" autocomplete="off"></div>
+    <div class="cc-fila cc-total" style="margin-bottom:12px;"><span>Total declarado</span><b id="cob-total">$0</b></div>
+    <div class="modal-error" id="cob-error"></div>
+    <button class="btn btn-primary" id="btn-declarar-cobranza" onclick="declararCobranza()">Declarar cobranza</button>
+    <div class="divider-label" style="margin-top:22px;">Mis cobranzas</div>
+    <div id="cob-mias"><p class="page-sub">Cargando…</p></div>`;
+  filtrarClientesCobranza();
+  cargarMisCobranzas();
+}
+function filtrarClientesCobranza(){
+  const q = ((document.getElementById("cob-filtro") || {}).value || "").trim().toLowerCase();
+  const sel = document.getElementById("cob-cliente");
+  if (!sel) return;
+  const actual = sel.value;
+  const lista = (state.clientesCobranza || []).filter(c => !q || c.nombre.toLowerCase().includes(q));
+  sel.innerHTML = (lista.length ? `<option value="">Elegí un cliente…</option>` : `<option value="">No hay clientes que coincidan</option>`)
+    + lista.map(c => `<option value="${c.id}">${escHtml(c.nombre)}</option>`).join("");
+  if (actual && lista.some(c => c.id === actual)) sel.value = actual;
+  else if (lista.length === 1 && q) sel.value = lista[0].id;
+}
+function actualizarTotalCobranza(){
+  const el = document.getElementById("cob-total");
+  if (el) el.textContent = formatearPesos(monto0("cob-cheques") + monto0("cob-efectivo"));
+}
+async function declararCobranza(){
+  mostrarErrorModal("cob-error", "");
+  const cliente = document.getElementById("cob-cliente").value;
+  const ch = monto0("cob-cheques"), ef = monto0("cob-efectivo");
+  const cant = parseInt(String(document.getElementById("cob-cant").value).replace(/\D/g, ""), 10) || 0;
+  const nota = document.getElementById("cob-nota").value.trim();
+  if (!cliente) return mostrarErrorModal("cob-error", "Elegí el cliente.");
+  if (ch + ef <= 0) return mostrarErrorModal("cob-error", "Cargá el total en cheques, el efectivo, o los dos.");
+  if (ch > 0 && cant < 1) return mostrarErrorModal("cob-error", "Indicá cuántos cheques recibiste.");
+  if (ch === 0 && cant > 0) return mostrarErrorModal("cob-error", "Pusiste cantidad de cheques pero no el total en cheques.");
+  const nombre = (state.clientesCobranza.find(c => c.id === cliente) || {}).nombre || "";
+  const resumen = `${nombre}\n` + (ch > 0 ? `Cheques: ${formatearPesos(ch)} (${cant})\n` : "") + (ef > 0 ? `Efectivo: ${formatearPesos(ef)}\n` : "") + `TOTAL: ${formatearPesos(ch + ef)}\n\nUna vez enviada no se puede modificar. ¿Confirmás?`;
+  if (!confirm(resumen)) return;
+  const btn = document.getElementById("btn-declarar-cobranza");
+  btn.disabled = true;
+  try {
+    const { error } = await supabaseClient.rpc("declarar_cobranza", { p_cliente: cliente, p_monto_cheques: ch, p_cant: cant, p_efectivo: ef, p_nota: nota || null });
+    if (error) throw error;
+    mostrarToast("Cobranza enviada a la administración.");
+    ["cob-cheques", "cob-cant", "cob-efectivo", "cob-nota", "cob-filtro"].forEach(id => { document.getElementById(id).value = ""; });
+    document.getElementById("cob-cliente").value = "";
+    actualizarTotalCobranza();
+    filtrarClientesCobranza();
+    cargarMisCobranzas();
+  } catch (e){
+    mostrarErrorModal("cob-error", "No se pudo enviar: " + (e.message || e) + " Tus datos siguen cargados; probá de nuevo.");
+  } finally { btn.disabled = false; }
+}
+async function cargarMisCobranzas(){
+  const cont = document.getElementById("cob-mias");
+  if (!cont) return;
+  const { data, error } = await supabaseClient.rpc("cobranzas_vista", { p_estado: null });
+  if (error){ cont.innerHTML = `<p class="page-sub">No se pudo cargar: ${escHtml(error.message)}</p>`; return; }
+  if (!data || !data.length){ cont.innerHTML = `<p class="page-sub">Todavía no cargaste cobranzas.</p>`; return; }
+  cont.innerHTML = data.slice(0, 30).map(c => `
+    <div class="cob-card">
+      <div class="cob-top"><span>${escHtml(c.cliente_nombre)}</span>${chipEstadoCobranza(c.estado)}</div>
+      <div class="cob-sub">${fechaHoraCorta(c.creado_en)}</div>
+      ${Number(c.monto_cheques) > 0 ? `<div class="cob-lin"><span>Cheques (${c.cant_cheques})</span><b>${formatearPesos(c.monto_cheques)}</b></div>` : ""}
+      ${Number(c.monto_efectivo) > 0 ? `<div class="cob-lin"><span>Efectivo</span><b>${formatearPesos(c.monto_efectivo)}</b></div>` : ""}
+      <div class="cob-lin cob-total"><span>Total</span><b>${formatearPesos(Number(c.monto_cheques) + Number(c.monto_efectivo))}</b></div>
+      ${c.motivo ? `<div class="cob-saldo">Motivo: ${escHtml(c.motivo)}</div>` : ""}
+    </div>`).join("");
+}
+
+// ---- Administración (titular / administrativo) ----
+async function actualizarBadgeCobranzas(){
+  if (!esAdminEmpresa()) return;
+  try {
+    const { data } = await supabaseClient.rpc("cobranzas_pendientes_count");
+    state.cobPendientes = Number(data) || 0;
+  } catch (e){ return; }
+  document.querySelectorAll('.nav-item[data-nav="clientes"]').forEach(n => {
+    let b = n.querySelector(".nav-badge-cob");
+    if (state.cobPendientes > 0){
+      if (!b){ b = document.createElement("span"); b.className = "nav-badge nav-badge-cob"; n.appendChild(b); }
+    } else if (b){ b.remove(); }
+  });
+  const tag = document.getElementById("cob-pend-tag");
+  if (tag) tag.textContent = state.cobPendientes > 0 ? state.cobPendientes + " por conciliar" : "Al día";
+}
+setInterval(() => {
+  if (!state.user) return;
+  actualizarBadgeCobranzas();
+  if (state.pantallaActual === "cobranzas" && !document.querySelector(".modal-overlay.show")) cargarCobranzasAdmin(true);
+}, 20000);
+
+async function cargarCobranzasAdmin(silencioso){
+  const cont = document.getElementById("cobranzas-content");
+  if (!esAdminEmpresa()){ cont.innerHTML = `<div class="empty-state"><p>Esta pantalla es para la administración (Premium).</p></div>`; return; }
+  if (!silencioso) cont.innerHTML = `<div class="empty-state"><p>Cargando…</p></div>`;
+  const [r, clientes] = await Promise.all([
+    supabaseClient.rpc("cobranzas_vista", { p_estado: null }),
+    obtenerClientesUsuario(state.user.id)
+  ]);
+  if (r.error){ cont.innerHTML = `<div class="empty-state"><p>No se pudo cargar: ${escHtml(r.error.message)}</p></div>`; return; }
+  state.clientesUsuario = clientes;
+  state.cobranzas = r.data || [];
+  state.cobTab = state.cobTab || "pendientes";
+  renderCobranzasAdmin();
+  actualizarBadgeCobranzas();
+}
+function cambiarTabCobranzas(t){ state.cobTab = t; renderCobranzasAdmin(); }
+function renderCobranzasAdmin(){
+  const cont = document.getElementById("cobranzas-content");
+  const todas = state.cobranzas || [];
+  const pend = todas.filter(c => c.estado === "pendiente");
+  const hist = todas.filter(c => c.estado !== "pendiente");
+  const tab = state.cobTab || "pendientes";
+  const lista = tab === "pendientes" ? pend.slice().reverse() : hist;
+  const tarjetas = lista.map(c => {
+    const total = Number(c.monto_cheques) + Number(c.monto_efectivo);
+    const cl = (state.clientesUsuario || []).find(x => x.id === c.cliente_id);
+    let saldoTxt = "";
+    if (cl && c.estado === "pendiente"){
+      const nuevo = cl.saldoCC - total;
+      saldoTxt = `<div class="cob-saldo">Saldo actual ${formatearPesos(cl.saldoCC)} → quedaría ${nuevo < 0 ? formatearPesos(-nuevo) + " a favor del cliente" : formatearPesos(nuevo)}</div>`;
+    }
+    const acciones = c.estado === "pendiente"
+      ? `<div class="cob-acciones">
+           <button class="btn btn-primary" onclick="confirmarCobranza('${c.id}')">Confirmar</button>
+           <button class="btn btn-secondary" onclick="abrirEdicionCobranza('${c.id}')">Corregir</button>
+           <button class="btn btn-secondary" onclick="abrirAccionCobranza('${c.id}','rechazar')">Rechazar</button>
+         </div>`
+      : c.estado === "confirmada"
+        ? `<div class="cob-acciones"><button class="btn btn-secondary" onclick="abrirAccionCobranza('${c.id}','anular')">Anular</button></div>` : "";
+    return `
+    <div class="cob-card">
+      <div class="cob-top"><span>${escHtml(c.cliente_nombre)}</span>${chipEstadoCobranza(c.estado)}</div>
+      <div class="cob-sub">Declarada por ${escHtml(c.vendedor_nombre)} · ${fechaHoraCorta(c.creado_en)}${c.editada ? " · corregida" : ""}</div>
+      ${Number(c.monto_cheques) > 0 ? `<div class="cob-lin"><span>Cheques (${c.cant_cheques})</span><b>${formatearPesos(c.monto_cheques)}</b></div>` : ""}
+      ${Number(c.monto_efectivo) > 0 ? `<div class="cob-lin"><span>Efectivo</span><b>${formatearPesos(c.monto_efectivo)}</b></div>` : ""}
+      <div class="cob-lin cob-total"><span>Total</span><b>${formatearPesos(total)}</b></div>
+      ${c.nota ? `<div class="cob-saldo">Nota: ${escHtml(c.nota)}</div>` : ""}
+      ${c.estado !== "pendiente" && c.resuelta_por_nombre ? `<div class="cob-saldo">${ETQ_COBRANZA[c.estado]} por ${escHtml(c.resuelta_por_nombre)} · ${fechaHoraCorta(c.resuelta_en)}${c.motivo ? " · " + escHtml(c.motivo) : ""}</div>` : ""}
+      ${saldoTxt}
+      ${acciones}
+    </div>`;
+  }).join("");
+  cont.innerHTML = `
+    <h1 class="page-title">Cobranzas</h1>
+    <p class="page-sub">Lo que declaran tus vendedores. Al <b>confirmar</b>, el monto se descuenta de la cuenta corriente del cliente.</p>
+    <div class="ge-tabs">
+      <div class="ge-tab ${tab === "pendientes" ? "active" : ""}" onclick="cambiarTabCobranzas('pendientes')">Pendientes (${pend.length})</div>
+      <div class="ge-tab ${tab === "historial" ? "active" : ""}" onclick="cambiarTabCobranzas('historial')">Historial</div>
+    </div>
+    ${tarjetas || `<div class="empty-state"><div class="ico">✅</div><p>${tab === "pendientes" ? "No hay cobranzas por conciliar." : "Todavía no hay cobranzas resueltas."}</p></div>`}`;
+}
+async function confirmarCobranza(id){
+  const c = (state.cobranzas || []).find(x => x.id === id);
+  if (!c) return;
+  const total = Number(c.monto_cheques) + Number(c.monto_efectivo);
+  if (!confirm(`¿Confirmar ${formatearPesos(total)} de ${c.cliente_nombre}? Se descuenta de su cuenta corriente.`)) return;
+  const { error } = await supabaseClient.rpc("confirmar_cobranza", { p_id: id, p_detalle: textoDetalleCobranza(c) });
+  if (error){ mostrarToast(error.message); return; }
+  mostrarToast("Cobranza confirmada y descontada de la cuenta corriente.");
+  cargarCobranzasAdmin(true);
+}
+function abrirEdicionCobranza(id){
+  const c = (state.cobranzas || []).find(x => x.id === id);
+  if (!c) return;
+  state.cobEditandoId = id;
+  document.getElementById("cob-ed-texto").textContent = c.cliente_nombre + " · declarada por " + c.vendedor_nombre;
+  document.getElementById("cob-ed-cheques").value = Number(c.monto_cheques) > 0 ? String(Math.round(Number(c.monto_cheques))) : "";
+  document.getElementById("cob-ed-cant").value = c.cant_cheques || "";
+  document.getElementById("cob-ed-efectivo").value = Number(c.monto_efectivo) > 0 ? String(Math.round(Number(c.monto_efectivo))) : "";
+  mostrarErrorModal("cob-ed-error", "");
+  document.getElementById("modal-cob-editar").classList.add("show");
+}
+async function guardarEdicionCobranza(){
+  const ch = monto0("cob-ed-cheques"), ef = monto0("cob-ed-efectivo");
+  const cant = parseInt(String(document.getElementById("cob-ed-cant").value).replace(/\D/g, ""), 10) || 0;
+  if (ch + ef <= 0) return mostrarErrorModal("cob-ed-error", "Cargá al menos un monto.");
+  if (ch > 0 && cant < 1) return mostrarErrorModal("cob-ed-error", "Indicá cuántos cheques.");
+  const { error } = await supabaseClient.rpc("editar_cobranza", { p_id: state.cobEditandoId, p_monto_cheques: ch, p_cant: cant, p_efectivo: ef });
+  if (error) return mostrarErrorModal("cob-ed-error", error.message);
+  document.getElementById("modal-cob-editar").classList.remove("show");
+  mostrarToast("Cobranza corregida. Falta confirmarla.");
+  cargarCobranzasAdmin(true);
+}
+function abrirAccionCobranza(id, accion){
+  const c = (state.cobranzas || []).find(x => x.id === id);
+  if (!c) return;
+  state.cobAccion = { id, accion };
+  document.getElementById("cob-ac-titulo").textContent = accion === "anular" ? "Anular cobranza confirmada" : "Rechazar cobranza";
+  document.getElementById("cob-ac-texto").textContent = accion === "anular"
+    ? `Se quita el pago de ${c.cliente_nombre} y su saldo vuelve a lo que era antes de confirmarla.`
+    : `La cobranza de ${c.cliente_nombre} queda rechazada y no modifica la cuenta corriente.`;
+  document.getElementById("btn-cob-accion").textContent = accion === "anular" ? "Anular cobranza" : "Rechazar cobranza";
+  document.getElementById("cob-ac-motivo").value = "";
+  mostrarErrorModal("cob-ac-error", "");
+  document.getElementById("modal-cob-accion").classList.add("show");
+}
+async function ejecutarAccionCobranza(){
+  const { id, accion } = state.cobAccion || {};
+  if (!id) return;
+  const motivo = document.getElementById("cob-ac-motivo").value.trim();
+  const { error } = await supabaseClient.rpc(accion === "anular" ? "anular_cobranza" : "rechazar_cobranza", { p_id: id, p_motivo: motivo || null });
+  if (error) return mostrarErrorModal("cob-ac-error", error.message);
+  document.getElementById("modal-cob-accion").classList.remove("show");
+  mostrarToast(accion === "anular" ? "Cobranza anulada: el saldo se restituyó." : "Cobranza rechazada.");
+  cargarCobranzasAdmin(true);
+}
+
+// Item "Cobranza" en la barra de abajo (solo lo ve el vendedor) y barras de las pantallas nuevas.
+function instalarNavCobranza(){
+  const base = document.querySelector("#screen-home .navbar");
+  if (!base) return;
+  const html = base.innerHTML;
+  ["screen-cobranza", "screen-cobranzas"].forEach(id => {
+    const nb = document.querySelector("#" + id + " .navbar");
+    if (nb && !nb.innerHTML.trim()) nb.innerHTML = html;
+  });
+  document.querySelectorAll(".navbar").forEach(nb => {
+    if (nb.querySelector('[data-nav="cobranza"]')) return;
+    const cuenta = nb.querySelector('[data-nav="cuenta"]');
+    const it = document.createElement("div");
+    it.className = "nav-item nav-calle";
+    it.dataset.nav = "cobranza";
+    it.setAttribute("onclick", "irA('cobranza')");
+    it.innerHTML = '<svg class="nav-ico" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.8"/></svg>Cobranza';
+    nb.insertBefore(it, cuenta);
+  });
+}
+instalarNavCobranza();
 
 // Llamadas al servidor para administrar el equipo (solo el titular Premium).
 async function llamarEquipo(accion, datos){
@@ -4065,6 +4402,7 @@ async function alternarAvisosVencimiento(){
 function actualizarNavActivo(){
   let clave = state.pantallaActual || "home";
   if (clave === "alertas" && state.tabGestion === "calendario") clave = "calendario";
+  if (clave === "cobranzas") clave = "clientes";
   document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.nav === clave));
 }
 function irAAlertas(){
@@ -4087,6 +4425,8 @@ function irA(pantalla){
   if (pantalla === "cuenta") renderCuenta();
   if (pantalla === "paywall") renderPaywall();
   if (pantalla === "clientes") renderClientes();
+  if (pantalla === "cobranza") renderCobranzaCalle();
+  if (pantalla === "cobranzas") cargarCobranzasAdmin();
   if (pantalla === "alertas") renderGestion();
   if (pantalla === "cliente-detalle") renderClienteDetalle(state.clienteActualId);
   if (pantalla === "home" && state.user){
@@ -6555,8 +6895,13 @@ async function renderClientes(){
       </div>`).join("");
 
   cont.innerHTML = `
+    <div class="hist-row" style="cursor:pointer; margin-bottom:14px;" onclick="irA('cobranzas')">
+      <div class="hist-top"><span>Cobranzas de vendedores</span><span class="tag" id="cob-pend-tag">${state.cobPendientes > 0 ? state.cobPendientes + " por conciliar" : "Ver"}</span></div>
+      <div class="hist-mid">Lo que declaran tus vendedores de calle. Al confirmar, baja el saldo del cliente.</div>
+    </div>
     <button class="btn btn-primary" style="margin-bottom:14px;" onclick="abrirModalNuevoCliente()">+ Nuevo cliente</button>
     ${listaHtml}`;
+  actualizarBadgeCobranzas();
 }
 
 function abrirModalNuevoCliente(){
@@ -6671,7 +7016,7 @@ function construirBloqueCuentaCorriente(cliente, movimientos){
     <div class="cc-mov">
       <div>${ETQ[m.tipo] || m.tipo}${m.detalle ? " · " + escHtml(m.detalle) : ""}<small>${new Date(m.fecha + "T00:00:00").toLocaleDateString("es-AR")}${m.vence ? " · vence " + new Date(m.vence + "T00:00:00").toLocaleDateString("es-AR") : ""}</small></div>
       <div><b style="color:${m.tipo === "factura" ? "var(--ink)" : "#2F6B4F"}">${m.tipo === "factura" ? "+" : "−"}${formatearPesos(Number(m.monto))}</b>
-        <button class="cc-x" title="Eliminar" onclick="eliminarMovimiento('${m.id}')">✕</button></div>
+        ${m.cobranza_id ? "" : `<button class="cc-x" title="Eliminar" onclick="eliminarMovimiento('${m.id}')">✕</button>`}</div>
     </div>`).join("");
   let estado = "";
   if (x.limite){
@@ -6685,7 +7030,7 @@ function construirBloqueCuentaCorriente(cliente, movimientos){
   return `
     <div class="cc-card">
       <h3>Cuenta corriente</h3>
-      <div class="cc-fila"><span>Saldo (facturas − pagos)</span><b>${formatearPesos(saldo)}</b></div>
+      <div class="cc-fila"><span>Saldo (facturas − pagos)</span><b>${saldo < 0 ? formatearPesos(-saldo) + " a favor del cliente" : formatearPesos(saldo)}</b></div>
       <div class="cc-fila"><span>Cheques sin cobrar</span><b>${formatearPesos(abiertos)}</b></div>
       <div class="cc-fila cc-total"><span>Exposición total</span><b>${formatearPesos(x.exposicion)}</b></div>
       ${estado}
@@ -6693,6 +7038,7 @@ function construirBloqueCuentaCorriente(cliente, movimientos){
         <button class="btn btn-secondary" onclick="abrirModalMovimiento('factura')">+ Factura</button>
         <button class="btn btn-secondary" onclick="abrirModalMovimiento('pago')">+ Pago</button>
       </div>
+      <div class="cc-botones" style="margin-top:8px;"><button class="btn btn-secondary" onclick="abrirModalMovimiento('saldo_inicial')">+ Saldo inicial (lo que te debe hoy)</button></div>
       <div class="field-hint" style="margin-top:8px;">Cuando recibís un cheque como pago, registralo acá como pago: el cheque sigue sumando a la exposición hasta que se cobre.</div>
       ${filas ? `<div style="margin-top:10px;">${filas}</div>` : ""}
       ${movimientos.length ? `<button class="btn btn-secondary" style="margin-top:10px;" onclick="abrirModalMovimiento('nota_credito')">+ Nota de crédito</button>` : ""}
@@ -6700,8 +7046,9 @@ function construirBloqueCuentaCorriente(cliente, movimientos){
 }
 
 function abrirModalMovimiento(tipo){
-  state.movTipo = tipo;
-  const T = {
+  const esSaldoInicial = tipo === "saldo_inicial";
+  state.movTipo = esSaldoInicial ? "factura" : tipo;
+  const T = esSaldoInicial ? ["Saldo inicial", "Cargá lo que este cliente te debe hoy. Después, cada cobranza que confirmes lo va bajando."] : {
     factura: ["Nueva factura", "Suma a lo que el cliente te debe."],
     pago: ["Nuevo pago", "Resta de lo que el cliente te debe (efectivo, transferencia o cheque recibido)."],
     nota_credito: ["Nueva nota de crédito", "Resta de lo que el cliente te debe (devolución o descuento)."]
@@ -6709,10 +7056,10 @@ function abrirModalMovimiento(tipo){
   document.getElementById("modal-mov-titulo").textContent = T[0];
   document.getElementById("modal-mov-texto").textContent = T[1];
   document.getElementById("input-mov-monto").value = "";
-  document.getElementById("input-mov-detalle").value = "";
+  document.getElementById("input-mov-detalle").value = esSaldoInicial ? "Saldo inicial" : "";
   document.getElementById("input-mov-fecha").value = new Date().toISOString().slice(0, 10);
   document.getElementById("input-mov-vence").value = "";
-  document.getElementById("field-mov-vence").style.display = tipo === "factura" ? "" : "none";
+  document.getElementById("field-mov-vence").style.display = (tipo === "factura") ? "" : "none";
   document.getElementById("modal-movimiento").classList.add("show");
 }
 function cerrarModalMovimiento(){ document.getElementById("modal-movimiento").classList.remove("show"); }
