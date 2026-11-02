@@ -18,7 +18,7 @@ const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
 const DOMINIO = "usuarios.opencheck.pro";
 const ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"; // sin letras que se confunden
 
-const resp = (status, obj) => ({ statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) });
+const resp = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 
 function claveTemporal(){
   let s = "";
@@ -26,14 +26,14 @@ function claveTemporal(){
   return s;
 }
 
-export const handler = async (event) => {
-  if (event.httpMethod !== "POST") return resp(405, { error: "Método no permitido" });
+export default async (req) => {
+  if (req.method !== "POST") return resp(405, { error: "Método no permitido" });
   const clave = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!clave) return resp(500, { error: "Falta SUPABASE_SERVICE_ROLE_KEY" });
   const admin = createClient(SUPABASE_URL, clave, { auth: { persistSession: false } });
 
   // 1) Quién llama
-  const token = (event.headers.authorization || event.headers.Authorization || "").replace(/^Bearer\s+/i, "");
+  const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!token) return resp(401, { error: "Sesión no válida" });
   const { data: au, error: eAu } = await admin.auth.getUser(token);
   if (eAu || !au || !au.user) return resp(401, { error: "Sesión no válida" });
@@ -44,7 +44,7 @@ export const handler = async (event) => {
   if (!(dueno.plan === "premium" || dueno.es_admin)) return resp(403, { error: "El equipo es una función Premium." });
 
   let body = {};
-  try { body = JSON.parse(event.body || "{}"); } catch (e) { return resp(400, { error: "Pedido inválido" }); }
+  try { body = JSON.parse((await req.text()) || "{}"); } catch (e) { return resp(400, { error: "Pedido inválido" }); }
 
   const traerMiembro = async (id) => {
     const { data } = await admin.from("usuarios").select("id, auth_user_id, nombre, dueno_id, rol, activo").eq("id", id).maybeSingle();
