@@ -1939,6 +1939,7 @@ async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, punt
   if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
 }
 function armarAnalisisGuardado(datos, resultado, chequeInfo){
+  if (typeof PDF_SOLO_PREMIUM !== "undefined" && PDF_SOLO_PREMIUM && !esPremiumEfectivo()) return null;   // el informe guardado es función Premium
   try { return JSON.parse(JSON.stringify({ v: 1, datos, resultado, chequeInfo: chequeInfo || null })); } catch(e){ return null; }
 }
 
@@ -3872,7 +3873,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-03-v52-historial-informe";
+const VERSION_APP = "2026-11-03-v53-informe-premium";
 
 const state = {
   user: null,
@@ -6371,7 +6372,9 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   if (state.ctxResultado){ Object.assign(window.ultimoContexto, state.ctxResultado); state.ctxResultado = null; }
   if (state.cuitResultado) state.cuitResultado = null;
   const _bc = document.getElementById("btn-pdf-compartir");
-  if (_bc) _bc.style.display = puedeCompartirPdf() ? "" : "none";
+  if (_bc) _bc.style.display = (puedeCompartirPdf() && esPremiumEfectivo()) ? "" : "none";
+  const _bp = document.getElementById("btn-pdf-consulta");
+  if (_bp) _bp.textContent = esPremiumEfectivo() ? "Descargar informe en PDF" : "Informe en PDF (función Premium)";
 
   document.getElementById("stamp-holder").innerHTML = construirSello(resultado.categoria);
   document.getElementById("res-empresa").textContent = datos.empresa;
@@ -6490,7 +6493,8 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
    INFORME EN PDF DE CADA CONSULTA (v51)
    Se arma en el dispositivo con jsPDF; no sube nada a ningún servidor.
    ======================================================= */
-const PDF_SOLO_PREMIUM = false;   // true = solo usuarios Premium
+const PDF_SOLO_PREMIUM = true;   // true = solo usuarios Premium (o de una empresa Premium)
+function esPremiumEfectivo(){ return !!(state.user && (state.user.plan === "premium" || state.user.es_admin || state.empresaPremium === true)); }
 function esAppNativaPdf(){ try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch(e){ return false; } }
 function pluginsNativosPdf(){ const P = (window.Capacitor && window.Capacitor.Plugins) || {}; return (P.Filesystem && P.Share) ? P : null; }
 function puedeCompartirPdf(){
@@ -6655,7 +6659,7 @@ async function construirPdfConsulta(){
   return { doc, nombre: `OpenCheck-${cuitDigitos || "consulta"}-${cuando.getFullYear()}${pad(cuando.getMonth()+1)}${pad(cuando.getDate())}.pdf` };
 }
 async function descargarPdfConsulta(compartir){
-  if (PDF_SOLO_PREMIUM && !(state.user && (state.user.plan === "premium" || state.user.es_admin || state.empresaPremium))){ mostrarToast("El informe en PDF es una función Premium."); return; }
+  if (PDF_SOLO_PREMIUM && !esPremiumEfectivo()){ mostrarToast("El informe en PDF es una función Premium."); return; }
   const btn = document.getElementById(compartir ? "btn-pdf-compartir" : "btn-pdf-consulta");
   const textoOrig = btn ? btn.textContent : "";
   if (btn){ btn.disabled = true; btn.textContent = "Preparando PDF…"; }
