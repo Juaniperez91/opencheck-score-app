@@ -1397,7 +1397,9 @@
       <div class="fuente-nota" id="res-fechas-datos" style="display:none;"></div>
 
       <div class="res-cob-acciones" id="res-cob-acciones-bottom"></div>
-      <button class="btn btn-secondary" onclick="volverDeResultado()">Volver a consultar</button>
+      <button class="btn btn-primary" id="btn-pdf-consulta" onclick="descargarPdfConsulta(false)">Descargar informe en PDF</button>
+      <button class="btn btn-secondary" id="btn-pdf-compartir" onclick="descargarPdfConsulta(true)" style="margin-top:8px; display:none;">Compartir informe</button>
+      <button class="btn btn-secondary" onclick="volverDeResultado()" style="margin-top:8px;">Volver a consultar</button>
     </div>
   </div>
 
@@ -3862,7 +3864,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-03-v50-cheque-como-consulta";
+const VERSION_APP = "2026-11-03-v51-pdf-consulta";
 
 const state = {
   user: null,
@@ -4182,6 +4184,7 @@ async function verAnalisisLibrador(cuit, banco, numero){
   }
   const resultado = calcularScore(datos);
   state.volverA = "cobranzas";
+  state.cuitResultado = formatearCuit(digits);
   mostrarResultado(datos, resultado, numero || "", null, fuente);
   irA("resultado");
 }
@@ -6347,10 +6350,22 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   // copy(JSON.stringify(window.ultimoResultado.detalle.deudaVsInflacion.detalleMensual))
   window.ultimoResultado = resultado;
   window.ultimosDatos = datos;
+  const _val = (id) => { const e = document.getElementById(id); return e ? e.value : ""; };
+  window.ultimoContexto = {
+    cuitTexto: state.cuitResultado || (() => { const c = _val("consulta-cuit"), d = c.replace(/\D/g, ""); return d.length === 11 ? formatearCuit(d) : c; })(),
+    numeroCheque: numeroCheque || "", chequeInfo: chequeInfo || null, fuente,
+    banco: numeroCheque ? _val("consulta-banco-cheque") : "",
+    vencimiento: numeroCheque ? _val("consulta-fecha-vencimiento") : "",
+    monto: numeroCheque ? parseMontoAR(_val("consulta-monto-cheque")) : 0,
+    cuando: new Date().toISOString()
+  };
+  if (state.cuitResultado) state.cuitResultado = null;
+  const _bc = document.getElementById("btn-pdf-compartir");
+  if (_bc) _bc.style.display = puedeCompartirPdf() ? "" : "none";
 
   document.getElementById("stamp-holder").innerHTML = construirSello(resultado.categoria);
   document.getElementById("res-empresa").textContent = datos.empresa;
-  document.getElementById("res-cuit").textContent = document.getElementById("consulta-cuit").value || "—";
+  document.getElementById("res-cuit").textContent = window.ultimoContexto.cuitTexto || "—";
 
   const fuenteBadge = fuente === "real"
     ? `<span class="fuente-badge fuente-real">API BCRA real</span>`
@@ -6458,6 +6473,208 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   document.getElementById("res-tendencia").className = "mini-val tendencia-val tendencia-" + tendencia.toLowerCase();
   document.getElementById("res-sparkline-situacion").innerHTML = construirSparklineSituacion(datos.historialSituacion);
   document.getElementById("res-sparkline-deuda").innerHTML = construirSparklineDeuda(datos.historialDeuda);
+}
+
+
+/* =======================================================
+   INFORME EN PDF DE CADA CONSULTA (v51)
+   Se arma en el dispositivo con jsPDF; no sube nada a ningún servidor.
+   ======================================================= */
+const PDF_SOLO_PREMIUM = false;   // true = solo usuarios Premium
+function esAppNativaPdf(){ try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch(e){ return false; } }
+function pluginsNativosPdf(){ const P = (window.Capacitor && window.Capacitor.Plugins) || {}; return (P.Filesystem && P.Share) ? P : null; }
+function puedeCompartirPdf(){
+  if (esAppNativaPdf()) return !!pluginsNativosPdf();
+  try { return !!(navigator.canShare && navigator.canShare({ files: [new File(["x"], "x.pdf", { type: "application/pdf" })] })); } catch(e){ return false; }
+}
+function cargarJsPdf(){
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+  return new Promise((ok, fail) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    sc.onload = () => ok(); sc.onerror = () => fail(new Error("No se pudo cargar el generador de PDF (revisá tu conexión)."));
+    document.head.appendChild(sc);
+  });
+}
+// Texto apto para el PDF: sin HTML y sin caracteres que la tipografía estándar no dibuja.
+function textoPdf(t){
+  if (t == null) return "";
+  let h = String(t).replace(/<\s*br\s*\/?>/gi, "\n").replace(/<\/(li|p|div)>/gi, "\n").replace(/<li[^>]*>/gi, "- ");
+  const d = document.createElement("div"); d.innerHTML = h;
+  return (d.textContent || "").replace(/[–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/…/g, "...").replace(/[•●]/g, "-").replace(/→/g, "->").replace(/≥/g, ">=").replace(/≤/g, "<=")
+    .replace(/[^\x09\x0A\x20-\x7E -ÿ]/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+function colorPdfCategoria(cat){
+  const t = (cat || "?")[0];
+  return t === "A" ? [15,110,86] : t === "B" ? [184,134,46] : t === "C" ? [166,61,61] : [100,100,100];
+}
+async function construirPdfConsulta(){
+  await cargarJsPdf();
+  const datos = window.ultimosDatos, res = window.ultimoResultado, ctx = window.ultimoContexto || {};
+  if (!datos || !res) throw new Error("No hay una consulta para exportar.");
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+  const W = 210, M = 15, AN = W - 2 * M, PIE = 282;
+  let y = M;
+  const cuando = new Date(ctx.cuando || Date.now());
+  const pad = (n) => String(n).padStart(2, "0");
+  const cuitDigitos = (ctx.cuitTexto || "").replace(/\D/g, "");
+  const idInforme = `OC-${cuando.getFullYear()}${pad(cuando.getMonth()+1)}${pad(cuando.getDate())}-${pad(cuando.getHours())}${pad(cuando.getMinutes())}-${cuitDigitos}`;
+  const nuevaPagina = () => { doc.addPage(); y = M; };
+  const asegurar = (alto) => { if (y + alto > PIE) nuevaPagina(); };
+  const escribir = (texto, { size = 10, bold = false, color = [40,40,40], x = M, ancho = AN, gap = 1.2 } = {}) => {
+    const t = textoPdf(texto); if (!t) return;
+    doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(...color);
+    const lh = size * 0.40;
+    for (const linea of doc.splitTextToSize(t, ancho)){ asegurar(lh + 1); doc.text(linea, x, y + lh * 0.8); y += lh; }
+    y += gap;
+  };
+  const titulo = (t) => { asegurar(14); y += 3; escribir(t, { size: 12, bold: true, color: [28,79,130], gap: 0.5 }); doc.setDrawColor(200); doc.line(M, y, W - M, y); y += 3; };
+  const par = (k, v) => { asegurar(6); doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.setTextColor(90,90,90); doc.text(textoPdf(k), M, y + 3.4);
+    doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30); const l = doc.splitTextToSize(textoPdf(v) || "-", AN - 48); doc.text(l, M + 48, y + 3.4); y += Math.max(5.5, l.length * 4.2); };
+
+  // Encabezado
+  doc.setFillColor(28,79,130); doc.rect(0, 0, W, 22, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(17); doc.setTextColor(255,255,255); doc.text("OpenCheck", M, 13.5);
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.text("Informe de consulta", W - M, 13.5, { align: "right" });
+  y = 30;
+  par("Informe N°", idInforme);
+  par("Fecha y hora", cuando.toLocaleString("es-AR"));
+  par("Consultado por", (state.user && (state.user.nombre || state.user.email)) || "-");
+
+  // Librador
+  titulo("Librador consultado");
+  escribir(datos.empresa || "-", { size: 15, bold: true, gap: 1 });
+  par("CUIT / CUIL", ctx.cuitTexto || "-");
+  par("Fuente de datos", ctx.fuente === "real" ? "API BCRA real (Central de Deudores)" : "Datos de ejemplo (demo) - no son datos reales del BCRA");
+
+  // Resultado
+  titulo("Resultado");
+  const cat = res.categoria, col = colorPdfCategoria(cat);
+  asegurar(20);
+  doc.setFillColor(...col); doc.roundedRect(M, y, 26, 16, 2, 2, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(20); doc.setTextColor(255,255,255); doc.text(String(cat), M + 13, y + 11, { align: "center" });
+  doc.setTextColor(30,30,30); doc.setFontSize(13); doc.text(datos.sinAntecedentesDeuda ? "Sin antecedentes suficientes" : (TRAMO_LABEL[cat] || ""), M + 32, y + 7);
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(90,90,90); doc.text(`Puntaje final: ${res.puntosFinales} / 100`, M + 32, y + 13);
+  y += 21;
+  if (res.forzadoC2) escribir("NO OPERABLE: " + res.motivo, { bold: true, color: [166,61,61] });
+  else if (res.motivo) escribir("Penalización aplicada: " + res.motivo, { bold: true, color: [166,61,61] });
+  if (datos.sinAntecedentesDeuda) escribir("El BCRA no informa relación con entidades bancarias para este CUIT. Sin historial de comportamiento no es posible clasificar con precisión; no equivale a un mal historial.", { color: [120,90,20] });
+
+  // Cheque
+  if (ctx.numeroCheque){
+    titulo("Cheque consultado");
+    par("N° de cheque", ctx.numeroCheque);
+    if (ctx.banco) par("Banco", (typeof nombreBancoPorCodigo === "function" ? nombreBancoPorCodigo(ctx.banco) : "") || ctx.banco);
+    if (ctx.vencimiento) par("Vencimiento", ctx.vencimiento.split("-").reverse().join("/"));
+    if (ctx.monto > 0) par("Monto", formatearPesos(ctx.monto));
+    const ci = ctx.chequeInfo;
+    const estado = ci && ci.noDisponible ? "No se pudo verificar (el BCRA no respondió). No implica que esté libre de denuncias."
+      : ci && ci.denunciado ? "DENUNCIADO: " + (ci.motivo || "")
+      : "Sin denuncias de extravío, robo ni oposición al pago en BCRA.";
+    par("Denuncias (BCRA)", estado);
+  }
+
+  // Cómo operar y por qué
+  const recos = datos.sinAntecedentesDeuda
+    ? ["Complementá con otras referencias del librador antes de decidir.", "Prestá atención al historial de rechazos de cheques, que se evaluó de forma independiente."]
+    : (RECOMENDACIONES[cat] || []);
+  if (recos.length){ titulo("Cómo operar"); recos.forEach(r => escribir("- " + r)); }
+  titulo("Por qué obtuvo esta categoría");
+  escribir(res.narrativa);
+
+  // Factores
+  titulo("Detalle del puntaje");
+  for (const v of Object.values(res.detalle)){
+    asegurar(16);
+    const pen = v.factorPenalizacion !== undefined;
+    const valor = v.noDisponible ? "N/D" : pen ? (v.factorPenalizacion > 0 ? `-${Math.round(v.factorPenalizacion*100)}%` : "sin descuento") : `${v.puntos}/${v.max}`;
+    doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(30,30,30); doc.text(textoPdf(v.label), M, y + 3.5);
+    doc.text(valor, W - M, y + 3.5, { align: "right" });
+    const frac = v.noDisponible ? 0 : pen ? v.factorPenalizacion : (v.max ? v.puntos / v.max : 0);
+    doc.setFillColor(230,230,230); doc.rect(M, y + 5, AN, 1.6, "F");
+    doc.setFillColor(...(pen && v.factorPenalizacion > 0 ? [166,61,61] : [28,79,130])); doc.rect(M, y + 5, AN * Math.max(0, Math.min(1, frac)), 1.6, "F");
+    y += 9;
+    escribir(v.desc, { size: 9, color: [90,90,90], gap: 2.2 });
+  }
+
+  // Entidades
+  titulo("Detalle por entidad bancaria");
+  const ents = datos.entidades || [];
+  par("Entidades", String(ents.length));
+  par("Concentración", calcularConcentracionBancaria(ents) + "%");
+  y += 1;
+  ents.forEach(e => {
+    asegurar(6);
+    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(30,30,30);
+    const nom = doc.splitTextToSize(textoPdf(e.nombre), 78)[0];
+    doc.text(nom, M, y + 3.4);
+    doc.text("Sit. " + e.situacion, M + 82, y + 3.4);
+    doc.text(formatearMonto(e.monto).replace(/[^\x20-\x7E -ÿ]/g, ""), M + 100, y + 3.4);
+    doc.text(e.diasAtraso > 0 ? e.diasAtraso + " días de atraso" : (e.situacion > 1 ? "sin días informados" : "al día"), W - M, y + 3.4, { align: "right" });
+    y += 5.2;
+  });
+
+  // Evolución
+  titulo("Evolución BCRA (hasta 24 meses)");
+  const hs = datos.historialSituacion || [], hd = datos.historialDeuda || [];
+  if (hs.length){
+    par("Peor situación (12 m)", "Situación " + Math.max(...hs.slice(-12)));
+    par("Tendencia de deuda", calcularTendenciaDeuda(hd));
+    asegurar(24);
+    const n = hs.length, bw = AN / n; const base = y + 20;
+    hs.forEach((sit, i) => { const alto = (sit / 6) * 18; doc.setFillColor(...(sit <= 2 ? [15,110,86] : sit <= 4 ? [184,134,46] : [166,61,61])); doc.rect(M + i * bw + 0.4, base - alto, bw - 0.8, alto, "F"); });
+    y = base + 3; escribir("Situación crediticia por mes (barras más altas = peor situación).", { size: 8, color: [110,110,110] });
+  }
+  const fechas = [];
+  if (/^\d{6}$/.test(datos.periodoBCRA || "")) fechas.push("Central de Deudores (BCRA): " + formatearPeriodoActividad(datos.periodoBCRA));
+  if (/^\d{6}$/.test(datos.periodoInflacion || "")) fechas.push("Inflación (BCRA): " + formatearPeriodoActividad(datos.periodoInflacion));
+  if (/^\d{4}-\d{2}/.test(datos.periodoSectorial || "")) fechas.push("Actividad sectorial (INDEC): " + formatearPeriodoEMAE(datos.periodoSectorial));
+  if (ctx.fuente === "real" && fechas.length) escribir("Datos al: " + fechas.join(" · ") + ". Estas fuentes publican con rezago respecto del mes en curso.", { size: 9, color: [90,90,90] });
+
+  // Aviso legal
+  titulo("Aviso importante");
+  escribir("Informe orientativo elaborado con información pública de la Central de Deudores del BCRA y otras fuentes oficiales, tal como estaba disponible al momento de la consulta. No constituye una recomendación de crédito ni una garantía de cumplimiento, y la decisión de operar es exclusiva de quien lo utiliza. Las fuentes pueden contener errores u omisiones. La categoría resulta de un modelo estadístico y no es una opinión sobre la persona o empresa consultada.", { size: 8.5, color: [100,100,100] });
+
+  // Pie en todas las páginas
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++){
+    doc.setPage(i); doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(130,130,130);
+    doc.text(`OpenCheck - opencheck.pro - Informe ${idInforme}`, M, 290); doc.text(`Página ${i} de ${total}`, W - M, 290, { align: "right" });
+  }
+  return { doc, nombre: `OpenCheck-${cuitDigitos || "consulta"}-${cuando.getFullYear()}${pad(cuando.getMonth()+1)}${pad(cuando.getDate())}.pdf` };
+}
+async function descargarPdfConsulta(compartir){
+  if (PDF_SOLO_PREMIUM && !(state.user && (state.user.plan === "premium" || state.user.es_admin || state.empresaPremium))){ mostrarToast("El informe en PDF es una función Premium."); return; }
+  const btn = document.getElementById(compartir ? "btn-pdf-compartir" : "btn-pdf-consulta");
+  const textoOrig = btn ? btn.textContent : "";
+  if (btn){ btn.disabled = true; btn.textContent = "Preparando PDF…"; }
+  try {
+    if (esAppNativaPdf() && !pluginsNativosPdf()){ mostrarToast("En la app, el PDF llega con la próxima actualización. Mientras tanto, descargalo desde opencheck.pro."); return; }
+    const { doc, nombre } = await construirPdfConsulta();
+    if (esAppNativaPdf()){
+      const P = pluginsNativosPdf();
+      const b64 = doc.output("datauristring").split(",")[1];
+      const r = await P.Filesystem.writeFile({ path: nombre, data: b64, directory: "CACHE" });
+      await P.Share.share({ title: "Informe OpenCheck", url: r.uri, dialogTitle: "Compartir informe" });
+    } else {
+      const blob = doc.output("blob");
+      const archivo = new File([blob], nombre, { type: "application/pdf" });
+      if (compartir && navigator.canShare && navigator.canShare({ files: [archivo] })){
+        await navigator.share({ files: [archivo], title: "Informe OpenCheck" });
+      } else {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre;
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        mostrarToast("Informe descargado.");
+      }
+    }
+  } catch (e){
+    if (e && e.name === "AbortError") return;   // el usuario cerró el menú de compartir
+    console.warn("[OpenCheck] PDF:", e);
+    mostrarToast("No pudimos armar el PDF: " + (e.message || "error"));
+  } finally {
+    if (btn){ btn.disabled = false; btn.textContent = textoOrig; }
+  }
 }
 
 /* ---- Verificar denuncia de cheque ---- */
