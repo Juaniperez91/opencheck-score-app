@@ -1332,10 +1332,11 @@
   <!-- ===================== RESULTADO ===================== -->
   <div class="screen" id="screen-resultado">
     <div class="topbar">
-      <span onclick="irA('home')" style="cursor:pointer; font-size:19px; line-height:1;">←</span>
+      <span onclick="volverDeResultado()" style="cursor:pointer; font-size:19px; line-height:1;">←</span>
       <div class="brand-name">Resultado</div>
     </div>
     <div class="content">
+      <div class="res-cob-acciones" id="res-cob-acciones-top"></div>
       <div class="stamp-wrap" id="stamp-holder"></div>
       <div class="result-meta">
         <div class="company" id="res-empresa">—</div>
@@ -1395,7 +1396,8 @@
       <div class="fuente-nota">Fuente: Central de Deudores del Sistema Financiero, Banco Central de la República Argentina (BCRA) — centraldedeudores.bcra.gob.ar. Acceso público y gratuito.</div>
       <div class="fuente-nota" id="res-fechas-datos" style="display:none;"></div>
 
-      <button class="btn btn-secondary" onclick="irA('home')">Volver a consultar</button>
+      <div class="res-cob-acciones" id="res-cob-acciones-bottom"></div>
+      <button class="btn btn-secondary" onclick="volverDeResultado()">Volver a consultar</button>
     </div>
   </div>
 
@@ -1604,28 +1606,6 @@
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="copiarClaveTemporal()">Copiar usuario y clave</button>
         <button class="btn btn-primary" onclick="document.getElementById('modal-clave-temporal').classList.remove('show')">Listo</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="modal-cob-cheque">
-    <div class="modal-caja" style="max-height:92vh; overflow-y:auto;">
-      <h3>Agregar cheque</h3>
-      <p>Lo consultamos en el BCRA y queda asignado a esta cobranza. La administración ve el riesgo de cada cheque.</p>
-      <div class="field"><label class="field-label">CUIT del librador</label>
-        <input type="text" class="mono" id="chq-cuit" placeholder="30-70893479-4" maxlength="13" inputmode="numeric" autocomplete="off"></div>
-      <div class="field"><label class="field-label">Banco</label>
-        <select id="chq-banco" class="select-banco"></select></div>
-      <div class="field"><label class="field-label">Número de cheque</label>
-        <input type="text" class="mono" id="chq-numero" placeholder="Ej: 00021458" inputmode="numeric" autocomplete="off"></div>
-      <div class="field"><label class="field-label">Fecha de vencimiento (plazo)</label>
-        <input type="date" id="chq-vence"></div>
-      <div class="field"><label class="field-label">Monto ($)</label>
-        <input type="text" class="mono" id="chq-monto" placeholder="Ej: 1.500.000" inputmode="decimal" autocomplete="off"></div>
-      <div class="modal-error" id="chq-error"></div>
-      <div class="modal-botones">
-        <button class="btn btn-primary" id="btn-chq-agregar" onclick="agregarChequeCobranza()">Consultar y agregar</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('modal-cob-cheque').classList.remove('show')">Cancelar</button>
       </div>
     </div>
   </div>
@@ -3882,7 +3862,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-02-v49-cobranzas-cheques";
+const VERSION_APP = "2026-11-03-v50-cheque-como-consulta";
 
 const state = {
   user: null,
@@ -4021,7 +4001,7 @@ function fechaHoraCorta(iso){
 }
 const ETQ_COBRANZA = { pendiente: "Pendiente", confirmada: "Confirmada", rechazada: "Rechazada", anulada: "Anulada" };
 function chipEstadoCobranza(e){ return `<span class="cob-est cob-est-${e}">${ETQ_COBRANZA[e] || e}</span>`; }
-function htmlChequesCobranza(c){
+function htmlChequesCobranza(c, admin){
   const l = Array.isArray(c.cheques) ? c.cheques : [];
   if (!l.length) return "";
   const alto = l.filter(k => (k.categoria && k.categoria[0] === "C") || k.denunciado === true);
@@ -4029,7 +4009,7 @@ function htmlChequesCobranza(c){
     + l.map(k => `
     <div class="chq-fila">
       <div>${escHtml(k.razon_social || "—")} <small>${escHtml(k.cuit)} · ${escHtml(nombreBancoPorCodigo(k.banco))} · N° ${escHtml(k.numero || "s/d")} · vence ${fechaCortaISO(k.vencimiento)}${k.denunciado === true ? ' · <b style="color:#b3261e;">DENUNCIADO</b>' : ""}</small></div>
-      <div style="text-align:right; white-space:nowrap;"><b>${formatearPesos(k.monto)}</b><br><span class="chq-cat" style="background:${colorCategoria(k.categoria)}">${escHtml(k.categoria || "?")}</span></div>
+      <div style="text-align:right; white-space:nowrap;"><b>${formatearPesos(k.monto)}</b><br><span class="chq-cat" style="background:${colorCategoria(k.categoria)}">${escHtml(k.categoria || "?")}</span>${admin ? `<br><a href="#" style="font-size:11.5px;" onclick="verAnalisisLibrador('${escHtml(k.cuit)}','${escHtml(k.banco || "")}','${escHtml(k.numero || "")}'); return false;">Ver análisis</a>` : ""}</div>
     </div>`).join("");
 }
 function textoDetalleCobranza(c){
@@ -4051,7 +4031,9 @@ async function renderCobranzaCalle(){
   const { data: clientes, error } = await supabaseClient.rpc("clientes_para_cobranza");
   if (error){ cont.innerHTML = `<div class="empty-state"><p>No pudimos cargar los clientes: ${escHtml(error.message)}</p></div>`; return; }
   state.clientesCobranza = clientes || [];
-  state.cobCheques = [];
+  const mantener = state.cobMantener === true;
+  state.cobMantener = false;
+  if (!mantener){ state.cobCheques = []; state.cobBorrador = null; }
   cont.innerHTML = `
     <h1 class="page-title">Cargar cobranza</h1>
     <p class="page-sub">Declará lo que te entregó un cliente. La administración lo ve en el acto. Una vez enviada <b>no se puede modificar</b>: si te equivocás, avisale a la administración.</p>
@@ -4061,7 +4043,7 @@ async function renderCobranzaCalle(){
     </div>
     <label class="field-label">Cheques recibidos</label>
     <div id="cob-cheques-detalle"></div>
-    <button class="btn btn-secondary" style="margin-bottom:6px;" onclick="abrirModalChequeCobranza()">+ Agregar cheque (con CUIT, número y plazo)</button>
+    <button class="btn btn-secondary" style="margin-bottom:6px;" onclick="iniciarAgregarCheque()">+ Agregar cheque (con CUIT, número y plazo)</button>
     <div id="cob-cheques-manual">
       <div class="field-hint" style="margin:0 0 10px;">O, si preferís no detallarlos, cargá solo el total y la cantidad:</div>
       <div class="field"><label class="field-label">Total recibido en cheques ($)</label>
@@ -4078,7 +4060,14 @@ async function renderCobranzaCalle(){
     <button class="btn btn-primary" id="btn-declarar-cobranza" onclick="declararCobranza()">Declarar cobranza</button>
     <div class="divider-label" style="margin-top:22px;">Mis cobranzas</div>
     <div id="cob-mias"><p class="page-sub">Cargando…</p></div>`;
-  filtrarClientesCobranza();
+  const bor = mantener ? state.cobBorrador : null;
+  if (bor){
+    document.getElementById("cob-filtro").value = bor.filtro || "";
+    filtrarClientesCobranza();
+    document.getElementById("cob-cliente").value = bor.cliente || "";
+    document.getElementById("cob-efectivo").value = bor.efectivo || "";
+    document.getElementById("cob-nota").value = bor.nota || "";
+  } else filtrarClientesCobranza();
   renderChequesCobranza();
   cargarMisCobranzas();
 }
@@ -4109,57 +4098,92 @@ function quitarChequeCobranza(i){
   state.cobCheques.splice(i, 1);
   renderChequesCobranza();
 }
-function abrirModalChequeCobranza(){
-  ["chq-cuit", "chq-numero", "chq-vence", "chq-monto"].forEach(id => { document.getElementById(id).value = ""; });
-  document.getElementById("chq-banco").innerHTML = ENTIDADES_CHEQUES.map(e => `<option value="${e.codigo}">${e.nombre}</option>`).join("");
-  mostrarErrorModal("chq-error", "");
-  document.getElementById("modal-cob-cheque").classList.add("show");
+function actualizarModoCobranzaHome(){
+  const en = !!state.modoCobranza;
+  let b = document.getElementById("banner-modo-cobranza");
+  const cont = document.querySelector("#screen-home .content");
+  if (en && cont){
+    if (!b){
+      b = document.createElement("div");
+      b.id = "banner-modo-cobranza";
+      b.className = "cob-riesgo";
+      b.style.cssText = "background:#e8f1fb; color:#1c4f82; border:1px solid #9fc2e8; display:flex; gap:10px; align-items:center; justify-content:space-between;";
+      cont.insertBefore(b, cont.firstChild);
+    }
+    const cl = ((state.clientesCobranza || []).find(c => c.id === (state.cobBorrador || {}).cliente) || {}).nombre || "";
+    b.innerHTML = `<span>Agregando un cheque a la cobranza de <b>${escHtml(cl)}</b>. Cargá CUIT, banco, número, vencimiento y monto.</span><button class="btn btn-secondary" style="width:auto; padding:6px 10px; font-size:12px;" onclick="cancelarAgregarCheque()">Cancelar</button>`;
+    b.style.display = "flex";
+  } else if (b){ b.style.display = "none"; }
+  const btn = document.getElementById("btn-consultar");
+  if (btn) btn.textContent = en ? "Consultar y agregar a la cobranza" : "Consultar score";
 }
-async function agregarChequeCobranza(){
-  mostrarErrorModal("chq-error", "");
-  const digits = limpiarCuit(document.getElementById("chq-cuit").value);
-  const banco = document.getElementById("chq-banco").value;
-  const numero = document.getElementById("chq-numero").value.trim();
-  const vence = document.getElementById("chq-vence").value;
-  const monto = parseMontoAR(document.getElementById("chq-monto").value);
-  if (digits.length !== 11) return mostrarErrorModal("chq-error", "El CUIT debe tener 11 números.");
-  if (!numero) return mostrarErrorModal("chq-error", "Cargá el número de cheque.");
-  if (!vence) return mostrarErrorModal("chq-error", "Cargá la fecha de vencimiento.");
-  if (!(monto > 0)) return mostrarErrorModal("chq-error", "Cargá el monto del cheque.");
-  if ((state.cobCheques || []).some(c => c.banco === banco && c.numero === numero)) return mostrarErrorModal("chq-error", "Ese cheque ya está en la lista.");
-  const btn = document.getElementById("btn-chq-agregar");
-  btn.disabled = true; btn.textContent = "Consultando BCRA…";
-  try {
-    let datos, fuente = "real";
-    try { datos = await construirDatosLibradorReal(digits); }
-    catch (e){
-      if (BCRA_DB[digits]){ datos = BCRA_DB[digits]; fuente = "demo"; }
-      else return mostrarErrorModal("chq-error", "El BCRA no respondió en este momento. Probá de nuevo en un minuto.");
-    }
-    let denunciado = null;
-    try {
-      const real = await consultarChequeDenunciadoBCRA(banco, numero);
-      if (real && real.ok) denunciado = real.denunciado === true;
-    } catch (e){ denunciado = null; }
-    const resultado = calcularScore(datos);
-    if (state.user){
-      state.user = await incrementarConsultasUsadas(state.user);
-      await registrarConsulta({
-        usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
-        categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
-        numeroCheque: numero, bancoCheque: banco, chequeDenunciado: denunciado, fechaVencimiento: vence, clienteId: null, montoCheque: monto
-      });
-    }
-    state.cobCheques.push({
-      cuit: formatearCuit(digits), razon_social: datos.empresa, categoria: resultado.categoria, puntos: resultado.puntosFinales,
-      fuente, banco, numero, vencimiento: vence, monto, denunciado
-    });
-    document.getElementById("modal-cob-cheque").classList.remove("show");
-    renderChequesCobranza();
-    mostrarToast("Cheque agregado: " + resultado.categoria);
-  } catch (e){
-    mostrarErrorModal("chq-error", "No se pudo consultar: " + (e.message || e));
-  } finally { btn.disabled = false; btn.textContent = "Consultar y agregar"; }
+function actualizarAccionesResultadoCobranza(){
+  ["res-cob-acciones-top", "res-cob-acciones-bottom"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (state.modoCobranza && state.cobChequePendiente){
+      const c = state.cobChequePendiente;
+      el.innerHTML = `<div class="cob-card" style="border-color:#2472B8; margin-bottom:14px;">
+        <div class="cob-top"><span>Cheque N° ${escHtml(c.numero)} · ${formatearPesos(c.monto)}</span><span class="chq-cat" style="background:${colorCategoria(c.categoria)}">${escHtml(c.categoria)}</span></div>
+        <div class="cob-sub">Revisá el análisis y, si corresponde, sumalo a la cobranza.</div>
+        <div class="cob-acciones"><button class="btn btn-primary" onclick="confirmarChequeEnCobranza()">Agregar a la cobranza</button>
+        <button class="btn btn-secondary" onclick="cancelarAgregarCheque()">Descartar</button></div></div>`;
+    } else el.innerHTML = "";
+  });
+}
+// El vendedor agrega un cheque usando la MISMA pantalla de consulta (con razón social, cámara y análisis completo).
+function iniciarAgregarCheque(){
+  const cliente = document.getElementById("cob-cliente").value;
+  if (!cliente){ mostrarErrorModal("cob-error", "Primero elegí el cliente."); return; }
+  mostrarErrorModal("cob-error", "");
+  state.cobBorrador = {
+    filtro: document.getElementById("cob-filtro").value, cliente,
+    efectivo: document.getElementById("cob-efectivo").value, nota: document.getElementById("cob-nota").value
+  };
+  state.cobMantener = true;
+  state.modoCobranza = true;
+  state.cobChequePendiente = null;
+  ["consulta-cuit", "consulta-numero-cheque", "consulta-fecha-vencimiento", "consulta-monto-cheque"].forEach(id => { const e = document.getElementById(id); if (e) e.value = ""; });
+  const rs = document.getElementById("razon-social-preview"); if (rs) rs.textContent = "";
+  irA("home");
+}
+function cancelarAgregarCheque(){
+  state.modoCobranza = false;
+  state.cobChequePendiente = null;
+  irA("cobranza");
+}
+function confirmarChequeEnCobranza(){
+  const c = state.cobChequePendiente;
+  if (!c) return;
+  state.cobCheques = state.cobCheques || [];
+  if (state.cobCheques.some(x => x.banco === c.banco && x.numero === c.numero)){ mostrarToast("Ese cheque ya está en la cobranza."); return; }
+  state.cobCheques.push(c);
+  state.cobChequePendiente = null;
+  state.modoCobranza = false;
+  state.cobMantener = true;
+  mostrarToast("Cheque agregado a la cobranza.");
+  irA("cobranza");
+}
+function volverDeResultado(){
+  const d = state.volverA || "home";
+  state.volverA = null;
+  irA(d);
+}
+// Muestra el análisis completo de un librador (sin registrar una consulta nueva): para la administración.
+async function verAnalisisLibrador(cuit, banco, numero){
+  const digits = limpiarCuit(cuit);
+  if (digits.length !== 11) return;
+  mostrarToast("Consultando BCRA…");
+  let datos, fuente = "real";
+  try { datos = await construirDatosLibradorReal(digits); }
+  catch (e){
+    if (BCRA_DB[digits]){ datos = BCRA_DB[digits]; fuente = "demo"; }
+    else { mostrarToast("El BCRA no respondió. Probá en un minuto."); return; }
+  }
+  const resultado = calcularScore(datos);
+  state.volverA = "cobranzas";
+  mostrarResultado(datos, resultado, numero || "", null, fuente);
+  irA("resultado");
 }
 function filtrarClientesCobranza(){
   const q = ((document.getElementById("cob-filtro") || {}).value || "").trim().toLowerCase();
@@ -4318,7 +4342,7 @@ function renderCobranzasAdmin(){
       <div class="cob-top"><span>${escHtml(c.cliente_nombre)}</span>${chipEstadoCobranza(c.estado)}</div>
       <div class="cob-sub">Declarada por ${escHtml(c.vendedor_nombre)} · ${fechaHoraCorta(c.creado_en)}${c.editada ? " · corregida" : ""}</div>
       ${Number(c.monto_cheques) > 0 ? `<div class="cob-lin"><span>Cheques (${c.cant_cheques})</span><b>${formatearPesos(c.monto_cheques)}</b></div>` : ""}
-      ${htmlChequesCobranza(c)}
+      ${htmlChequesCobranza(c, true)}
       ${Number(c.monto_efectivo) > 0 ? `<div class="cob-lin"><span>Efectivo</span><b>${formatearPesos(c.monto_efectivo)}</b></div>` : ""}
       <div class="cob-lin cob-total"><span>Total</span><b>${formatearPesos(total)}</b></div>
       ${c.nota ? `<div class="cob-saldo">Nota: ${escHtml(c.nota)}</div>` : ""}
@@ -4593,6 +4617,8 @@ function irACalendario(){
 }
 
 function irA(pantalla){
+  if (state.modoCobranza && !["home", "resultado", "cobranza"].includes(pantalla)){ state.modoCobranza = false; state.cobChequePendiente = null; }
+  if (pantalla !== "resultado" && pantalla !== "home") state.volverA = null;
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + pantalla).classList.add("active");
   state.pantallaActual = pantalla;
@@ -4607,6 +4633,8 @@ function irA(pantalla){
   if (pantalla === "cobranzas") cargarCobranzasAdmin();
   if (pantalla === "alertas") renderGestion();
   if (pantalla === "cliente-detalle") renderClienteDetalle(state.clienteActualId);
+  if (pantalla === "resultado") actualizarAccionesResultadoCobranza();
+  if (pantalla === "home") actualizarModoCobranzaHome();
   if (pantalla === "home" && state.user){
     const mesActual = new Date().toISOString().slice(0,7);
     const usadas = state.user.mes_actual === mesActual ? (state.user.consultas_usadas_mes || 0) : 0;
@@ -5208,6 +5236,10 @@ async function consultarCuit(){
     mostrarToast("Si cargás número de cheque, necesitamos también la fecha de vencimiento.");
     return;
   }
+  if (state.modoCobranza){
+    if (!numeroCheque){ mostrarToast("Para agregarlo a la cobranza cargá el número de cheque."); return; }
+    if (!(parseMontoAR(document.getElementById("consulta-monto-cheque").value) > 0)){ mostrarToast("Para agregarlo a la cobranza cargá el monto del cheque."); return; }
+  }
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
   const vaABloquear = consultaBloqueada(usadasEsteMes);
@@ -5253,9 +5285,18 @@ async function consultarCuit(){
   }
 
   btn.disabled = false;
-  btn.textContent = "Consultar score";
+  btn.textContent = state.modoCobranza ? "Consultar y agregar a la cobranza" : "Consultar score";
 
   const resultado = calcularScore(datos);
+
+  if (state.modoCobranza){
+    state.cobChequePendiente = {
+      cuit: formatearCuit(digits), razon_social: datos.empresa, categoria: resultado.categoria, puntos: resultado.puntosFinales,
+      fuente, banco: String(bancoCheque), numero: numeroCheque, vencimiento: fechaVencimiento || null,
+      monto: parseMontoAR(document.getElementById("consulta-monto-cheque").value),
+      denunciado: chequeInfo ? chequeInfo.denunciado : null
+    };
+  }
 
   if (state.user){
     state.user = await incrementarConsultasUsadas(state.user);
