@@ -1,6 +1,6 @@
 // netlify/functions/resumen-admin-semanal.js
 //
-// Resumen semanal PARA EL ADMINISTRADOR. Corre los lunes a la mañana (hora
+// Resumen semanal PARA EL ADMINISTRADOR. Corre los lunes y jueves a la mañana (hora
 // argentina) y manda SIEMPRE un mail a opencheckscore@hotmail.com con el estado
 // del sistema de la última semana: vigilante de cartera, datos de las fuentes
 // (BCRA / INDEC) y uso de la app. El asunto dice TODO EN ORDEN o ATENCIÓN.
@@ -100,6 +100,22 @@ export async function correrResumenAdmin({ enviar = true } = {}){
     lineas.push("- No se pudo leer el uso de la app: " + e.message);
   }
 
+  // ---- 4) Desde el último resumen (lunes y jueves 11:20 UTC) ----
+  try {
+    let corte = new Date(ahora - 3600000);                // 1 h antes: si corre justo a la hora, toma el resumen anterior
+    corte.setUTCHours(11, 20, 0, 0);
+    while (corte.getTime() > ahora - 3600000 || ![1, 4].includes(corte.getUTCDay())) corte = new Date(corte.getTime() - 86400000);
+    const corteISO = corte.toISOString();
+    const diaCorte = fechaAR(corte.getTime());
+    const { count: nCons } = await supabase.from("consultas").select("id", { count: "exact", head: true }).gte("creado_en", corteISO);
+    const { count: nUs } = await supabase.from("usuarios").select("id", { count: "exact", head: true }).gte("creado_en", corteISO);
+    const { data: dd } = await supabase.from("vigilante_estadisticas").select("alertas_nuevas").gte("dia", diaCorte).lt("dia", hoy);
+    const nAl = (dd || []).reduce((a, d) => a + (Number(d.alertas_nuevas) || 0), 0);
+    lineas.push("", `DESDE EL ÚLTIMO RESUMEN (${diaCorte})`, `- ${num(nCons)} consulta${nCons === 1 ? "" : "s"} nueva${nCons === 1 ? "" : "s"}, ${num(nUs)} usuario${nUs === 1 ? "" : "s"} nuevo${nUs === 1 ? "" : "s"}, ${num(nAl)} alerta${nAl === 1 ? "" : "s"} nueva${nAl === 1 ? "" : "s"} del vigilante.`);
+  } catch (e){
+    lineas.push("", "DESDE EL ÚLTIMO RESUMEN", "- No se pudo calcular: " + e.message);
+  }
+
   const estado = atencion.length ? "ATENCIÓN" : "TODO EN ORDEN";
   const cuerpo = [
     `Estado del sistema: ${estado}`,
@@ -108,7 +124,7 @@ export async function correrResumenAdmin({ enviar = true } = {}){
     ...lineas,
     "",
     "Si dice ATENCIÓN: Netlify > Logs > Functions, y abrir la función indicada. La app sigue funcionando con el último dato guardado.",
-    "Este resumen llega todos los lunes. El vigilante diario sigue avisando aparte si detecta un problema."
+    "Este resumen llega los lunes y jueves. El vigilante diario sigue avisando aparte si detecta un problema."
   ].join("\n");
 
   if (enviar){
@@ -139,5 +155,5 @@ export default async () => {
 };
 
 export const config = {
-  schedule: "20 11 * * 1"   // lunes 8:20 hora argentina (11:20 UTC)
+  schedule: "20 11 * * 1,4"   // lunes y jueves 8:20 hora argentina (11:20 UTC)
 };
