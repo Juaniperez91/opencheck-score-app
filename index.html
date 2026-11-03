@@ -294,6 +294,19 @@
   .cob-card .cob-saldo{font-size:12px; color:var(--ink-soft); margin-top:6px;}
   .cob-acciones{display:flex; gap:8px; margin-top:12px;}
   .cob-acciones .btn{flex:1; padding:10px 6px; font-size:13px;}
+  .banner-cob{display:none; align-items:center; gap:10px; background:#ffedc2; border:2px solid #e0a100; color:#5c3d00; border-radius:12px; padding:12px 14px; margin:0 0 14px; cursor:pointer; font-size:13.5px; line-height:1.35; animation:pulsoCob 2s ease-in-out infinite;}
+  .banner-cob.show{display:flex;}
+  .banner-cob b{font-size:15px;}
+  .banner-cob .bc-n{flex:none; min-width:30px; height:30px; border-radius:15px; background:#d62828; color:#fff; font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:center; padding:0 8px;}
+  .banner-cob .bc-go{margin-left:auto; font-weight:700; white-space:nowrap;}
+  @keyframes pulsoCob{0%,100%{box-shadow:0 0 0 0 rgba(224,161,0,.55);}50%{box-shadow:0 0 0 7px rgba(224,161,0,0);}}
+  .nav-badge.nav-badge-cob{width:auto; min-width:16px; height:16px; border-radius:8px; font-size:10px; font-weight:800; color:#fff; line-height:13px; text-align:center; padding:0 3px; top:2px; right:calc(50% - 26px); background:#d62828;}
+  .hist-row.cob-alerta{background:#ffedc2; border:2px solid #e0a100;}
+  .chq-fila{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:8px 0; border-top:1px dashed var(--hairline); font-size:12.5px;}
+  .chq-fila small{display:block; color:var(--ink-soft); font-size:11.5px;}
+  .chq-cat{display:inline-block; min-width:30px; text-align:center; font-weight:800; font-size:11.5px; color:#fff; border-radius:6px; padding:2px 6px;}
+  .chq-x{border:0; background:transparent; color:var(--ink-soft); font-size:15px; cursor:pointer;}
+  .cob-riesgo{background:#fdecea; color:#b3261e; border-radius:8px; padding:8px 10px; font-size:12.5px; font-weight:600; margin:8px 0;}
   .modal-error{display:none; background:#fdecea; color:#b3261e; border-radius:8px; padding:9px 11px; font-size:12.5px; line-height:1.4; margin:0 0 12px;}
   .modal-error.show{display:block;}
   input:focus{border-color:var(--green);}
@@ -1210,6 +1223,7 @@
       <div class="topbar-sub" id="user-chip">—</div>
     </div>
     <div class="content">
+      <div class="banner-cob" id="banner-cob-home" onclick="irA('cobranzas')"></div>
       <h1 class="page-title">Consultar librador</h1>
       <p class="page-sub">Ingresá un CUIT o sacá una foto del cheque para calificar el riesgo del librador.</p>
 
@@ -1437,6 +1451,7 @@
       </div>
     </div>
     <div class="content">
+      <div class="banner-cob" id="banner-cob-clientes" onclick="irA('cobranzas')"></div>
       <h1 class="page-title">Tus clientes</h1>
       <p class="page-sub">Agrupá los cheques por quién te los entregó, para ver cómo te viene pagando cada uno con el tiempo.</p>
       <div id="clientes-content"></div>
@@ -1531,6 +1546,11 @@
         <input type="text" id="input-nuevo-cliente-limite" placeholder="Ej: 4.000.000" autocomplete="off" inputmode="numeric">
         <div class="field-hint">Cuánto estás dispuesto a tener en riesgo con este cliente (lo que te debe más sus cheques sin cobrar). Si lo superás, te avisamos. Es solo un aviso: no bloquea nada.</div>
       </div>
+      <div class="field" id="field-cliente-saldo">
+        <label>Saldo inicial en $ (opcional)</label>
+        <input type="text" id="input-nuevo-cliente-saldo" placeholder="Ej: 100.000.000" autocomplete="off" inputmode="numeric">
+        <div class="field-hint">Lo que este cliente te debe hoy. Después, cada cobranza que confirmes lo va bajando.</div>
+      </div>
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="cerrarModalNuevoCliente()">Cancelar</button>
         <button class="btn btn-primary" id="btn-confirmar-cliente" onclick="confirmarNuevoCliente()">Crear</button>
@@ -1584,6 +1604,28 @@
       <div class="modal-botones">
         <button class="btn btn-secondary" onclick="copiarClaveTemporal()">Copiar usuario y clave</button>
         <button class="btn btn-primary" onclick="document.getElementById('modal-clave-temporal').classList.remove('show')">Listo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-cob-cheque">
+    <div class="modal-caja" style="max-height:92vh; overflow-y:auto;">
+      <h3>Agregar cheque</h3>
+      <p>Lo consultamos en el BCRA y queda asignado a esta cobranza. La administración ve el riesgo de cada cheque.</p>
+      <div class="field"><label class="field-label">CUIT del librador</label>
+        <input type="text" class="mono" id="chq-cuit" placeholder="30-70893479-4" maxlength="13" inputmode="numeric" autocomplete="off"></div>
+      <div class="field"><label class="field-label">Banco</label>
+        <select id="chq-banco" class="select-banco"></select></div>
+      <div class="field"><label class="field-label">Número de cheque</label>
+        <input type="text" class="mono" id="chq-numero" placeholder="Ej: 00021458" inputmode="numeric" autocomplete="off"></div>
+      <div class="field"><label class="field-label">Fecha de vencimiento (plazo)</label>
+        <input type="date" id="chq-vence"></div>
+      <div class="field"><label class="field-label">Monto ($)</label>
+        <input type="text" class="mono" id="chq-monto" placeholder="Ej: 1.500.000" inputmode="decimal" autocomplete="off"></div>
+      <div class="modal-error" id="chq-error"></div>
+      <div class="modal-botones">
+        <button class="btn btn-primary" id="btn-chq-agregar" onclick="agregarChequeCobranza()">Consultar y agregar</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-cob-cheque').classList.remove('show')">Cancelar</button>
       </div>
     </div>
   </div>
@@ -3840,7 +3882,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-02-v48-cobranzas";
+const VERSION_APP = "2026-11-02-v49-cobranzas-cheques";
 
 const state = {
   user: null,
@@ -3915,7 +3957,7 @@ async function aplicarRolUsuario(){
   const u = state.user;
   document.body.classList.toggle("rol-calle", !!(u && u.rol === "calle"));
   state.empresaPremium = true;
-  if (u && u.rol !== "calle") setTimeout(actualizarBadgeCobranzas, 800);
+  if (u && u.rol !== "calle") setTimeout(actualizarBadgeCobranzas, 600);
   if (!u || u.rol !== "calle") return true;
   if (u.activo === false){
     await supabaseClient.auth.signOut();
@@ -3979,6 +4021,17 @@ function fechaHoraCorta(iso){
 }
 const ETQ_COBRANZA = { pendiente: "Pendiente", confirmada: "Confirmada", rechazada: "Rechazada", anulada: "Anulada" };
 function chipEstadoCobranza(e){ return `<span class="cob-est cob-est-${e}">${ETQ_COBRANZA[e] || e}</span>`; }
+function htmlChequesCobranza(c){
+  const l = Array.isArray(c.cheques) ? c.cheques : [];
+  if (!l.length) return "";
+  const alto = l.filter(k => (k.categoria && k.categoria[0] === "C") || k.denunciado === true);
+  return (alto.length ? `<div class="cob-riesgo">⚠️ ${alto.length} de ${l.length} cheque${l.length === 1 ? "" : "s"} con riesgo alto o denunciado${alto.length === l.length ? "" : ": revisalos antes de confirmar"}.</div>` : "")
+    + l.map(k => `
+    <div class="chq-fila">
+      <div>${escHtml(k.razon_social || "—")} <small>${escHtml(k.cuit)} · ${escHtml(nombreBancoPorCodigo(k.banco))} · N° ${escHtml(k.numero || "s/d")} · vence ${fechaCortaISO(k.vencimiento)}${k.denunciado === true ? ' · <b style="color:#b3261e;">DENUNCIADO</b>' : ""}</small></div>
+      <div style="text-align:right; white-space:nowrap;"><b>${formatearPesos(k.monto)}</b><br><span class="chq-cat" style="background:${colorCategoria(k.categoria)}">${escHtml(k.categoria || "?")}</span></div>
+    </div>`).join("");
+}
 function textoDetalleCobranza(c){
   const p = [];
   if (Number(c.monto_cheques) > 0) p.push(`cheques ${formatearPesos(c.monto_cheques)} (${c.cant_cheques})`);
@@ -3998,6 +4051,7 @@ async function renderCobranzaCalle(){
   const { data: clientes, error } = await supabaseClient.rpc("clientes_para_cobranza");
   if (error){ cont.innerHTML = `<div class="empty-state"><p>No pudimos cargar los clientes: ${escHtml(error.message)}</p></div>`; return; }
   state.clientesCobranza = clientes || [];
+  state.cobCheques = [];
   cont.innerHTML = `
     <h1 class="page-title">Cargar cobranza</h1>
     <p class="page-sub">Declará lo que te entregó un cliente. La administración lo ve en el acto. Una vez enviada <b>no se puede modificar</b>: si te equivocás, avisale a la administración.</p>
@@ -4005,10 +4059,16 @@ async function renderCobranzaCalle(){
       <input type="text" id="cob-filtro" placeholder="Buscar cliente…" autocomplete="off" oninput="filtrarClientesCobranza()" style="margin-bottom:8px;">
       <select id="cob-cliente" class="select-banco"></select>
     </div>
-    <div class="field"><label class="field-label">Total recibido en cheques ($)</label>
-      <input type="text" class="mono" id="cob-cheques" inputmode="decimal" placeholder="Ej: 7.000.000" autocomplete="off" oninput="actualizarTotalCobranza()"></div>
-    <div class="field"><label class="field-label">Cantidad de cheques</label>
-      <input type="text" class="mono" id="cob-cant" inputmode="numeric" placeholder="Ej: 5" autocomplete="off"></div>
+    <label class="field-label">Cheques recibidos</label>
+    <div id="cob-cheques-detalle"></div>
+    <button class="btn btn-secondary" style="margin-bottom:6px;" onclick="abrirModalChequeCobranza()">+ Agregar cheque (con CUIT, número y plazo)</button>
+    <div id="cob-cheques-manual">
+      <div class="field-hint" style="margin:0 0 10px;">O, si preferís no detallarlos, cargá solo el total y la cantidad:</div>
+      <div class="field"><label class="field-label">Total recibido en cheques ($)</label>
+        <input type="text" class="mono" id="cob-cheques" inputmode="decimal" placeholder="Ej: 7.000.000" autocomplete="off" oninput="actualizarTotalCobranza()"></div>
+      <div class="field"><label class="field-label">Cantidad de cheques</label>
+        <input type="text" class="mono" id="cob-cant" inputmode="numeric" placeholder="Ej: 5" autocomplete="off"></div>
+    </div>
     <div class="field"><label class="field-label">Efectivo recibido ($)</label>
       <input type="text" class="mono" id="cob-efectivo" inputmode="decimal" placeholder="Ej: 3.200.000" autocomplete="off" oninput="actualizarTotalCobranza()"></div>
     <div class="field"><label class="field-label">Nota (opcional)</label>
@@ -4019,7 +4079,87 @@ async function renderCobranzaCalle(){
     <div class="divider-label" style="margin-top:22px;">Mis cobranzas</div>
     <div id="cob-mias"><p class="page-sub">Cargando…</p></div>`;
   filtrarClientesCobranza();
+  renderChequesCobranza();
   cargarMisCobranzas();
+}
+function colorCategoria(cat){ return colorPorTierCategoria(cat); }
+function renderChequesCobranza(){
+  const cont = document.getElementById("cob-cheques-detalle");
+  if (!cont) return;
+  const lista = state.cobCheques || [];
+  cont.innerHTML = lista.map((c, i) => `
+    <div class="chq-fila">
+      <div>${escHtml(c.razon_social || "—")} <small>${escHtml(c.cuit)} · ${escHtml(nombreBancoPorCodigo(c.banco))} · N° ${escHtml(c.numero)} · vence ${fechaCortaISO(c.vencimiento)}${c.denunciado === true ? ' · <b style="color:#b3261e;">DENUNCIADO</b>' : ""}</small></div>
+      <div style="text-align:right; white-space:nowrap;"><b>${formatearPesos(c.monto)}</b><br><span class="chq-cat" style="background:${colorCategoria(c.categoria)}">${escHtml(c.categoria || "?")}</span>
+        <button class="chq-x" title="Quitar" onclick="quitarChequeCobranza(${i})">✕</button></div>
+    </div>`).join("");
+  const manual = document.getElementById("cob-cheques-manual");
+  if (manual) manual.style.display = lista.length ? "none" : "";
+  actualizarTotalCobranza();
+}
+function nombreBancoPorCodigo(cod){
+  const e = ENTIDADES_CHEQUES.find(x => String(x.codigo) === String(cod));
+  return e ? e.nombre : (cod ? "Banco " + cod : "Banco s/d");
+}
+function fechaCortaISO(iso){
+  if (!iso) return "—";
+  try { return new Date(String(iso).slice(0, 10) + "T00:00:00").toLocaleDateString("es-AR"); } catch (e){ return iso; }
+}
+function quitarChequeCobranza(i){
+  state.cobCheques.splice(i, 1);
+  renderChequesCobranza();
+}
+function abrirModalChequeCobranza(){
+  ["chq-cuit", "chq-numero", "chq-vence", "chq-monto"].forEach(id => { document.getElementById(id).value = ""; });
+  document.getElementById("chq-banco").innerHTML = ENTIDADES_CHEQUES.map(e => `<option value="${e.codigo}">${e.nombre}</option>`).join("");
+  mostrarErrorModal("chq-error", "");
+  document.getElementById("modal-cob-cheque").classList.add("show");
+}
+async function agregarChequeCobranza(){
+  mostrarErrorModal("chq-error", "");
+  const digits = limpiarCuit(document.getElementById("chq-cuit").value);
+  const banco = document.getElementById("chq-banco").value;
+  const numero = document.getElementById("chq-numero").value.trim();
+  const vence = document.getElementById("chq-vence").value;
+  const monto = parseMontoAR(document.getElementById("chq-monto").value);
+  if (digits.length !== 11) return mostrarErrorModal("chq-error", "El CUIT debe tener 11 números.");
+  if (!numero) return mostrarErrorModal("chq-error", "Cargá el número de cheque.");
+  if (!vence) return mostrarErrorModal("chq-error", "Cargá la fecha de vencimiento.");
+  if (!(monto > 0)) return mostrarErrorModal("chq-error", "Cargá el monto del cheque.");
+  if ((state.cobCheques || []).some(c => c.banco === banco && c.numero === numero)) return mostrarErrorModal("chq-error", "Ese cheque ya está en la lista.");
+  const btn = document.getElementById("btn-chq-agregar");
+  btn.disabled = true; btn.textContent = "Consultando BCRA…";
+  try {
+    let datos, fuente = "real";
+    try { datos = await construirDatosLibradorReal(digits); }
+    catch (e){
+      if (BCRA_DB[digits]){ datos = BCRA_DB[digits]; fuente = "demo"; }
+      else return mostrarErrorModal("chq-error", "El BCRA no respondió en este momento. Probá de nuevo en un minuto.");
+    }
+    let denunciado = null;
+    try {
+      const real = await consultarChequeDenunciadoBCRA(banco, numero);
+      if (real && real.ok) denunciado = real.denunciado === true;
+    } catch (e){ denunciado = null; }
+    const resultado = calcularScore(datos);
+    if (state.user){
+      state.user = await incrementarConsultasUsadas(state.user);
+      await registrarConsulta({
+        usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
+        categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
+        numeroCheque: numero, bancoCheque: banco, chequeDenunciado: denunciado, fechaVencimiento: vence, clienteId: null, montoCheque: monto
+      });
+    }
+    state.cobCheques.push({
+      cuit: formatearCuit(digits), razon_social: datos.empresa, categoria: resultado.categoria, puntos: resultado.puntosFinales,
+      fuente, banco, numero, vencimiento: vence, monto, denunciado
+    });
+    document.getElementById("modal-cob-cheque").classList.remove("show");
+    renderChequesCobranza();
+    mostrarToast("Cheque agregado: " + resultado.categoria);
+  } catch (e){
+    mostrarErrorModal("chq-error", "No se pudo consultar: " + (e.message || e));
+  } finally { btn.disabled = false; btn.textContent = "Consultar y agregar"; }
 }
 function filtrarClientesCobranza(){
   const q = ((document.getElementById("cob-filtro") || {}).value || "").trim().toLowerCase();
@@ -4032,32 +4172,42 @@ function filtrarClientesCobranza(){
   if (actual && lista.some(c => c.id === actual)) sel.value = actual;
   else if (lista.length === 1 && q) sel.value = lista[0].id;
 }
+function totalChequesCobranza(){
+  const l = state.cobCheques || [];
+  return l.length ? l.reduce((s, c) => s + Number(c.monto), 0) : monto0("cob-cheques");
+}
 function actualizarTotalCobranza(){
   const el = document.getElementById("cob-total");
-  if (el) el.textContent = formatearPesos(monto0("cob-cheques") + monto0("cob-efectivo"));
+  if (el) el.textContent = formatearPesos(totalChequesCobranza() + monto0("cob-efectivo"));
 }
 async function declararCobranza(){
   mostrarErrorModal("cob-error", "");
   const cliente = document.getElementById("cob-cliente").value;
-  const ch = monto0("cob-cheques"), ef = monto0("cob-efectivo");
-  const cant = parseInt(String(document.getElementById("cob-cant").value).replace(/\D/g, ""), 10) || 0;
+  const detalle = state.cobCheques || [];
+  const conDetalle = detalle.length > 0;
+  const ch = conDetalle ? detalle.reduce((s, c) => s + Number(c.monto), 0) : monto0("cob-cheques");
+  const ef = monto0("cob-efectivo");
+  const cant = conDetalle ? detalle.length : (parseInt(String(document.getElementById("cob-cant").value).replace(/\D/g, ""), 10) || 0);
   const nota = document.getElementById("cob-nota").value.trim();
   if (!cliente) return mostrarErrorModal("cob-error", "Elegí el cliente.");
-  if (ch + ef <= 0) return mostrarErrorModal("cob-error", "Cargá el total en cheques, el efectivo, o los dos.");
-  if (ch > 0 && cant < 1) return mostrarErrorModal("cob-error", "Indicá cuántos cheques recibiste.");
-  if (ch === 0 && cant > 0) return mostrarErrorModal("cob-error", "Pusiste cantidad de cheques pero no el total en cheques.");
+  if (ch + ef <= 0) return mostrarErrorModal("cob-error", "Cargá los cheques, el efectivo, o los dos.");
+  if (!conDetalle && ch > 0 && cant < 1) return mostrarErrorModal("cob-error", "Indicá cuántos cheques recibiste.");
+  if (!conDetalle && ch === 0 && cant > 0) return mostrarErrorModal("cob-error", "Pusiste cantidad de cheques pero no el total en cheques.");
   const nombre = (state.clientesCobranza.find(c => c.id === cliente) || {}).nombre || "";
   const resumen = `${nombre}\n` + (ch > 0 ? `Cheques: ${formatearPesos(ch)} (${cant})\n` : "") + (ef > 0 ? `Efectivo: ${formatearPesos(ef)}\n` : "") + `TOTAL: ${formatearPesos(ch + ef)}\n\nUna vez enviada no se puede modificar. ¿Confirmás?`;
   if (!confirm(resumen)) return;
   const btn = document.getElementById("btn-declarar-cobranza");
   btn.disabled = true;
   try {
-    const { error } = await supabaseClient.rpc("declarar_cobranza", { p_cliente: cliente, p_monto_cheques: ch, p_cant: cant, p_efectivo: ef, p_nota: nota || null });
+    const { error } = conDetalle
+      ? await supabaseClient.rpc("declarar_cobranza_detalle", { p_cliente: cliente, p_efectivo: ef, p_nota: nota || null, p_cheques: detalle })
+      : await supabaseClient.rpc("declarar_cobranza", { p_cliente: cliente, p_monto_cheques: ch, p_cant: cant, p_efectivo: ef, p_nota: nota || null });
     if (error) throw error;
     mostrarToast("Cobranza enviada a la administración.");
     ["cob-cheques", "cob-cant", "cob-efectivo", "cob-nota", "cob-filtro"].forEach(id => { document.getElementById(id).value = ""; });
     document.getElementById("cob-cliente").value = "";
-    actualizarTotalCobranza();
+    state.cobCheques = [];
+    renderChequesCobranza();
     filtrarClientesCobranza();
     cargarMisCobranzas();
   } catch (e){
@@ -4075,6 +4225,7 @@ async function cargarMisCobranzas(){
       <div class="cob-top"><span>${escHtml(c.cliente_nombre)}</span>${chipEstadoCobranza(c.estado)}</div>
       <div class="cob-sub">${fechaHoraCorta(c.creado_en)}</div>
       ${Number(c.monto_cheques) > 0 ? `<div class="cob-lin"><span>Cheques (${c.cant_cheques})</span><b>${formatearPesos(c.monto_cheques)}</b></div>` : ""}
+      ${htmlChequesCobranza(c)}
       ${Number(c.monto_efectivo) > 0 ? `<div class="cob-lin"><span>Efectivo</span><b>${formatearPesos(c.monto_efectivo)}</b></div>` : ""}
       <div class="cob-lin cob-total"><span>Total</span><b>${formatearPesos(Number(c.monto_cheques) + Number(c.monto_efectivo))}</b></div>
       ${c.motivo ? `<div class="cob-saldo">Motivo: ${escHtml(c.motivo)}</div>` : ""}
@@ -4084,18 +4235,38 @@ async function cargarMisCobranzas(){
 // ---- Administración (titular / administrativo) ----
 async function actualizarBadgeCobranzas(){
   if (!esAdminEmpresa()) return;
+  let n;
   try {
-    const { data } = await supabaseClient.rpc("cobranzas_pendientes_count");
-    state.cobPendientes = Number(data) || 0;
+    const { data, error } = await supabaseClient.rpc("cobranzas_pendientes_count");
+    if (error) return;
+    n = Number(data) || 0;
   } catch (e){ return; }
-  document.querySelectorAll('.nav-item[data-nav="clientes"]').forEach(n => {
-    let b = n.querySelector(".nav-badge-cob");
-    if (state.cobPendientes > 0){
-      if (!b){ b = document.createElement("span"); b.className = "nav-badge nav-badge-cob"; n.appendChild(b); }
+  const previo = state.cobPendientes;
+  state.cobPendientes = n;
+  document.querySelectorAll('.nav-item[data-nav="clientes"]').forEach(nv => {
+    let b = nv.querySelector(".nav-badge-cob");
+    if (n > 0){
+      if (!b){ b = document.createElement("span"); b.className = "nav-badge nav-badge-cob"; nv.appendChild(b); }
+      b.textContent = n > 9 ? "9+" : String(n);
     } else if (b){ b.remove(); }
   });
+  ["banner-cob-home", "banner-cob-clientes"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (n > 0){
+      el.innerHTML = `<span class="bc-n">${n}</span><span><b>${n === 1 ? "Tenés 1 cobranza por confirmar" : "Tenés " + n + " cobranzas por confirmar"}</b><br>Hasta que no la confirmes, no baja el saldo del cliente.</span><span class="bc-go">Ver ›</span>`;
+      el.classList.add("show");
+    } else { el.classList.remove("show"); el.innerHTML = ""; }
+  });
+  document.title = (n > 0 ? "(" + n + ") " : "") + "OpenCheck";
   const tag = document.getElementById("cob-pend-tag");
-  if (tag) tag.textContent = state.cobPendientes > 0 ? state.cobPendientes + " por conciliar" : "Al día";
+  if (tag) tag.textContent = n > 0 ? n + " por conciliar" : "Al día";
+  const card = document.getElementById("cob-card-clientes");
+  if (card) card.classList.toggle("cob-alerta", n > 0);
+  if (previo !== undefined && n > previo){
+    mostrarToast("🔔 Nueva cobranza para confirmar");
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e){}
+  }
 }
 setInterval(() => {
   if (!state.user) return;
@@ -4147,6 +4318,7 @@ function renderCobranzasAdmin(){
       <div class="cob-top"><span>${escHtml(c.cliente_nombre)}</span>${chipEstadoCobranza(c.estado)}</div>
       <div class="cob-sub">Declarada por ${escHtml(c.vendedor_nombre)} · ${fechaHoraCorta(c.creado_en)}${c.editada ? " · corregida" : ""}</div>
       ${Number(c.monto_cheques) > 0 ? `<div class="cob-lin"><span>Cheques (${c.cant_cheques})</span><b>${formatearPesos(c.monto_cheques)}</b></div>` : ""}
+      ${htmlChequesCobranza(c)}
       ${Number(c.monto_efectivo) > 0 ? `<div class="cob-lin"><span>Efectivo</span><b>${formatearPesos(c.monto_efectivo)}</b></div>` : ""}
       <div class="cob-lin cob-total"><span>Total</span><b>${formatearPesos(total)}</b></div>
       ${c.nota ? `<div class="cob-saldo">Nota: ${escHtml(c.nota)}</div>` : ""}
@@ -4182,12 +4354,18 @@ function abrirEdicionCobranza(id){
   document.getElementById("cob-ed-cheques").value = Number(c.monto_cheques) > 0 ? String(Math.round(Number(c.monto_cheques))) : "";
   document.getElementById("cob-ed-cant").value = c.cant_cheques || "";
   document.getElementById("cob-ed-efectivo").value = Number(c.monto_efectivo) > 0 ? String(Math.round(Number(c.monto_efectivo))) : "";
+  const detallada = Array.isArray(c.cheques) && c.cheques.length > 0;
+  document.getElementById("cob-ed-cheques").disabled = detallada;
+  document.getElementById("cob-ed-cant").disabled = detallada;
+  if (detallada) document.getElementById("cob-ed-texto").textContent += " · Los cheques detallados no se corrigen: si alguno está mal, rechazá la cobranza y que la cargue de nuevo. Acá podés corregir el efectivo.";
   mostrarErrorModal("cob-ed-error", "");
   document.getElementById("modal-cob-editar").classList.add("show");
 }
 async function guardarEdicionCobranza(){
-  const ch = monto0("cob-ed-cheques"), ef = monto0("cob-ed-efectivo");
-  const cant = parseInt(String(document.getElementById("cob-ed-cant").value).replace(/\D/g, ""), 10) || 0;
+  const cobEd = (state.cobranzas || []).find(x => x.id === state.cobEditandoId) || {};
+  const detalladaEd = Array.isArray(cobEd.cheques) && cobEd.cheques.length > 0;
+  const ch = detalladaEd ? Number(cobEd.monto_cheques) : monto0("cob-ed-cheques"), ef = monto0("cob-ed-efectivo");
+  const cant = detalladaEd ? Number(cobEd.cant_cheques) : (parseInt(String(document.getElementById("cob-ed-cant").value).replace(/\D/g, ""), 10) || 0);
   if (ch + ef <= 0) return mostrarErrorModal("cob-ed-error", "Cargá al menos un monto.");
   if (ch > 0 && cant < 1) return mostrarErrorModal("cob-ed-error", "Indicá cuántos cheques.");
   const { error } = await supabaseClient.rpc("editar_cobranza", { p_id: state.cobEditandoId, p_monto_cheques: ch, p_cant: cant, p_efectivo: ef });
@@ -4835,6 +5013,8 @@ async function cerrarSesion(){
   await supabaseClient.auth.signOut();
   state.user = null;
   document.body.classList.remove("rol-calle");
+  state.cobPendientes = undefined;
+  document.title = "OpenCheck";
   mostrarToast("Sesión cerrada");
   irA("registro");
 }
@@ -6895,7 +7075,7 @@ async function renderClientes(){
       </div>`).join("");
 
   cont.innerHTML = `
-    <div class="hist-row" style="cursor:pointer; margin-bottom:14px;" onclick="irA('cobranzas')">
+    <div class="hist-row ${state.cobPendientes > 0 ? "cob-alerta" : ""}" id="cob-card-clientes" style="cursor:pointer; margin-bottom:14px;" onclick="irA('cobranzas')">
       <div class="hist-top"><span>Cobranzas de vendedores</span><span class="tag" id="cob-pend-tag">${state.cobPendientes > 0 ? state.cobPendientes + " por conciliar" : "Ver"}</span></div>
       <div class="hist-mid">Lo que declaran tus vendedores de calle. Al confirmar, baja el saldo del cliente.</div>
     </div>
@@ -6912,6 +7092,8 @@ function abrirModalNuevoCliente(){
   document.getElementById("input-nuevo-cliente-nombre").value = "";
   document.getElementById("input-nuevo-cliente-cuit").value = "";
   document.getElementById("input-nuevo-cliente-limite").value = "";
+  document.getElementById("input-nuevo-cliente-saldo").value = "";
+  document.getElementById("field-cliente-saldo").style.display = "";
   document.getElementById("modal-nuevo-cliente").classList.add("show");
 }
 function abrirModalEditarCliente(cliente){
@@ -6922,6 +7104,7 @@ function abrirModalEditarCliente(cliente){
   document.getElementById("input-nuevo-cliente-nombre").value = cliente.nombre || "";
   document.getElementById("input-nuevo-cliente-cuit").value = cliente.cuit_principal || "";
   document.getElementById("input-nuevo-cliente-limite").value = Number(cliente.limite_exposicion) > 0 ? String(Math.round(Number(cliente.limite_exposicion))) : "";
+  document.getElementById("field-cliente-saldo").style.display = "none";
   document.getElementById("modal-nuevo-cliente").classList.add("show");
 }
 function cerrarModalNuevoCliente(){
@@ -6934,6 +7117,9 @@ async function confirmarNuevoCliente(){
   const limite = limiteTxt ? parseMontoAR(limiteTxt) : null;
   if (!nombre){ mostrarToast("Ponele un nombre al cliente."); return; }
   if (limiteTxt && !(limite > 0)){ mostrarToast("El tope tiene que ser un monto válido."); return; }
+  const saldoTxt = (state.modoModalCliente === "editar") ? "" : document.getElementById("input-nuevo-cliente-saldo").value.trim();
+  const saldoIni = saldoTxt ? parseMontoAR(saldoTxt) : null;
+  if (saldoTxt && !(saldoIni > 0)){ mostrarToast("El saldo inicial tiene que ser un monto válido."); return; }
   try {
     if (state.modoModalCliente === "editar"){
       await actualizarCliente(state.clienteEditandoId, nombre, cuit, limite);
@@ -6941,9 +7127,16 @@ async function confirmarNuevoCliente(){
       mostrarToast("Cliente actualizado.");
       renderClienteDetalle(state.clienteEditandoId);
     } else {
-      await crearCliente(state.user.id, nombre, cuit, limite);
+      const nuevo = await crearCliente(state.user.id, nombre, cuit, limite);
+      if (saldoIni > 0){
+        const { error: eSaldo } = await supabaseClient.from("movimientos").insert({
+          usuario_id: state.user.id, cliente_id: nuevo.id, tipo: "factura", monto: saldoIni,
+          fecha: new Date().toISOString().slice(0, 10), detalle: "Saldo inicial"
+        });
+        if (eSaldo) mostrarToast("El cliente se creó, pero no se pudo cargar el saldo inicial. Cargalo desde su cuenta corriente.");
+      }
       cerrarModalNuevoCliente();
-      mostrarToast("Cliente creado.");
+      if (!(saldoIni > 0)) mostrarToast("Cliente creado.");
       renderClientes();
     }
   } catch (e){
