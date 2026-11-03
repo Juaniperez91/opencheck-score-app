@@ -1914,10 +1914,8 @@ async function registrarAceptacionTC(usuarioId){
   if (error) console.warn("[OpenCheck Score] No se pudo registrar aceptación de T&C:", error.message);
 }
 
-async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento, clienteId, montoCheque }){
-  const { error } = await supabaseClient
-    .from("consultas")
-    .insert({
+async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento, clienteId, montoCheque, analisis }){
+  const fila = {
       usuario_id: usuarioId,
       cuit_consultado: cuit,
       razon_social: razonSocial,
@@ -1930,8 +1928,18 @@ async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, punt
       fecha_vencimiento_cheque: fechaVencimiento || null,
       cliente_id: clienteId || null,
       monto_cheque: (montoCheque && montoCheque > 0) ? montoCheque : null
-    });
+  };
+  if (analisis) fila.analisis = analisis;
+  let { error } = await supabaseClient.from("consultas").insert(fila);
+  // Si la columna "analisis" todavía no existe en la base, la consulta se guarda igual (sin informe reabrible).
+  if (error && analisis && /analisis/i.test(error.message || "")){
+    delete fila.analisis;
+    ({ error } = await supabaseClient.from("consultas").insert(fila));
+  }
   if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
+}
+function armarAnalisisGuardado(datos, resultado, chequeInfo){
+  try { return JSON.parse(JSON.stringify({ v: 1, datos, resultado, chequeInfo: chequeInfo || null })); } catch(e){ return null; }
 }
 
 // Trae las últimas consultas del usuario actual desde Supabase (no de
@@ -3864,7 +3872,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-03-v51-pdf-consulta";
+const VERSION_APP = "2026-11-03-v52-historial-informe";
 
 const state = {
   user: null,
@@ -5312,7 +5320,8 @@ async function consultarCuit(){
       chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null,
       fechaVencimiento: document.getElementById("consulta-fecha-vencimiento").value || null,
       clienteId: clienteSelect ? (clienteSelect.value || null) : null,
-      montoCheque: numeroCheque ? parseMontoAR(document.getElementById("consulta-monto-cheque").value) : null
+      montoCheque: numeroCheque ? parseMontoAR(document.getElementById("consulta-monto-cheque").value) : null,
+      analisis: armarAnalisisGuardado(datos, resultado, chequeInfo)
     });
   }
 
@@ -5371,7 +5380,7 @@ async function verEstadoCliente(clienteId){
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
       categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
-      clienteId
+      clienteId, analisis: armarAnalisisGuardado(datos, resultado, null)
     });
   }
 
@@ -6359,6 +6368,7 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
     monto: numeroCheque ? parseMontoAR(_val("consulta-monto-cheque")) : 0,
     cuando: new Date().toISOString()
   };
+  if (state.ctxResultado){ Object.assign(window.ultimoContexto, state.ctxResultado); state.ctxResultado = null; }
   if (state.cuitResultado) state.cuitResultado = null;
   const _bc = document.getElementById("btn-pdf-compartir");
   if (_bc) _bc.style.display = puedeCompartirPdf() ? "" : "none";
@@ -6803,10 +6813,22 @@ async function renderHistorial(){
       <div class="hist-bottom">
         <span class="hist-date">${fecha.toLocaleString("es-AR")}</span>
       </div>
+      ${h.analisis ? `<button class="btn btn-secondary" style="margin-top:8px; padding:8px 12px; font-size:13px;" onclick="abrirInformeGuardado('${h.id}')">Ver informe</button>` : ""}
       ${confirmacionHtml}
       ${clienteHtml}
     </div>`;
   }).join("");
+}
+// Reabre una consulta del historial tal como se vio (sin consultar al BCRA ni gastar una consulta).
+function abrirInformeGuardado(id){
+  const h = (state.ultimoHistorial || []).find(x => String(x.id) === String(id));
+  const a = h && h.analisis;
+  if (!a || !a.datos || !a.resultado){ mostrarToast("Esta consulta no tiene informe guardado."); return; }
+  state.cuitResultado = h.cuit_consultado;
+  state.ctxResultado = { banco: h.banco_cheque_consultado || "", vencimiento: h.fecha_vencimiento_cheque || "", monto: h.monto_cheque || 0, cuando: h.creado_en };
+  state.volverA = "historial";
+  mostrarResultado(a.datos, a.resultado, h.numero_cheque_consultado || "", a.chequeInfo || null, h.fuente);
+  irA("resultado");
 }
 
 // Actualiza a qué cliente pertenece una consulta ya guardada (o la
