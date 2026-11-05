@@ -3900,7 +3900,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-03-v55-cliente-nuevo";
+const VERSION_APP = "2026-11-05-v56-eliminar-cliente";
 
 const state = {
   user: null,
@@ -8025,6 +8025,21 @@ async function eliminarMovimiento(id){
   renderClienteDetalle(state.clienteActualId);
 }
 
+async function eliminarClienteActual(nCheques, nMov){
+  const c = state.clienteActualObj;
+  if (!c || esUsuarioEquipo()) return;
+  const msg = `¿Eliminar a "${c.nombre}"?\n\nSe borrará su cuenta corriente (${nMov} movimiento${nMov===1?"":"s"}) y su historial de cobranzas.\n` +
+    (nCheques ? `Sus ${nCheques} cheque${nCheques===1?"":"s"} NO se borran: quedan en el Historial sin cliente asignado.\n` : "") +
+    `\nEsta acción no se puede deshacer.`;
+  if (!confirm(msg)) return;
+  const { error } = await supabaseClient.rpc("eliminar_cliente", { p_id: c.id });
+  if (error){ mostrarToast(error.message && error.message.length < 140 ? error.message : "No pudimos eliminar el cliente, probá de nuevo."); return; }
+  state.clientesUsuario = await obtenerClientesUsuario(state.user.id);
+  state.clienteActualId = null; state.clienteActualObj = null;
+  mostrarToast("Cliente eliminado.");
+  irA("clientes");
+}
+
 async function renderClienteDetalle(clienteId){
   const contTitulo = document.getElementById("cliente-detalle-nombre");
   const cont = document.getElementById("cliente-detalle-content");
@@ -8045,8 +8060,10 @@ async function renderClienteDetalle(clienteId){
     ? `<button class="btn btn-primary" id="btn-ver-estado-cliente" style="margin-bottom:14px;" onclick="verEstadoCliente('${cliente.id}')">🔍 Ver estado actual</button>`
     : `<div class="dash-nota" style="margin-bottom:14px;">Cargale un CUIT propio a este cliente (botón "Editar cliente") para poder consultar su estado actual con un clic.</div>`;
 
+  const btnEliminar = `<button class="btn btn-secondary" style="margin-top:18px; color:#b3261e; border-color:#e0b4b0;" onclick="eliminarClienteActual(${consultas.length}, ${movimientos.length})">Eliminar cliente</button>`;
+  const btnEliminarV = esUsuarioEquipo() ? "" : btnEliminar;
   if (consultas.length === 0){
-    cont.innerHTML = `${btnEditar}${btnVerEstado}${bloqueCC}<div class="empty-state"><div class="ico">📄</div><p>Todavía no le asignaste ningún cheque a este cliente.<br>Hacelo desde una fila del Historial.</p></div>`;
+    cont.innerHTML = `${btnEditar}${btnVerEstado}${bloqueCC}<div class="empty-state"><div class="ico">📄</div><p>Todavía no le asignaste ningún cheque a este cliente.<br>Hacelo desde una fila del Historial.</p></div>${btnEliminarV}`;
     return;
   }
 
@@ -8158,7 +8175,8 @@ async function renderClienteDetalle(clienteId){
         <h3>Resultado de los cheques</h3>
         ${donutResultado}
       </div>
-    </div>`;
+    </div>
+    ${btnEliminarV}`;
 }
 
 function mostrarTabClienteDash(tab){
