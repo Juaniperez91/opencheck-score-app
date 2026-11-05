@@ -284,7 +284,7 @@
   body.rol-calle .nav-calle{display:block !important;}
   .cob-est{display:inline-block; font-size:11px; font-weight:700; padding:3px 8px; border-radius:100px;}
   .cob-est-pendiente{background:#fff3d6; color:#8a5a00;}
-  .cob-est-confirmada{background:#e1f3e8; color:#1f6b45;}
+  .cob-est-confirmada, .cob-est-aprobada{background:#e1f3e8; color:#1f6b45;}
   .cob-est-rechazada, .cob-est-anulada{background:#fdecea; color:#b3261e;}
   .cob-card{background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:14px; margin-bottom:12px;}
   .cob-card .cob-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-weight:700; font-size:14px;}
@@ -1283,6 +1283,10 @@
       <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
 
       <div class="divider-label">Otras herramientas</div>
+      <div class="link-line" id="link-consulta-masiva" onclick="abrirImportador('cuits')">
+        <span>Consultar varios CUIT desde un Excel</span>
+        <span class="arrow">→</span>
+      </div>
       <div class="link-line" onclick="irA('denuncia')">
         <span>¿Un cheque fue denunciado como extraviado o robado?</span>
         <span class="arrow">→</span>
@@ -1626,6 +1630,29 @@
       <div class="modal-botones">
         <button class="btn btn-primary" id="btn-cob-editar" onclick="guardarEdicionCobranza()">Guardar corrección</button>
         <button class="btn btn-secondary" onclick="document.getElementById('modal-cob-editar').classList.remove('show')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-importar">
+    <div class="modal-caja" style="max-height:88vh; overflow:auto;">
+      <h3 id="imp-titulo">Importar</h3>
+      <div id="imp-cuerpo"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-cli-nuevo">
+    <div class="modal-caja">
+      <h3>Proponer un cliente nuevo</h3>
+      <p>Primero vas a consultar el riesgo de su CUIT. Después se lo mandás a la administración para que lo apruebe.</p>
+      <div class="field"><label class="field-label">Nombre del cliente</label>
+        <input type="text" id="cli-nuevo-nombre" autocomplete="off" placeholder="Ej: Carnicería López" maxlength="120"></div>
+      <div class="field"><label class="field-label">Nota (opcional)</label>
+        <input type="text" id="cli-nuevo-nota" autocomplete="off" placeholder="Ej: lo conocí en la feria, compra por semana" maxlength="200"></div>
+      <div class="modal-error" id="cli-nuevo-error"></div>
+      <div class="modal-botones">
+        <button class="btn btn-primary" onclick="iniciarClienteNuevo()">Seguir: consultar su CUIT</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-cli-nuevo').classList.remove('show')">Cancelar</button>
       </div>
     </div>
   </div>
@@ -3873,7 +3900,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-03-v53-informe-premium";
+const VERSION_APP = "2026-11-03-v55-cliente-nuevo";
 
 const state = {
   user: null,
@@ -4010,7 +4037,7 @@ function monto0(id){ return parseMontoAR(document.getElementById(id).value) || 0
 function fechaHoraCorta(iso){
   try { return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch (e){ return ""; }
 }
-const ETQ_COBRANZA = { pendiente: "Pendiente", confirmada: "Confirmada", rechazada: "Rechazada", anulada: "Anulada" };
+const ETQ_COBRANZA = { pendiente: "Pendiente", confirmada: "Confirmada", rechazada: "Rechazada", anulada: "Anulada", aprobada: "Aprobado" };
 function chipEstadoCobranza(e){ return `<span class="cob-est cob-est-${e}">${ETQ_COBRANZA[e] || e}</span>`; }
 function htmlChequesCobranza(c, admin){
   const l = Array.isArray(c.cheques) ? c.cheques : [];
@@ -4052,6 +4079,7 @@ async function renderCobranzaCalle(){
       <input type="text" id="cob-filtro" placeholder="Buscar cliente…" autocomplete="off" oninput="filtrarClientesCobranza()" style="margin-bottom:8px;">
       <select id="cob-cliente" class="select-banco"></select>
     </div>
+    <div class="field-hint" style="margin:-6px 0 12px;">¿Es un cliente nuevo? <a href="#" onclick="abrirClienteNuevoCalle(); return false;">Proponelo a la administración</a></div>
     <label class="field-label">Cheques recibidos</label>
     <div id="cob-cheques-detalle"></div>
     <button class="btn btn-secondary" style="margin-bottom:6px;" onclick="iniciarAgregarCheque()">+ Agregar cheque (con CUIT, número y plazo)</button>
@@ -4069,6 +4097,8 @@ async function renderCobranzaCalle(){
     <div class="cc-fila cc-total" style="margin-bottom:12px;"><span>Total declarado</span><b id="cob-total">$0</b></div>
     <div class="modal-error" id="cob-error"></div>
     <button class="btn btn-primary" id="btn-declarar-cobranza" onclick="declararCobranza()">Declarar cobranza</button>
+    <div class="divider-label" style="margin-top:22px;">Mis clientes nuevos propuestos</div>
+    <div id="cli-mias"><p class="page-sub">Cargando…</p></div>
     <div class="divider-label" style="margin-top:22px;">Mis cobranzas</div>
     <div id="cob-mias"><p class="page-sub">Cargando…</p></div>`;
   const bor = mantener ? state.cobBorrador : null;
@@ -4081,6 +4111,7 @@ async function renderCobranzaCalle(){
   } else filtrarClientesCobranza();
   renderChequesCobranza();
   cargarMisCobranzas();
+  cargarMisSolicitudesCliente();
 }
 function colorCategoria(cat){ return colorPorTierCategoria(cat); }
 function renderChequesCobranza(){
@@ -4110,7 +4141,7 @@ function quitarChequeCobranza(i){
   renderChequesCobranza();
 }
 function actualizarModoCobranzaHome(){
-  const en = !!state.modoCobranza;
+  const en = !!(state.modoCobranza || state.modoClienteNuevo);
   let b = document.getElementById("banner-modo-cobranza");
   const cont = document.querySelector("#screen-home .content");
   if (en && cont){
@@ -4122,17 +4153,27 @@ function actualizarModoCobranzaHome(){
       cont.insertBefore(b, cont.firstChild);
     }
     const cl = ((state.clientesCobranza || []).find(c => c.id === (state.cobBorrador || {}).cliente) || {}).nombre || "";
-    b.innerHTML = `<span>Agregando un cheque a la cobranza de <b>${escHtml(cl)}</b>. Cargá CUIT, banco, número, vencimiento y monto.</span><button class="btn btn-secondary" style="width:auto; padding:6px 10px; font-size:12px;" onclick="cancelarAgregarCheque()">Cancelar</button>`;
+    b.innerHTML = state.modoClienteNuevo
+      ? `<span>Cliente nuevo: <b>${escHtml((state.cliNuevo || {}).nombre || "")}</b>. Ingresá su CUIT y consultá el riesgo (no hace falta cargar un cheque).</span><button class="btn btn-secondary" style="width:auto; padding:6px 10px; font-size:12px;" onclick="cancelarAgregarCheque()">Cancelar</button>`
+      : `<span>Agregando un cheque a la cobranza de <b>${escHtml(cl)}</b>. Cargá CUIT, banco, número, vencimiento y monto.</span><button class="btn btn-secondary" style="width:auto; padding:6px 10px; font-size:12px;" onclick="cancelarAgregarCheque()">Cancelar</button>`;
     b.style.display = "flex";
   } else if (b){ b.style.display = "none"; }
   const btn = document.getElementById("btn-consultar");
-  if (btn) btn.textContent = en ? "Consultar y agregar a la cobranza" : "Consultar score";
+  if (btn) btn.textContent = state.modoClienteNuevo ? "Consultar riesgo del cliente nuevo" : (en ? "Consultar y agregar a la cobranza" : "Consultar score");
 }
 function actualizarAccionesResultadoCobranza(){
   ["res-cob-acciones-top", "res-cob-acciones-bottom"].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (state.modoCobranza && state.cobChequePendiente){
+    if (state.modoClienteNuevo && state.cliNuevoPendiente){
+      const c = state.cliNuevoPendiente;
+      el.innerHTML = `<div class="cob-card" style="border-color:#2472B8; margin-bottom:14px;">
+        <div class="cob-top"><span>${escHtml(c.nombre)}</span><span class="chq-cat" style="background:${colorCategoria(c.categoria)}">${escHtml(c.categoria)}</span></div>
+        <div class="cob-sub">Revisá el análisis y, si corresponde, proponelo a la administración. Hasta que lo apruebe, no podés cargarle cobranzas.</div>
+        <div class="modal-error" id="cli-envio-error"></div>
+        <div class="cob-acciones"><button class="btn btn-primary" id="btn-cli-enviar" onclick="enviarClienteNuevo()">Proponer a la administración</button>
+        <button class="btn btn-secondary" onclick="cancelarAgregarCheque()">Descartar</button></div></div>`;
+    } else if (state.modoCobranza && state.cobChequePendiente){
       const c = state.cobChequePendiente;
       el.innerHTML = `<div class="cob-card" style="border-color:#2472B8; margin-bottom:14px;">
         <div class="cob-top"><span>Cheque N° ${escHtml(c.numero)} · ${formatearPesos(c.monto)}</span><span class="chq-cat" style="background:${colorCategoria(c.categoria)}">${escHtml(c.categoria)}</span></div>
@@ -4142,6 +4183,57 @@ function actualizarAccionesResultadoCobranza(){
     } else el.innerHTML = "";
   });
 }
+// ---- Cliente nuevo propuesto por el vendedor (se consulta el riesgo del CUIT y la administración aprueba) ----
+function abrirClienteNuevoCalle(){
+  document.getElementById("cli-nuevo-nombre").value = "";
+  document.getElementById("cli-nuevo-nota").value = "";
+  mostrarErrorModal("cli-nuevo-error", "");
+  document.getElementById("modal-cli-nuevo").classList.add("show");
+}
+function iniciarClienteNuevo(){
+  const nombre = document.getElementById("cli-nuevo-nombre").value.trim();
+  if (nombre.length < 2) return mostrarErrorModal("cli-nuevo-error", "Ponele un nombre al cliente.");
+  const el = (id) => { const e = document.getElementById(id); return e ? e.value : ""; };
+  state.cobBorrador = { filtro: el("cob-filtro"), cliente: el("cob-cliente"), efectivo: el("cob-efectivo"), nota: el("cob-nota") };
+  state.cliNuevo = { nombre, nota: document.getElementById("cli-nuevo-nota").value.trim() };
+  state.cobMantener = true;
+  state.modoClienteNuevo = true; state.modoCobranza = false;
+  state.cliNuevoPendiente = null; state.cobChequePendiente = null;
+  document.getElementById("modal-cli-nuevo").classList.remove("show");
+  ["consulta-cuit", "consulta-numero-cheque", "consulta-fecha-vencimiento", "consulta-monto-cheque"].forEach(id => { const e = document.getElementById(id); if (e) e.value = ""; });
+  const rs = document.getElementById("razon-social-preview"); if (rs) rs.textContent = "";
+  irA("home");
+}
+async function enviarClienteNuevo(){
+  const c = state.cliNuevoPendiente; if (!c) return;
+  const btn = document.getElementById("btn-cli-enviar"); if (btn){ btn.disabled = true; btn.textContent = "Enviando…"; }
+  const { error } = await supabaseClient.rpc("proponer_cliente", {
+    p_nombre: c.nombre, p_cuit: c.cuit, p_categoria: c.categoria, p_puntos: c.puntos,
+    p_razon: c.razon, p_nota: c.nota || null, p_analisis: c.analisis || null
+  });
+  if (error){
+    mostrarErrorModal("cli-envio-error", error.message);
+    if (btn){ btn.disabled = false; btn.textContent = "Proponer a la administración"; }
+    return;
+  }
+  state.modoClienteNuevo = false; state.cliNuevoPendiente = null; state.cobMantener = true;
+  mostrarToast("Enviado a la administración. Cuando lo apruebe, ya vas a poder cargarle cobranzas.");
+  irA("cobranza");
+}
+async function cargarMisSolicitudesCliente(){
+  const cont = document.getElementById("cli-mias"); if (!cont) return;
+  const { data, error } = await supabaseClient.rpc("solicitudes_cliente_vista");
+  if (error){ cont.innerHTML = `<p class="page-sub">No se pudo cargar: ${escHtml(error.message)}</p>`; return; }
+  if (!data || !data.length){ cont.innerHTML = `<p class="page-sub">Todavía no propusiste clientes nuevos.</p>`; return; }
+  cont.innerHTML = data.slice(0, 20).map(s => `
+    <div class="cob-card">
+      <div class="cob-top"><span>${escHtml(s.nombre)}</span>${chipEstadoCobranza(s.estado)}</div>
+      <div class="cob-sub">${escHtml(formatearCuit(s.cuit))} · ${fechaHoraCorta(s.creado_en)}</div>
+      ${s.estado === "aprobada" ? `<div class="cob-saldo">Ya podés cargarle cobranzas.</div>` : ""}
+      ${s.motivo ? `<div class="cob-saldo">Motivo: ${escHtml(s.motivo)}</div>` : ""}
+    </div>`).join("");
+}
+
 // El vendedor agrega un cheque usando la MISMA pantalla de consulta (con razón social, cámara y análisis completo).
 function iniciarAgregarCheque(){
   const cliente = document.getElementById("cob-cliente").value;
@@ -4160,7 +4252,10 @@ function iniciarAgregarCheque(){
 }
 function cancelarAgregarCheque(){
   state.modoCobranza = false;
+  state.modoClienteNuevo = false;
   state.cobChequePendiente = null;
+  state.cliNuevoPendiente = null;
+  state.cobMantener = true;
   irA("cobranza");
 }
 function confirmarChequeEnCobranza(){
@@ -4271,14 +4366,17 @@ async function cargarMisCobranzas(){
 // ---- Administración (titular / administrativo) ----
 async function actualizarBadgeCobranzas(){
   if (!esAdminEmpresa()) return;
-  let n;
+  let n, nCob, nCli = 0;
   try {
     const { data, error } = await supabaseClient.rpc("cobranzas_pendientes_count");
     if (error) return;
-    n = Number(data) || 0;
+    nCob = Number(data) || 0;
+    const r2 = await supabaseClient.rpc("solicitudes_cliente_pendientes_count");
+    nCli = (r2 && !r2.error) ? (Number(r2.data) || 0) : 0;
+    n = nCob + nCli;
   } catch (e){ return; }
   const previo = state.cobPendientes;
-  state.cobPendientes = n;
+  state.cobPendientes = n; state.cliPendientes = nCli;
   document.querySelectorAll('.nav-item[data-nav="clientes"]').forEach(nv => {
     let b = nv.querySelector(".nav-badge-cob");
     if (n > 0){
@@ -4290,17 +4388,21 @@ async function actualizarBadgeCobranzas(){
     const el = document.getElementById(id);
     if (!el) return;
     if (n > 0){
-      el.innerHTML = `<span class="bc-n">${n}</span><span><b>${n === 1 ? "Tenés 1 cobranza por confirmar" : "Tenés " + n + " cobranzas por confirmar"}</b><br>Hasta que no la confirmes, no baja el saldo del cliente.</span><span class="bc-go">Ver ›</span>`;
+      const tit = nCli === 0 ? (n === 1 ? "Tenés 1 cobranza por confirmar" : "Tenés " + n + " cobranzas por confirmar")
+        : nCob === 0 ? (nCli === 1 ? "Tenés 1 cliente nuevo por aprobar" : "Tenés " + nCli + " clientes nuevos por aprobar")
+        : `Tenés ${nCob} cobranza${nCob === 1 ? "" : "s"} y ${nCli} cliente${nCli === 1 ? "" : "s"} nuevo${nCli === 1 ? "" : "s"} por resolver`;
+      const sub = nCli === 0 ? "Hasta que no la confirmes, no baja el saldo del cliente." : "Los vendedores esperan tu respuesta.";
+      el.innerHTML = `<span class="bc-n">${n}</span><span><b>${tit}</b><br>${sub}</span><span class="bc-go">Ver ›</span>`;
       el.classList.add("show");
     } else { el.classList.remove("show"); el.innerHTML = ""; }
   });
   document.title = (n > 0 ? "(" + n + ") " : "") + "OpenCheck";
   const tag = document.getElementById("cob-pend-tag");
-  if (tag) tag.textContent = n > 0 ? n + " por conciliar" : "Al día";
+  if (tag) tag.textContent = n > 0 ? n + " por resolver" : "Al día";
   const card = document.getElementById("cob-card-clientes");
   if (card) card.classList.toggle("cob-alerta", n > 0);
   if (previo !== undefined && n > previo){
-    mostrarToast("🔔 Nueva cobranza para confirmar");
+    mostrarToast(nCli > 0 && nCob === 0 ? "🔔 Cliente nuevo para aprobar" : "🔔 Nueva cobranza para confirmar");
     try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e){}
   }
 }
@@ -4314,14 +4416,20 @@ async function cargarCobranzasAdmin(silencioso){
   const cont = document.getElementById("cobranzas-content");
   if (!esAdminEmpresa()){ cont.innerHTML = `<div class="empty-state"><p>Esta pantalla es para la administración (Premium).</p></div>`; return; }
   if (!silencioso) cont.innerHTML = `<div class="empty-state"><p>Cargando…</p></div>`;
-  const [r, clientes] = await Promise.all([
+  const [r, clientes, rs] = await Promise.all([
     supabaseClient.rpc("cobranzas_vista", { p_estado: null }),
-    obtenerClientesUsuario(state.user.id)
+    obtenerClientesUsuario(state.user.id),
+    supabaseClient.rpc("solicitudes_cliente_vista")
   ]);
   if (r.error){ cont.innerHTML = `<div class="empty-state"><p>No se pudo cargar: ${escHtml(r.error.message)}</p></div>`; return; }
   state.clientesUsuario = clientes;
   state.cobranzas = r.data || [];
-  state.cobTab = state.cobTab || "pendientes";
+  state.solicitudes = (rs && !rs.error && rs.data) ? rs.data : [];
+  if (!silencioso) state.cobTab = null;
+  if (!state.cobTab){
+    const pc = state.cobranzas.filter(c => c.estado === "pendiente").length, ps = state.solicitudes.filter(x => x.estado === "pendiente").length;
+    state.cobTab = (pc === 0 && ps > 0) ? "clientes" : "pendientes";
+  }
   renderCobranzasAdmin();
   actualizarBadgeCobranzas();
 }
@@ -4369,8 +4477,59 @@ function renderCobranzasAdmin(){
     <div class="ge-tabs">
       <div class="ge-tab ${tab === "pendientes" ? "active" : ""}" onclick="cambiarTabCobranzas('pendientes')">Pendientes (${pend.length})</div>
       <div class="ge-tab ${tab === "historial" ? "active" : ""}" onclick="cambiarTabCobranzas('historial')">Historial</div>
+      <div class="ge-tab ${tab === "clientes" ? "active" : ""}" onclick="cambiarTabCobranzas('clientes')">Clientes nuevos (${(state.solicitudes || []).filter(x => x.estado === "pendiente").length})</div>
     </div>
-    ${tarjetas || `<div class="empty-state"><div class="ico">✅</div><p>${tab === "pendientes" ? "No hay cobranzas por conciliar." : "Todavía no hay cobranzas resueltas."}</p></div>`}`;
+    ${tab === "clientes" ? htmlSolicitudesAdmin() : (tarjetas || `<div class="empty-state"><div class="ico">✅</div><p>${tab === "pendientes" ? "No hay cobranzas por conciliar." : "Todavía no hay cobranzas resueltas."}</p></div>`)}`;
+}
+function htmlSolicitudesAdmin(){
+  const todas = state.solicitudes || [];
+  const pend = todas.filter(x => x.estado === "pendiente").slice().reverse(), res = todas.filter(x => x.estado !== "pendiente");
+  const tarjeta = (x) => {
+    const riesgo = x.categoria && x.categoria[0] === "C";
+    return `<div class="cob-card">
+      <div class="cob-top"><span>${escHtml(x.nombre)}</span>${chipEstadoCobranza(x.estado)}</div>
+      <div class="cob-sub">Propuesto por ${escHtml(x.vendedor_nombre)} · ${fechaHoraCorta(x.creado_en)}</div>
+      ${riesgo ? `<div class="cob-riesgo">⚠️ Riesgo alto según OpenCheck: pensalo bien antes de aprobarlo.</div>` : ""}
+      <div class="cob-lin"><span>CUIT</span><b>${escHtml(formatearCuit(x.cuit))}</b></div>
+      ${x.razon_social ? `<div class="cob-lin"><span>Figura como</span><b>${escHtml(x.razon_social)}</b></div>` : ""}
+      <div class="cob-lin"><span>Riesgo OpenCheck</span><b><span class="chq-cat" style="background:${colorCategoria(x.categoria)}">${escHtml(x.categoria || "?")}</span> ${x.puntos != null ? x.puntos + "/100" : ""}</b></div>
+      ${x.nota ? `<div class="cob-saldo">Nota del vendedor: ${escHtml(x.nota)}</div>` : ""}
+      ${x.estado !== "pendiente" && x.resuelta_por_nombre ? `<div class="cob-saldo">${ETQ_COBRANZA[x.estado]} por ${escHtml(x.resuelta_por_nombre)} · ${fechaHoraCorta(x.resuelta_en)}${x.motivo ? " · " + escHtml(x.motivo) : ""}</div>` : ""}
+      <div class="cob-acciones">
+        ${x.analisis ? `<button class="btn btn-secondary" onclick="verAnalisisSolicitud('${x.id}')">Ver análisis</button>` : ""}
+        ${x.estado === "pendiente" ? `<button class="btn btn-primary" onclick="aprobarClienteNuevo('${x.id}')">Aprobar</button>
+        <button class="btn btn-secondary" onclick="abrirRechazoCliente('${x.id}')">Rechazar</button>` : ""}
+      </div></div>`;
+  };
+  return `<p class="page-sub">Clientes que propusieron tus vendedores, con el riesgo de su CUIT. Al <b>aprobar</b>, el cliente se crea y ellos ya pueden cargarle cobranzas.</p>`
+    + (pend.length ? pend.map(tarjeta).join("") : `<div class="empty-state"><div class="ico">✅</div><p>No hay clientes nuevos por aprobar.</p></div>`)
+    + (res.length ? `<div class="divider-label" style="margin-top:18px;">Resueltos</div>` + res.slice(0, 20).map(tarjeta).join("") : "");
+}
+function verAnalisisSolicitud(id){
+  const x = (state.solicitudes || []).find(v => v.id === id); const a = x && x.analisis;
+  if (!a || !a.datos || !a.resultado){ mostrarToast("No hay análisis guardado."); return; }
+  state.cuitResultado = formatearCuit(x.cuit);
+  state.volverA = "cobranzas";
+  mostrarResultado(a.datos, a.resultado, "", null, "real");
+  irA("resultado");
+}
+async function aprobarClienteNuevo(id){
+  const x = (state.solicitudes || []).find(v => v.id === id); if (!x) return;
+  if (!confirm(`¿Aprobar a ${x.nombre} como cliente? Se crea en tu cartera (con su CUIT en monitoreo) y tus vendedores ya pueden cargarle cobranzas.`)) return;
+  const { error } = await supabaseClient.rpc("aprobar_cliente", { p_id: id, p_tope: null });
+  if (error){ mostrarToast(error.message); return; }
+  mostrarToast("Cliente aprobado y agregado a tu cartera.");
+  cargarCobranzasAdmin(true);
+}
+function abrirRechazoCliente(id){
+  const x = (state.solicitudes || []).find(v => v.id === id); if (!x) return;
+  state.cobAccion = { id, accion: "rechazar_cliente" };
+  document.getElementById("cob-ac-titulo").textContent = "Rechazar cliente nuevo";
+  document.getElementById("cob-ac-texto").textContent = `${x.nombre} no se agrega a tu cartera. El vendedor ve el motivo.`;
+  document.getElementById("btn-cob-accion").textContent = "Rechazar cliente";
+  document.getElementById("cob-ac-motivo").value = "";
+  mostrarErrorModal("cob-ac-error", "");
+  document.getElementById("modal-cob-accion").classList.add("show");
 }
 async function confirmarCobranza(id){
   const c = (state.cobranzas || []).find(x => x.id === id);
@@ -4427,10 +4586,10 @@ async function ejecutarAccionCobranza(){
   const { id, accion } = state.cobAccion || {};
   if (!id) return;
   const motivo = document.getElementById("cob-ac-motivo").value.trim();
-  const { error } = await supabaseClient.rpc(accion === "anular" ? "anular_cobranza" : "rechazar_cobranza", { p_id: id, p_motivo: motivo || null });
+  const { error } = await supabaseClient.rpc(accion === "anular" ? "anular_cobranza" : accion === "rechazar_cliente" ? "rechazar_cliente" : "rechazar_cobranza", { p_id: id, p_motivo: motivo || null });
   if (error) return mostrarErrorModal("cob-ac-error", error.message);
   document.getElementById("modal-cob-accion").classList.remove("show");
-  mostrarToast(accion === "anular" ? "Cobranza anulada: el saldo se restituyó." : "Cobranza rechazada.");
+  mostrarToast(accion === "anular" ? "Cobranza anulada: el saldo se restituyó." : accion === "rechazar_cliente" ? "Cliente rechazado." : "Cobranza rechazada.");
   cargarCobranzasAdmin(true);
 }
 
@@ -4629,7 +4788,7 @@ function irACalendario(){
 }
 
 function irA(pantalla){
-  if (state.modoCobranza && !["home", "resultado", "cobranza"].includes(pantalla)){ state.modoCobranza = false; state.cobChequePendiente = null; }
+  if ((state.modoCobranza || state.modoClienteNuevo) && !["home", "resultado", "cobranza"].includes(pantalla)){ state.modoCobranza = false; state.modoClienteNuevo = false; state.cobChequePendiente = null; state.cliNuevoPendiente = null; }
   if (pantalla !== "resultado" && pantalla !== "home") state.volverA = null;
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + pantalla).classList.add("active");
@@ -5297,10 +5456,17 @@ async function consultarCuit(){
   }
 
   btn.disabled = false;
-  btn.textContent = state.modoCobranza ? "Consultar y agregar a la cobranza" : "Consultar score";
+  btn.textContent = state.modoClienteNuevo ? "Consultar riesgo del cliente nuevo" : (state.modoCobranza ? "Consultar y agregar a la cobranza" : "Consultar score");
 
   const resultado = calcularScore(datos);
 
+  if (state.modoClienteNuevo){
+    state.cliNuevoPendiente = {
+      nombre: (state.cliNuevo || {}).nombre || "", nota: (state.cliNuevo || {}).nota || "",
+      cuit: digits, razon: datos.empresa, categoria: resultado.categoria, puntos: resultado.puntosFinales,
+      analisis: armarAnalisisGuardado(datos, resultado, null), fuente
+    };
+  }
   if (state.modoCobranza){
     state.cobChequePendiente = {
       cuit: formatearCuit(digits), razon_social: datos.empresa, categoria: resultado.categoria, puntos: resultado.puntosFinales,
@@ -6691,6 +6857,295 @@ async function descargarPdfConsulta(compartir){
   }
 }
 
+
+/* =======================================================
+   IMPORTACIÓN DESDE EXCEL (v54): carga masiva de clientes y consulta masiva de CUIT
+   Formato fijo: la app ofrece una plantilla y cada usuario adapta su archivo.
+   El archivo se lee en el dispositivo; no se sube a ningún servidor.
+   ======================================================= */
+const IMP_MAX_CLIENTES = 500;
+const IMP_MAX_CUITS = 200;
+function cargarXlsx(){
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((ok, fail) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    sc.onload = () => ok(); sc.onerror = () => fail(new Error("No se pudo cargar el lector de Excel (revisá tu conexión)."));
+    document.head.appendChild(sc);
+  });
+}
+function normCol(t){ return String(t == null ? "" : t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function parseCsvTexto(txt){
+  txt = txt.replace(/^﻿/, "");
+  const primera = txt.split(/\r?\n/)[0] || "";
+  const sep = [";", "\t", ","].map(c => [c, primera.split(c).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const filas = []; let fila = [], campo = "", q = false;
+  for (let i = 0; i < txt.length; i++){
+    const c = txt[i];
+    if (q){ if (c === '"'){ if (txt[i + 1] === '"'){ campo += '"'; i++; } else q = false; } else campo += c; }
+    else if (c === '"') q = true;
+    else if (c === sep){ fila.push(campo); campo = ""; }
+    else if (c === "\n" || c === "\r"){ if (c === "\r" && txt[i + 1] === "\n") i++; fila.push(campo); filas.push(fila); fila = []; campo = ""; }
+    else campo += c;
+  }
+  if (campo !== "" || fila.length){ fila.push(campo); filas.push(fila); }
+  return filas;
+}
+async function leerArchivoTabla(file){
+  if (/\.csv$|\.txt$/i.test(file.name)) return parseCsvTexto(await file.text());
+  await cargarXlsx();
+  const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const hoja = wb.Sheets[wb.SheetNames[0]];
+  return window.XLSX.utils.sheet_to_json(hoja, { header: 1, defval: "", raw: true });
+}
+// Busca la fila de encabezados y devuelve las filas de datos como objetos {nombre, cuit, saldo, tope, ref, fila}
+function interpretarTabla(filas, necesitaNombre){
+  const mapa = { nombre: ["razonsocial", "nombre", "cliente", "razon", "nombreyapellido"], cuit: ["cuit", "cuil", "cuitcuil", "cuitocuil"], saldo: ["saldoinicial", "saldo", "deuda"], tope: ["topedeexposicion", "tope", "limite", "limitedeexposicion"], ref: ["referencia", "nota", "comentario", "observaciones"] };
+  for (let h = 0; h < Math.min(filas.length, 12); h++){
+    const cols = {}; (filas[h] || []).forEach((c, i) => { const n = normCol(c); for (const k in mapa) if (cols[k] === undefined && mapa[k].includes(n)) cols[k] = i; });
+    if (cols.cuit !== undefined && (!necesitaNombre || cols.nombre !== undefined)){
+      const out = [];
+      for (let r = h + 1; r < filas.length; r++){
+        const f = filas[r] || []; if (!f.some(v => String(v).trim() !== "")) continue;
+        const g = (k) => cols[k] === undefined ? "" : f[cols[k]];
+        out.push({ fila: r + 1, nombre: String(g("nombre")).trim(), cuitRaw: g("cuit"), saldoRaw: g("saldo"), topeRaw: g("tope"), ref: String(g("ref")).trim() });
+      }
+      return out;
+    }
+  }
+  return null;
+}
+function cuitDesdeCelda(v){
+  if (typeof v === "number") v = String(Math.round(v));
+  return limpiarCuit(String(v == null ? "" : v));
+}
+function montoDesdeCelda(v){ if (typeof v === "number") return v > 0 ? Math.round(v * 100) / 100 : null; return parseMontoAR(v); }
+
+async function entregarArchivo(blob, nombre){
+  if (esAppNativaPdf()){
+    const P = pluginsNativosPdf();
+    if (!P){ mostrarToast("En la app, la descarga de archivos llega con la próxima actualización. Mientras tanto, usá opencheck.pro."); return false; }
+    const b64 = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+    const r = await P.Filesystem.writeFile({ path: nombre, data: b64, directory: "CACHE" });
+    await P.Share.share({ title: nombre, url: r.uri, dialogTitle: "Guardar o compartir" });
+    return true;
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  return true;
+}
+async function descargarPlantilla(tipo){
+  try {
+    await cargarXlsx(); const X = window.XLSX;
+    const wb = X.utils.book_new();
+    let datos, instr, nombre;
+    if (tipo === "clientes"){
+      datos = [["Razón social", "CUIT", "Saldo inicial", "Tope de exposición"],
+        ["Distribuidora Ejemplo SA", "30-71234567-8", 1500000, 3000000],
+        ["Juan Pérez", "20-12345678-6", "", ""]];
+      instr = [["Cómo completar la plantilla de clientes"], [""],
+        ["Razón social: obligatoria. Nombre del cliente tal como lo conocés."],
+        ["CUIT: opcional pero recomendado (11 dígitos, con o sin guiones). Si lo cargás, el cliente queda en monitoreo."],
+        ["Saldo inicial: opcional. Lo que el cliente te debe hoy, en pesos (solo números)."],
+        ["Tope de exposición: opcional. Monto máximo de deuda que querés tolerarle, en pesos."],
+        [""], ["Borrá las filas de ejemplo antes de cargar las tuyas. No cambies los títulos de las columnas."],
+        [`Máximo ${IMP_MAX_CLIENTES} clientes por archivo. Los clientes que ya tenés cargados se omiten.`]];
+      nombre = "OpenCheck-plantilla-clientes.xlsx";
+    } else {
+      datos = [["CUIT", "Referencia (opcional)"], ["30-71234567-8", "Distribuidora Ejemplo SA"], ["20-12345678-6", "Pérez Juan"]];
+      instr = [["Cómo completar la plantilla de consulta masiva"], [""],
+        ["CUIT: obligatorio. 11 dígitos, con o sin guiones. Puede ser CUIT o CUIL."],
+        ["Referencia: opcional. Un nombre o nota tuya para reconocer cada fila en el resultado."],
+        [""], ["Borrá las filas de ejemplo antes de cargar las tuyas. No cambies los títulos de las columnas."],
+        [`Máximo ${IMP_MAX_CUITS} CUIT por archivo. Cada CUIT consultado queda en tu Historial.`]];
+      nombre = "OpenCheck-plantilla-consulta-masiva.xlsx";
+    }
+    const h1 = X.utils.aoa_to_sheet(datos); h1["!cols"] = datos[0].map((_, i) => ({ wch: [30, 18, 16, 20][i] || 18 }));
+    X.utils.book_append_sheet(wb, h1, "Plantilla");
+    const h2 = X.utils.aoa_to_sheet(instr); h2["!cols"] = [{ wch: 100 }];
+    X.utils.book_append_sheet(wb, h2, "Instrucciones");
+    const bytes = X.write(wb, { bookType: "xlsx", type: "array" });
+    const ok = await entregarArchivo(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), nombre);
+    if (ok) mostrarToast("Plantilla descargada.");
+  } catch (e){ mostrarToast("No pudimos armar la plantilla: " + (e.message || "error")); }
+}
+
+// ---------- Importador (modal) ----------
+function impCuerpo(html){ document.getElementById("imp-cuerpo").innerHTML = html; }
+function abrirImportador(tipo){
+  if (!state.user){ mostrarToast("Iniciá sesión para usar esta función."); return; }
+  if (!esPremiumEfectivo() || esUsuarioEquipo()){ mostrarToast(esUsuarioEquipo() ? "Esta función es para el titular de la cuenta." : "La importación desde Excel es una función Premium."); return; }
+  state.imp = { tipo, filas: null, cancelar: false, corriendo: false };
+  const cl = tipo === "clientes";
+  document.getElementById("imp-titulo").textContent = cl ? "Importar clientes desde Excel" : "Consultar varios CUIT desde Excel";
+  impCuerpo(`
+    <p style="font-size:13px; line-height:1.5; color:var(--ink-soft);">${cl
+      ? "Cargá todos tus clientes de una vez. Descargá la plantilla, completala con tus datos (razón social, CUIT, saldo inicial y tope, opcionales) y subila acá."
+      : `Subí una lista de CUIT y te devolvemos un Excel con la categoría de riesgo de cada uno (hasta ${IMP_MAX_CUITS} por archivo). Cada consulta queda en tu Historial.`}</p>
+    <button class="btn btn-secondary" style="margin-bottom:10px;" onclick="descargarPlantilla('${tipo}')">1. Descargar plantilla</button>
+    <label class="btn btn-primary" style="display:block; text-align:center; cursor:pointer;">2. Elegir mi archivo
+      <input type="file" accept=".xlsx,.xls,.csv,.txt" style="display:none;" onchange="impArchivoElegido(this)">
+    </label>
+    <div class="modal-error" id="imp-error"></div>
+    <div class="modal-botones"><button class="btn btn-secondary" onclick="cerrarImportador()">Cerrar</button></div>`);
+  document.getElementById("modal-importar").classList.add("show");
+}
+function cerrarImportador(){
+  if (state.imp && state.imp.corriendo && !confirm("Hay una consulta en curso. ¿Cancelarla y cerrar?")) return;
+  if (state.imp) state.imp.cancelar = true;
+  document.getElementById("modal-importar").classList.remove("show");
+}
+function impError(msg){ const e = document.getElementById("imp-error"); if (e){ e.textContent = msg || ""; e.style.display = msg ? "block" : "none"; } }
+async function impArchivoElegido(input){
+  const file = input.files && input.files[0]; if (!file) return;
+  impError("");
+  try {
+    const filas = await leerArchivoTabla(file);
+    const t = state.imp.tipo;
+    const datos = interpretarTabla(filas, t === "clientes");
+    if (!datos){ impError(t === "clientes" ? "No encontramos las columnas 'Razón social' y 'CUIT'. Usá la plantilla sin cambiar los títulos." : "No encontramos la columna 'CUIT'. Usá la plantilla sin cambiar el título."); return; }
+    if (!datos.length){ impError("El archivo no tiene filas para cargar."); return; }
+    if (t === "clientes") await impPrepararClientes(datos); else impPrepararCuits(datos);
+  } catch (e){ impError("No pudimos leer el archivo: " + (e.message || "error")); }
+  finally { input.value = ""; }
+}
+function impListaProblemas(problemas){
+  if (!problemas.length) return "";
+  return `<div style="margin:10px 0; font-size:12.5px; color:#8a3a3a;"><b>Filas que no se van a cargar (${problemas.length}):</b><ul style="padding-left:18px; margin:4px 0;">${problemas.slice(0, 12).map(p => `<li>Fila ${p.fila}: ${escHtml(p.motivo)}</li>`).join("")}${problemas.length > 12 ? `<li>…y ${problemas.length - 12} más</li>` : ""}</ul></div>`;
+}
+async function impPrepararClientes(datos){
+  if (datos.length > IMP_MAX_CLIENTES){ impError(`El archivo tiene ${datos.length} filas. El máximo es ${IMP_MAX_CLIENTES} por archivo: dividilo en partes.`); return; }
+  const existentes = await obtenerClientesUsuario(state.user.id);
+  const nombresEx = new Set(existentes.map(c => normCol(c.nombre))), cuitsEx = new Set(existentes.map(c => limpiarCuit(c.cuit_principal)).filter(Boolean));
+  const vistosN = new Set(), vistosC = new Set(), ok = [], problemas = [];
+  let yaExisten = 0;
+  for (const d of datos){
+    const cuit = cuitDesdeCelda(d.cuitRaw);
+    if (!d.nombre){ problemas.push({ fila: d.fila, motivo: "falta la razón social" }); continue; }
+    if (cuit && !esCuitValido(cuit)){ problemas.push({ fila: d.fila, motivo: `el CUIT "${String(d.cuitRaw).trim()}" no es válido` }); continue; }
+    const saldo = d.saldoRaw === "" ? null : montoDesdeCelda(d.saldoRaw), tope = d.topeRaw === "" ? null : montoDesdeCelda(d.topeRaw);
+    if (d.saldoRaw !== "" && !(saldo > 0)){ problemas.push({ fila: d.fila, motivo: "el saldo inicial no es un monto válido" }); continue; }
+    if (d.topeRaw !== "" && !(tope > 0)){ problemas.push({ fila: d.fila, motivo: "el tope no es un monto válido" }); continue; }
+    if ((cuit && cuitsEx.has(cuit)) || nombresEx.has(normCol(d.nombre))){ yaExisten++; continue; }
+    if ((cuit && vistosC.has(cuit)) || vistosN.has(normCol(d.nombre))){ problemas.push({ fila: d.fila, motivo: "repetido dentro del archivo" }); continue; }
+    if (cuit) vistosC.add(cuit); vistosN.add(normCol(d.nombre));
+    ok.push({ nombre: d.nombre, cuit: cuit ? formatearCuit(cuit) : null, saldo, tope });
+  }
+  state.imp.filas = ok;
+  const conSaldo = ok.filter(x => x.saldo > 0).length;
+  impCuerpo(`
+    <div class="cob-card" style="margin-bottom:10px;"><b>${ok.length}</b> cliente${ok.length === 1 ? "" : "s"} listo${ok.length === 1 ? "" : "s"} para cargar${conSaldo ? ` (${conSaldo} con saldo inicial)` : ""}.
+      ${yaExisten ? `<br><span style="color:var(--ink-soft);">${yaExisten} ya existía${yaExisten === 1 ? "" : "n"} y se omite${yaExisten === 1 ? "" : "n"}.</span>` : ""}</div>
+    ${impListaProblemas(problemas)}
+    <div class="modal-error" id="imp-error"></div>
+    <div class="modal-botones">
+      ${ok.length ? `<button class="btn btn-primary" id="btn-imp-confirmar" onclick="impConfirmarClientes()">Importar ${ok.length} cliente${ok.length === 1 ? "" : "s"}</button>` : ""}
+      <button class="btn btn-secondary" onclick="cerrarImportador()">Cancelar</button>
+    </div>`);
+}
+async function impConfirmarClientes(){
+  const lista = state.imp.filas || []; const btn = document.getElementById("btn-imp-confirmar");
+  if (btn){ btn.disabled = true; btn.textContent = "Importando…"; }
+  let creados = 0, saldosFallidos = 0;
+  try {
+    for (let i = 0; i < lista.length; i += 100){
+      const lote = lista.slice(i, i + 100);
+      const { data, error } = await supabaseClient.from("clientes").insert(lote.map(c => ({ usuario_id: state.user.id, nombre: c.nombre, cuit_principal: c.cuit, limite_exposicion: c.tope || null }))).select();
+      if (error) throw error;
+      creados += (data || []).length;
+      const hoy = new Date().toISOString().slice(0, 10), movs = [];
+      lote.forEach((c, j) => { const r = (data || []).find(x => x.nombre === c.nombre) || (data || [])[j]; if (c.saldo > 0 && r) movs.push({ usuario_id: state.user.id, cliente_id: r.id, tipo: "factura", monto: c.saldo, fecha: hoy, detalle: "Saldo inicial" }); });
+      if (movs.length){ const { error: eM } = await supabaseClient.from("movimientos").insert(movs); if (eM) saldosFallidos += movs.length; }
+    }
+    impCuerpo(`<div class="cob-card"><b>Listo.</b> Se cargaron ${creados} cliente${creados === 1 ? "" : "s"}.${saldosFallidos ? `<br>No se pudieron cargar ${saldosFallidos} saldos iniciales: cargalos desde la cuenta corriente de cada cliente.` : ""}</div>
+      <div class="modal-botones"><button class="btn btn-primary" onclick="cerrarImportador()">Cerrar</button></div>`);
+    renderClientes();
+  } catch (e){
+    impCuerpo(`<div class="modal-error" style="display:block;">Se cargaron ${creados} y se cortó la importación: ${escHtml(e.message || "error")}. Revisá la lista de clientes antes de volver a intentar (los ya cargados se omiten).</div>
+      <div class="modal-botones"><button class="btn btn-secondary" onclick="cerrarImportador()">Cerrar</button></div>`);
+    renderClientes();
+  }
+}
+function impPrepararCuits(datos){
+  if (datos.length > IMP_MAX_CUITS){ impError(`El archivo tiene ${datos.length} filas. El máximo es ${IMP_MAX_CUITS} por archivo: dividilo en partes.`); return; }
+  const vistos = new Set(), ok = [], problemas = [];
+  for (const d of datos){
+    const c = cuitDesdeCelda(d.cuitRaw);
+    if (!esCuitValido(c)){ problemas.push({ fila: d.fila, motivo: `el CUIT "${String(d.cuitRaw).trim() || "(vacío)"}" no es válido` }); continue; }
+    if (vistos.has(c)){ problemas.push({ fila: d.fila, motivo: "CUIT repetido en el archivo" }); continue; }
+    vistos.add(c); ok.push({ cuit: c, ref: d.ref || d.nombre || "" });
+  }
+  state.imp.filas = ok;
+  const min = Math.max(1, Math.round(ok.length * 3 / 2 / 60));
+  impCuerpo(`
+    <div class="cob-card" style="margin-bottom:10px;"><b>${ok.length}</b> CUIT para consultar. Demora aproximadamente ${min} minuto${min === 1 ? "" : "s"}; mantené esta pantalla abierta.</div>
+    ${impListaProblemas(problemas)}
+    <div class="modal-error" id="imp-error"></div>
+    <div class="modal-botones">
+      ${ok.length ? `<button class="btn btn-primary" onclick="impEjecutarConsultaMasiva()">Consultar ${ok.length} CUIT</button>` : ""}
+      <button class="btn btn-secondary" onclick="cerrarImportador()">Cancelar</button>
+    </div>`);
+}
+async function impEjecutarConsultaMasiva(){
+  const lista = state.imp.filas || []; const resultados = []; let hechos = 0, idx = 0;
+  state.imp.corriendo = true; state.imp.cancelar = false;
+  const pintar = () => impCuerpo(`
+    <div class="cob-card"><b>Consultando… ${hechos} de ${lista.length}</b>
+      <div style="height:8px; background:#e3ebf3; border-radius:6px; margin-top:8px; overflow:hidden;"><div style="height:8px; width:${Math.round(hechos / lista.length * 100)}%; background:var(--green);"></div></div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">No cierres esta pantalla.</div></div>
+    <div class="modal-botones"><button class="btn btn-secondary" onclick="state.imp.cancelar = true; this.disabled = true; this.textContent = 'Cancelando…';">Cancelar</button></div>`);
+  pintar();
+  const trabajar = async () => {
+    while (idx < lista.length && !state.imp.cancelar){
+      const item = lista[idx++]; let datos = null, err = "";
+      for (let intento = 0; intento < 2 && !datos; intento++){
+        try { datos = await construirDatosLibradorReal(item.cuit); } catch (e){ err = (e && e.message) || "sin respuesta"; await new Promise(r => setTimeout(r, 1200)); }
+      }
+      if (datos){
+        const res = calcularScore(datos);
+        resultados.push({ item, datos, res });
+        try { await registrarConsulta({ usuarioId: state.user.id, cuit: formatearCuit(item.cuit), razonSocial: datos.empresa, categoria: res.categoria, puntos: res.puntosFinales, fuente: "real", analisis: armarAnalisisGuardado(datos, res, null) }); } catch (e){}
+      } else resultados.push({ item, error: err || "El BCRA no respondió" });
+      hechos++; pintar();
+    }
+  };
+  await Promise.all([trabajar(), trabajar()]);
+  state.imp.corriendo = false;
+  state.impResultados = resultados;
+  const conDato = resultados.filter(r => r.res), fallidos = resultados.length - conDato.length;
+  const cuenta = {}; conDato.forEach(r => { const t = r.res.categoria[0]; cuenta[t] = (cuenta[t] || 0) + 1; });
+  impCuerpo(`
+    <div class="cob-card"><b>${state.imp.cancelar ? "Consulta cancelada" : "Listo"}.</b> ${conDato.length} consultado${conDato.length === 1 ? "" : "s"}
+      (${["A", "B", "C"].filter(k => cuenta[k]).map(k => `${cuenta[k]} ${k}`).join(" · ") || "-"})${fallidos ? ` · <span style="color:#8a3a3a;">${fallidos} sin respuesta del BCRA</span>` : ""}.
+      <div style="font-size:12px; color:var(--ink-soft); margin-top:4px;">Cada consulta quedó en tu Historial (con "Ver informe").${fallidos ? " Los que fallaron no se descuentan: volvé a subirlos en un rato." : ""}</div></div>
+    <div class="modal-botones">
+      <button class="btn btn-primary" onclick="impDescargarResultados()">Descargar resultados (Excel)</button>
+      <button class="btn btn-secondary" onclick="cerrarImportador()">Cerrar</button>
+    </div>`);
+}
+async function impDescargarResultados(){
+  try {
+    await cargarXlsx(); const X = window.XLSX; const rs = state.impResultados || [];
+    const cab = ["CUIT", "Razón social (BCRA/ARCA)", "Referencia", "Categoría", "Puntaje", "Riesgo", "Observación", "Peor situación 12 m", "Entidades", "Deuda bancaria total ($)", "Rechazos sin fondos 12 m", "Fecha de consulta"];
+    const fecha = new Date().toLocaleString("es-AR");
+    const filas = rs.map(r => {
+      if (!r.res) return [formatearCuit(r.item.cuit), "", r.item.ref, "", "", "Sin respuesta del BCRA", r.error || "", "", "", "", "", fecha];
+      const d = r.datos, hs = d.historialSituacion || [];
+      return [formatearCuit(r.item.cuit), d.empresa, r.item.ref, r.res.categoria, r.res.puntosFinales,
+        d.sinAntecedentesDeuda ? "Sin antecedentes suficientes" : (TRAMO_LABEL[r.res.categoria] || ""), textoPdf(r.res.motivo || ""),
+        hs.length ? Math.max(...hs.slice(-12)) : "", (d.entidades || []).length, Math.round((d.entidades || []).reduce((a, e) => a + (Number(e.monto) || 0), 0)),
+        (Number(d.rechazosSinFondos6m) || 0) + (Number(d.rechazosSinFondos6a12m) || 0), fecha];
+    });
+    const hoja = X.utils.aoa_to_sheet([cab, ...filas]); hoja["!cols"] = [16, 34, 26, 10, 9, 24, 50, 14, 10, 20, 14, 20].map(w => ({ wch: w }));
+    const nota = X.utils.aoa_to_sheet([["Informe orientativo elaborado con información pública del BCRA y otras fuentes oficiales, tal como estaba disponible al momento de la consulta. No constituye una recomendación de crédito ni una garantía de cumplimiento; la decisión de operar es exclusiva de quien lo utiliza. Las fuentes pueden contener errores u omisiones."]]);
+    nota["!cols"] = [{ wch: 120 }];
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, hoja, "Resultados"); X.utils.book_append_sheet(wb, nota, "Aviso");
+    const bytes = X.write(wb, { bookType: "xlsx", type: "array" });
+    const d = new Date(), pad = n => String(n).padStart(2, "0");
+    await entregarArchivo(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `OpenCheck-consulta-masiva-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.xlsx`);
+  } catch (e){ mostrarToast("No pudimos armar el Excel: " + (e.message || "error")); }
+}
+
 /* ---- Verificar denuncia de cheque ---- */
 async function verificarDenuncia(){
   const num = document.getElementById("denuncia-numero").value.trim();
@@ -7360,10 +7815,11 @@ async function renderClientes(){
 
   cont.innerHTML = `
     <div class="hist-row ${state.cobPendientes > 0 ? "cob-alerta" : ""}" id="cob-card-clientes" style="cursor:pointer; margin-bottom:14px;" onclick="irA('cobranzas')">
-      <div class="hist-top"><span>Cobranzas de vendedores</span><span class="tag" id="cob-pend-tag">${state.cobPendientes > 0 ? state.cobPendientes + " por conciliar" : "Ver"}</span></div>
-      <div class="hist-mid">Lo que declaran tus vendedores de calle. Al confirmar, baja el saldo del cliente.</div>
+      <div class="hist-top"><span>Cobranzas y clientes nuevos</span><span class="tag" id="cob-pend-tag">${state.cobPendientes > 0 ? state.cobPendientes + " por resolver" : "Ver"}</span></div>
+      <div class="hist-mid">Lo que declaran y proponen tus vendedores de calle: cobranzas y clientes nuevos.</div>
     </div>
-    <button class="btn btn-primary" style="margin-bottom:14px;" onclick="abrirModalNuevoCliente()">+ Nuevo cliente</button>
+    <button class="btn btn-primary" style="margin-bottom:8px;" onclick="abrirModalNuevoCliente()">+ Nuevo cliente</button>
+    <button class="btn btn-secondary" style="margin-bottom:14px;" onclick="abrirImportador('clientes')">Importar clientes desde Excel</button>
     ${listaHtml}`;
   actualizarBadgeCobranzas();
 }
