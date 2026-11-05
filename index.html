@@ -1281,12 +1281,9 @@
         <div class="field-hint">Si este cheque te lo trajo un cliente que ya tenés cargado, asignáselo de una — así queda ordenado en su historial sin tener que hacerlo después.</div>
       </div>
       <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
+      <button class="btn btn-secondary" id="link-consulta-masiva" style="margin-top:10px;" onclick="abrirImportador('cuits')">📊 Consultar varios CUIT desde un Excel <span style="font-size:11px; opacity:.7;">(Premium)</span></button>
 
       <div class="divider-label">Otras herramientas</div>
-      <div class="link-line" id="link-consulta-masiva" onclick="abrirImportador('cuits')">
-        <span>Consultar varios CUIT desde un Excel</span>
-        <span class="arrow">→</span>
-      </div>
       <div class="link-line" onclick="irA('denuncia')">
         <span>¿Un cheque fue denunciado como extraviado o robado?</span>
         <span class="arrow">→</span>
@@ -3900,7 +3897,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-05-v56-eliminar-cliente";
+const VERSION_APP = "2026-11-05-v57-masiva-completa";
 
 const state = {
   user: null,
@@ -6900,15 +6897,17 @@ async function leerArchivoTabla(file){
 }
 // Busca la fila de encabezados y devuelve las filas de datos como objetos {nombre, cuit, saldo, tope, ref, fila}
 function interpretarTabla(filas, necesitaNombre){
-  const mapa = { nombre: ["razonsocial", "nombre", "cliente", "razon", "nombreyapellido"], cuit: ["cuit", "cuil", "cuitcuil", "cuitocuil"], saldo: ["saldoinicial", "saldo", "deuda"], tope: ["topedeexposicion", "tope", "limite", "limitedeexposicion"], ref: ["referencia", "nota", "comentario", "observaciones"] };
+  const mapa = { nombre: ["razonsocial", "nombre", "cliente", "razon", "nombreyapellido"], cuit: ["cuit", "cuil", "cuitcuil", "cuitocuil"], saldo: ["saldoinicial", "saldo", "deuda"], tope: ["topedeexposicion", "tope", "limite", "limitedeexposicion"], ref: ["referencia", "nota", "comentario", "observaciones"],
+    banco: ["banco", "bancodelcheque", "entidad", "entidadbancaria"], numero: ["ndecheque", "numerodecheque", "nrodecheque", "ncheque", "numerocheque", "nrocheque", "cheque", "numero"],
+    venc: ["fechadevencimiento", "vencimiento", "fechavencimiento", "fechadepago", "fechadecobro"], monto: ["monto", "importe", "montodelcheque", "importedelcheque"] };
   for (let h = 0; h < Math.min(filas.length, 12); h++){
-    const cols = {}; (filas[h] || []).forEach((c, i) => { const n = normCol(c); for (const k in mapa) if (cols[k] === undefined && mapa[k].includes(n)) cols[k] = i; });
+    const cols = {}; (filas[h] || []).forEach((c, i) => { const n = normCol(String(c == null ? "" : c).replace(/\(.*?\)/g, "")); for (const k in mapa) if (cols[k] === undefined && mapa[k].includes(n)) cols[k] = i; });
     if (cols.cuit !== undefined && (!necesitaNombre || cols.nombre !== undefined)){
       const out = [];
       for (let r = h + 1; r < filas.length; r++){
         const f = filas[r] || []; if (!f.some(v => String(v).trim() !== "")) continue;
         const g = (k) => cols[k] === undefined ? "" : f[cols[k]];
-        out.push({ fila: r + 1, nombre: String(g("nombre")).trim(), cuitRaw: g("cuit"), saldoRaw: g("saldo"), topeRaw: g("tope"), ref: String(g("ref")).trim() });
+        out.push({ fila: r + 1, nombre: String(g("nombre")).trim(), cuitRaw: g("cuit"), saldoRaw: g("saldo"), topeRaw: g("tope"), ref: String(g("ref")).trim(), bancoRaw: g("banco"), numeroRaw: g("numero"), vencRaw: g("venc"), montoRaw: g("monto") });
       }
       return out;
     }
@@ -6918,6 +6917,38 @@ function interpretarTabla(filas, necesitaNombre){
 function cuitDesdeCelda(v){
   if (typeof v === "number") v = String(Math.round(v));
   return limpiarCuit(String(v == null ? "" : v));
+}
+function fechaDesdeCelda(v){
+  // Devuelve "AAAA-MM-DD", "" si está vacía, o null si no se entiende
+  if (v === "" || v == null) return "";
+  let y, m, d;
+  if (typeof v === "number"){ const dt = new Date(Math.round((v - 25569) * 86400000)); y = dt.getUTCFullYear(); m = dt.getUTCMonth() + 1; d = dt.getUTCDate(); }
+  else {
+    const t = String(v).trim(); let r;
+    if ((r = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/))){ d = +r[1]; m = +r[2]; y = +r[3]; if (y < 100) y += 2000; }
+    else if ((r = t.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/))){ y = +r[1]; m = +r[2]; d = +r[3]; }
+    else return null;
+  }
+  const chk = new Date(Date.UTC(y, m - 1, d));
+  if (!(y >= 2000 && y <= 2100) || chk.getUTCMonth() !== m - 1 || chk.getUTCDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+function bancoDesdeCelda(v){
+  const n = normCol(v); if (!n) return undefined;
+  if (/^\d+$/.test(n)){ const e = ENTIDADES_CHEQUES.find(x => String(x.codigo) === String(Number(n))); if (e) return e; }
+  const core = (t) => normCol(String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\b(banco|de|la|del|argentina|sa|s\.a\.)\b/g, " "));
+  const k = core(v);
+  return ENTIDADES_CHEQUES.find(x => normCol(x.nombre) === n)
+    || (k.length >= 3 ? ENTIDADES_CHEQUES.find(x => core(x.nombre) === k) || ENTIDADES_CHEQUES.find(x => core(x.nombre).includes(k) || k.includes(core(x.nombre))) : null) || null;
+}
+function clienteDesdeCelda(txt, clientes){
+  const t = String(txt == null ? "" : txt).trim(); if (!t) return undefined;
+  const c = cuitDesdeCelda(t);
+  if (esCuitValido(c)){ const x = clientes.find(k => limpiarCuit(k.cuit_principal) === c); if (x) return x; }
+  const n = normCol(t);
+  const ex = clientes.find(k => normCol(k.nombre) === n); if (ex) return ex;
+  if (n.length >= 4){ const cand = clientes.filter(k => normCol(k.nombre).includes(n) || n.includes(normCol(k.nombre))); if (cand.length === 1) return cand[0]; }
+  return null;
 }
 function montoDesdeCelda(v){ if (typeof v === "number") return v > 0 ? Math.round(v * 100) / 100 : null; return parseMontoAR(v); }
 
@@ -6952,15 +6983,25 @@ async function descargarPlantilla(tipo){
         [`Máximo ${IMP_MAX_CLIENTES} clientes por archivo. Los clientes que ya tenés cargados se omiten.`]];
       nombre = "OpenCheck-plantilla-clientes.xlsx";
     } else {
-      datos = [["CUIT", "Referencia (opcional)"], ["30-71234567-8", "Distribuidora Ejemplo SA"], ["20-12345678-6", "Pérez Juan"]];
+      datos = [["OBLIGATORIO: solo CUIT. El resto es opcional, pero cuantos más datos cargues, más completa queda cada consulta (cheque en tu Historial, calendario, avisos de vencimiento, verificación de denuncia y cliente asignado)."],
+        ["CUIT (obligatorio)", "Cliente (opcional)", "Banco (opcional)", "Nº de cheque (opcional)", "Fecha de vencimiento (opcional)", "Monto (opcional)", "Referencia (opcional)"],
+        ["30-71234567-8", "Distribuidora Ejemplo SA", "Banco Galicia", "00021458", "15/12/2026", 1500000, "Pedido 123"],
+        ["20-12345678-6", "", "", "", "", "", ""]];
       instr = [["Cómo completar la plantilla de consulta masiva"], [""],
-        ["CUIT: obligatorio. 11 dígitos, con o sin guiones. Puede ser CUIT o CUIL."],
-        ["Referencia: opcional. Un nombre o nota tuya para reconocer cada fila en el resultado."],
-        [""], ["Borrá las filas de ejemplo antes de cargar las tuyas. No cambies los títulos de las columnas."],
-        [`Máximo ${IMP_MAX_CUITS} CUIT por archivo. Cada CUIT consultado queda en tu Historial.`]];
+        ["OBLIGATORIA: CUIT (11 dígitos, con o sin guiones; puede ser CUIT o CUIL). Es la única columna que necesitás."],
+        ["OPCIONALES (cuantos más datos cargues, más completa queda la consulta):"],
+        ["  Cliente: nombre de un cliente que ya tenés cargado, para asignarle el cheque. Si no coincide, el cheque queda sin cliente."],
+        ["  Banco: nombre o código del banco del cheque (ej. Galicia, Macro, Nación, 7, 285). Se usa para verificar si el cheque fue denunciado."],
+        ["  Nº de cheque: número del cheque. Junto con el banco, permite verificar denuncias."],
+        ["  Fecha de vencimiento: dd/mm/aaaa. Con fecha, el cheque aparece en el calendario y en los avisos de vencimiento."],
+        ["  Monto: importe del cheque en pesos (solo números)."],
+        ["  Referencia: una nota tuya para reconocer la fila en el resultado."],
+        [""], ["Un mismo CUIT puede repetirse en varias filas si son cheques distintos (se consulta una sola vez al BCRA)."],
+        ["Borrá las filas de ejemplo antes de cargar las tuyas. No cambies los títulos de las columnas ni borres la fila de títulos."],
+        [`Máximo ${IMP_MAX_CUITS} filas por archivo. Cada fila consultada queda en tu Historial.`]];
       nombre = "OpenCheck-plantilla-consulta-masiva.xlsx";
     }
-    const h1 = X.utils.aoa_to_sheet(datos); h1["!cols"] = datos[0].map((_, i) => ({ wch: [30, 18, 16, 20][i] || 18 }));
+    const h1 = X.utils.aoa_to_sheet(datos); h1["!cols"] = (tipo === "clientes" ? datos[0] : datos[1]).map((_, i) => ({ wch: (tipo === "clientes" ? [30, 18, 16, 20] : [20, 26, 18, 20, 26, 16, 22])[i] || 18 }));
     X.utils.book_append_sheet(wb, h1, "Plantilla");
     const h2 = X.utils.aoa_to_sheet(instr); h2["!cols"] = [{ wch: 100 }];
     X.utils.book_append_sheet(wb, h2, "Instrucciones");
@@ -6981,7 +7022,7 @@ function abrirImportador(tipo){
   impCuerpo(`
     <p style="font-size:13px; line-height:1.5; color:var(--ink-soft);">${cl
       ? "Cargá todos tus clientes de una vez. Descargá la plantilla, completala con tus datos (razón social, CUIT, saldo inicial y tope, opcionales) y subila acá."
-      : `Subí una lista de CUIT y te devolvemos un Excel con la categoría de riesgo de cada uno (hasta ${IMP_MAX_CUITS} por archivo). Cada consulta queda en tu Historial.`}</p>
+      : `Subí una lista de CUIT y te devolvemos un Excel con la categoría de riesgo de cada uno (hasta ${IMP_MAX_CUITS} filas por archivo). Cada consulta queda en tu Historial.<br><br><b>Obligatorio:</b> solo el CUIT.<br><b>Opcionales:</b> cliente, banco, Nº de cheque, vencimiento, monto y referencia. Cuantos más datos cargues, más completa queda cada consulta: el cheque se guarda en tu Historial, aparece en el calendario, se verifica si fue denunciado y se asigna a tu cliente.`}</p>
     <button class="btn btn-secondary" style="margin-bottom:10px;" onclick="descargarPlantilla('${tipo}')">1. Descargar plantilla</button>
     <label class="btn btn-primary" style="display:block; text-align:center; cursor:pointer;">2. Elegir mi archivo
       <input type="file" accept=".xlsx,.xls,.csv,.txt" style="display:none;" onchange="impArchivoElegido(this)">
@@ -7005,7 +7046,7 @@ async function impArchivoElegido(input){
     const datos = interpretarTabla(filas, t === "clientes");
     if (!datos){ impError(t === "clientes" ? "No encontramos las columnas 'Razón social' y 'CUIT'. Usá la plantilla sin cambiar los títulos." : "No encontramos la columna 'CUIT'. Usá la plantilla sin cambiar el título."); return; }
     if (!datos.length){ impError("El archivo no tiene filas para cargar."); return; }
-    if (t === "clientes") await impPrepararClientes(datos); else impPrepararCuits(datos);
+    if (t === "clientes") await impPrepararClientes(datos); else await impPrepararCuits(datos);
   } catch (e){ impError("No pudimos leer el archivo: " + (e.message || "error")); }
   finally { input.value = ""; }
 }
@@ -7066,23 +7107,46 @@ async function impConfirmarClientes(){
     renderClientes();
   }
 }
-function impPrepararCuits(datos){
+async function impPrepararCuits(datos){
   if (datos.length > IMP_MAX_CUITS){ impError(`El archivo tiene ${datos.length} filas. El máximo es ${IMP_MAX_CUITS} por archivo: dividilo en partes.`); return; }
-  const vistos = new Set(), ok = [], problemas = [];
+  let clientes = []; try { clientes = await obtenerClientesUsuario(state.user.id); } catch (e){}
+  const vistos = new Set(), ok = [], problemas = [], clientesSinMatch = new Set(); const avisos = [];
   for (const d of datos){
     const c = cuitDesdeCelda(d.cuitRaw);
     if (!esCuitValido(c)){ problemas.push({ fila: d.fila, motivo: `el CUIT "${String(d.cuitRaw).trim() || "(vacío)"}" no es válido` }); continue; }
-    if (vistos.has(c)){ problemas.push({ fila: d.fila, motivo: "CUIT repetido en el archivo" }); continue; }
-    vistos.add(c); ok.push({ cuit: c, ref: d.ref || d.nombre || "" });
+    const it = { fila: d.fila, cuit: c, ref: d.ref || "", clienteId: null, clienteNombre: "", banco: null, numero: "", venc: "", monto: null };
+    // Cliente
+    const cli = clienteDesdeCelda(d.nombre, clientes);
+    if (cli){ it.clienteId = cli.id; it.clienteNombre = cli.nombre; } else if (cli === null){ clientesSinMatch.add(String(d.nombre).trim()); if (!it.ref) it.ref = String(d.nombre).trim(); }
+    // Cheque
+    it.numero = String(d.numeroRaw == null ? "" : (typeof d.numeroRaw === "number" ? Math.round(d.numeroRaw) : d.numeroRaw)).trim();
+    const f = fechaDesdeCelda(d.vencRaw);
+    if (f === null) avisos.push(`Fila ${d.fila}: la fecha de vencimiento "${String(d.vencRaw).trim()}" no se entiende (usá dd/mm/aaaa); se consulta sin fecha.`); else it.venc = f;
+    if (d.montoRaw !== "" && d.montoRaw != null){ const m = montoDesdeCelda(d.montoRaw); if (m > 0) it.monto = m; else avisos.push(`Fila ${d.fila}: el monto "${String(d.montoRaw).trim()}" no es válido; se consulta sin monto.`); }
+    const bn = bancoDesdeCelda(d.bancoRaw);
+    if (bn === null) avisos.push(`Fila ${d.fila}: no reconocimos el banco "${String(d.bancoRaw).trim()}"; no se verifica denuncia.`); else if (bn) it.banco = bn;
+    if (it.numero && !it.banco && bn === undefined) avisos.push(`Fila ${d.fila}: tiene Nº de cheque pero falta el banco; no se verifica denuncia.`);
+    if (it.numero && !it.venc && f !== null) avisos.push(`Fila ${d.fila}: tiene Nº de cheque pero falta el vencimiento; no aparecerá en el calendario.`);
+    // Repetidos: el mismo CUIT puede repetirse si son cheques distintos
+    const clave = c + "|" + (it.numero ? (it.banco ? it.banco.codigo : "") + "|" + it.numero : "sin-cheque");
+    if (vistos.has(clave)){ problemas.push({ fila: d.fila, motivo: it.numero ? "mismo cheque repetido en el archivo" : "CUIT repetido sin datos de cheque" }); continue; }
+    vistos.add(clave); ok.push(it);
   }
   state.imp.filas = ok;
-  const min = Math.max(1, Math.round(ok.length * 3 / 2 / 60));
+  const nCheque = ok.filter(x => x.numero).length, nVenc = ok.filter(x => x.venc).length, nCli = ok.filter(x => x.clienteId).length, nDen = ok.filter(x => x.numero && x.banco).length;
+  const unicos = new Set(ok.map(x => x.cuit)).size;
+  const min = Math.max(1, Math.round(unicos * 3 / 2 / 60 + nDen / 120));
+  const lineas = [nCheque ? `${nCheque} con cheque (${nDen} se verificarán por denuncia)` : "", nVenc ? `${nVenc} irán al calendario` : "", nCli ? `${nCli} asignadas a un cliente` : ""].filter(Boolean);
   impCuerpo(`
-    <div class="cob-card" style="margin-bottom:10px;"><b>${ok.length}</b> CUIT para consultar. Demora aproximadamente ${min} minuto${min === 1 ? "" : "s"}; mantené esta pantalla abierta.</div>
+    <div class="cob-card" style="margin-bottom:10px;"><b>${ok.length}</b> fila${ok.length === 1 ? "" : "s"} para consultar${unicos !== ok.length ? ` (${unicos} CUIT distintos)` : ""}.
+      ${lineas.length ? `<div style="font-size:12.5px; color:var(--ink-soft); margin-top:4px;">${lineas.join(" · ")}</div>` : ""}
+      <div style="font-size:12.5px; margin-top:4px;">Demora aproximadamente ${min} minuto${min === 1 ? "" : "s"}; mantené esta pantalla abierta.</div></div>
+    ${clientesSinMatch.size ? `<div style="margin:10px 0; font-size:12.5px; color:#8a6a1a;"><b>Clientes que no coinciden con los que tenés cargados (${clientesSinMatch.size}):</b> ${[...clientesSinMatch].slice(0, 8).map(escHtml).join(", ")}${clientesSinMatch.size > 8 ? "…" : ""}. Esos cheques quedan sin cliente asignado.</div>` : ""}
+    ${avisos.length ? `<div style="margin:10px 0; font-size:12.5px; color:#8a6a1a;"><b>Avisos (${avisos.length}):</b><ul style="padding-left:18px; margin:4px 0;">${avisos.slice(0, 8).map(a => `<li>${escHtml(a)}</li>`).join("")}${avisos.length > 8 ? `<li>…y ${avisos.length - 8} más</li>` : ""}</ul></div>` : ""}
     ${impListaProblemas(problemas)}
     <div class="modal-error" id="imp-error"></div>
     <div class="modal-botones">
-      ${ok.length ? `<button class="btn btn-primary" onclick="impEjecutarConsultaMasiva()">Consultar ${ok.length} CUIT</button>` : ""}
+      ${ok.length ? `<button class="btn btn-primary" onclick="impEjecutarConsultaMasiva()">Consultar ${ok.length} fila${ok.length === 1 ? "" : "s"}</button>` : ""}
       <button class="btn btn-secondary" onclick="cerrarImportador()">Cancelar</button>
     </div>`);
 }
@@ -7095,17 +7159,30 @@ async function impEjecutarConsultaMasiva(){
       <div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">No cierres esta pantalla.</div></div>
     <div class="modal-botones"><button class="btn btn-secondary" onclick="state.imp.cancelar = true; this.disabled = true; this.textContent = 'Cancelando…';">Cancelar</button></div>`);
   pintar();
+  const cache = {};
+  const obtener = (cuit) => { if (!cache[cuit]) cache[cuit] = (async () => {
+    let err = "";
+    for (let intento = 0; intento < 2; intento++){
+      try { return { datos: await construirDatosLibradorReal(cuit) }; } catch (e){ err = (e && e.message) || "sin respuesta"; await new Promise(r => setTimeout(r, 1200)); }
+    }
+    return { error: err || "El BCRA no respondió" };
+  })(); return cache[cuit]; };
   const trabajar = async () => {
     while (idx < lista.length && !state.imp.cancelar){
-      const item = lista[idx++]; let datos = null, err = "";
-      for (let intento = 0; intento < 2 && !datos; intento++){
-        try { datos = await construirDatosLibradorReal(item.cuit); } catch (e){ err = (e && e.message) || "sin respuesta"; await new Promise(r => setTimeout(r, 1200)); }
-      }
-      if (datos){
-        const res = calcularScore(datos);
-        resultados.push({ item, datos, res });
-        try { await registrarConsulta({ usuarioId: state.user.id, cuit: formatearCuit(item.cuit), razonSocial: datos.empresa, categoria: res.categoria, puntos: res.puntosFinales, fuente: "real", analisis: armarAnalisisGuardado(datos, res, null) }); } catch (e){}
-      } else resultados.push({ item, error: err || "El BCRA no respondió" });
+      const item = lista[idx++];
+      const r = await obtener(item.cuit);
+      if (r.datos){
+        const datos = r.datos, res = calcularScore(datos);
+        let chequeInfo = null;
+        if (item.numero && item.banco){
+          try { const real = await consultarChequeDenunciadoBCRA(item.banco.codigo, item.numero); chequeInfo = real.ok ? real : { ok: false, noDisponible: true, denunciado: null }; }
+          catch (e){ chequeInfo = { ok: false, noDisponible: true, denunciado: null }; }
+        }
+        resultados.push({ item, datos, res, chequeInfo });
+        try { await registrarConsulta({ usuarioId: state.user.id, cuit: formatearCuit(item.cuit), razonSocial: datos.empresa, categoria: res.categoria, puntos: res.puntosFinales, fuente: "real",
+          numeroCheque: item.numero || null, bancoCheque: (item.numero && item.banco) ? String(item.banco.codigo) : null, chequeDenunciado: chequeInfo ? chequeInfo.denunciado : null,
+          fechaVencimiento: item.venc || null, clienteId: item.clienteId || null, montoCheque: item.monto, analisis: armarAnalisisGuardado(datos, res, chequeInfo) }); } catch (e){}
+      } else resultados.push({ item, error: r.error });
       hechos++; pintar();
     }
   };
@@ -7126,17 +7203,20 @@ async function impEjecutarConsultaMasiva(){
 async function impDescargarResultados(){
   try {
     await cargarXlsx(); const X = window.XLSX; const rs = state.impResultados || [];
-    const cab = ["CUIT", "Razón social (BCRA/ARCA)", "Referencia", "Categoría", "Puntaje", "Riesgo", "Observación", "Peor situación 12 m", "Entidades", "Deuda bancaria total ($)", "Rechazos sin fondos 12 m", "Fecha de consulta"];
+    const cab = ["CUIT", "Razón social (BCRA/ARCA)", "Referencia", "Cliente asignado", "Banco", "Nº de cheque", "Vencimiento", "Monto ($)", "Cheque denunciado", "Categoría", "Puntaje", "Riesgo", "Observación", "Peor situación 12 m", "Entidades", "Deuda bancaria total ($)", "Rechazos sin fondos 12 m", "Fecha de consulta"];
     const fecha = new Date().toLocaleString("es-AR");
     const filas = rs.map(r => {
-      if (!r.res) return [formatearCuit(r.item.cuit), "", r.item.ref, "", "", "Sin respuesta del BCRA", r.error || "", "", "", "", "", fecha];
+      const it = r.item, venc = it.venc ? it.venc.split("-").reverse().join("/") : "";
+      const chq = [it.clienteNombre, it.banco ? it.banco.nombre : "", it.numero, venc, it.monto || ""];
+      if (!r.res) return [formatearCuit(it.cuit), "", it.ref, ...chq, "", "", "", "Sin respuesta del BCRA", r.error || "", "", "", "", "", fecha];
       const d = r.datos, hs = d.historialSituacion || [];
-      return [formatearCuit(r.item.cuit), d.empresa, r.item.ref, r.res.categoria, r.res.puntosFinales,
+      const den = !it.numero ? "" : (r.chequeInfo && r.chequeInfo.ok ? (r.chequeInfo.denunciado ? "SÍ - DENUNCIADO" : "No") : "No se pudo verificar");
+      return [formatearCuit(it.cuit), d.empresa, it.ref, ...chq, den, r.res.categoria, r.res.puntosFinales,
         d.sinAntecedentesDeuda ? "Sin antecedentes suficientes" : (TRAMO_LABEL[r.res.categoria] || ""), textoPdf(r.res.motivo || ""),
         hs.length ? Math.max(...hs.slice(-12)) : "", (d.entidades || []).length, Math.round((d.entidades || []).reduce((a, e) => a + (Number(e.monto) || 0), 0)),
         (Number(d.rechazosSinFondos6m) || 0) + (Number(d.rechazosSinFondos6a12m) || 0), fecha];
     });
-    const hoja = X.utils.aoa_to_sheet([cab, ...filas]); hoja["!cols"] = [16, 34, 26, 10, 9, 24, 50, 14, 10, 20, 14, 20].map(w => ({ wch: w }));
+    const hoja = X.utils.aoa_to_sheet([cab, ...filas]); hoja["!cols"] = [16, 34, 22, 24, 22, 14, 13, 16, 18, 10, 9, 24, 50, 14, 10, 20, 14, 20].map(w => ({ wch: w }));
     const nota = X.utils.aoa_to_sheet([["Informe orientativo elaborado con información pública del BCRA y otras fuentes oficiales, tal como estaba disponible al momento de la consulta. No constituye una recomendación de crédito ni una garantía de cumplimiento; la decisión de operar es exclusiva de quien lo utiliza. Las fuentes pueden contener errores u omisiones."]]);
     nota["!cols"] = [{ wch: 120 }];
     const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, hoja, "Resultados"); X.utils.book_append_sheet(wb, nota, "Aviso");
