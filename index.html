@@ -1963,7 +1963,7 @@ async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, punt
   if (error) console.warn("[OpenCheck Score] No se pudo registrar la consulta:", error.message);
 }
 function armarAnalisisGuardado(datos, resultado, chequeInfo){
-  if (typeof PDF_SOLO_PREMIUM !== "undefined" && PDF_SOLO_PREMIUM && !esPremiumEfectivo()) return null;   // el informe guardado es función Premium
+  if (typeof PDF_SOLO_PREMIUM !== "undefined" && PDF_SOLO_PREMIUM && !puedeFuncion("pdf")) return null;   // el informe guardado es del Nivel 2 en adelante
   try { return JSON.parse(JSON.stringify({ v: 1, datos, resultado, chequeInfo: chequeInfo || null })); } catch(e){ return null; }
 }
 
@@ -3897,7 +3897,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-05-v57-masiva-completa";
+const VERSION_APP = "2026-11-06-v58-niveles-premium";
 
 const state = {
   user: null,
@@ -3960,12 +3960,45 @@ function ocultarAvisoBCRA(){
 
 /* ---- Equipo: roles y consulta bloqueada ---- */
 function esUsuarioEquipo(){ return !!(state.user && state.user.rol === "calle"); }
-// Un usuario de equipo consulta sin cupo mensual mientras la empresa tenga Premium.
+/* ---- Niveles de Premium (1 Básico · 2 Profesional · 3 Total). Un Premium sin nivel cargado se trata como 3. ---- */
+const NIVELES = {
+  1: { nombre: "Básico",       consultas: 30,       vendedores: 0,        pdf: false, importar: false },
+  2: { nombre: "Profesional",  consultas: 50,       vendedores: 3,        pdf: true,  importar: false },
+  3: { nombre: "Total",        consultas: Infinity, vendedores: Infinity, pdf: true,  importar: true  }
+};
+function nivelEfectivo(){
+  const u = state.user; if (!u) return 0;
+  if (u.es_admin) return 3;
+  if (u.rol === "calle") return state.empresaPremium === true ? (state.empresaNivel || 3) : 0;
+  return u.plan === "premium" ? (u.nivel || 3) : 0;
+}
+function puedeFuncion(f){ const n = nivelEfectivo(); return n > 0 && !!NIVELES[n][f]; }
+function limiteConsultas(){ const n = nivelEfectivo(); return n > 0 ? NIVELES[n].consultas : state.queriesLimit; }
+// El cupo de un Premium es de la EMPRESA (titular + vendedores). Un Gratis cuenta solo lo suyo.
+function consultasUsadasMes(u){
+  if (!u) return 0;
+  if (nivelEfectivo() > 0 && typeof state.usoEmpresa === "number") return state.usoEmpresa;
+  const mes = new Date().toISOString().slice(0, 7);
+  return u.mes_actual === mes ? (u.consultas_usadas_mes || 0) : 0;
+}
+async function refrescarUsoEmpresa(){
+  if (!state.user || nivelEfectivo() === 0){ state.usoEmpresa = null; return; }
+  try { const { data, error } = await supabaseClient.rpc("consultas_empresa_mes"); state.usoEmpresa = (!error && typeof data === "number") ? data : null; }
+  catch (e){ state.usoEmpresa = null; }
+}
+function consultasRestantesTxt(u){
+  if (!u) return "—";
+  const lim = limiteConsultas(); if (u.es_admin || lim === Infinity) return "∞";
+  return Math.max(0, lim - consultasUsadasMes(u));
+}
+function nombreNivel(n){ return n ? `Nivel ${n} (${NIVELES[n].nombre})` : ""; }
+// Un usuario de equipo consulta mientras la empresa tenga Premium; el cupo mensual de su nivel es de toda la empresa.
 function consultaBloqueada(usadasEsteMes){
   const u = state.user;
   if (!u) return false;
-  if (esUsuarioEquipo()) return state.empresaPremium !== true;
-  return !!(!u.es_admin && !u.es_tester && u.plan === "free" && usadasEsteMes >= state.queriesLimit);
+  if (u.es_admin || u.es_tester) return false;
+  if (esUsuarioEquipo() && state.empresaPremium !== true) return true;
+  return Math.max(usadasEsteMes, consultasUsadasMes(u)) >= limiteConsultas();
 }
 // Se llama justo después de cargar el perfil (al entrar o al recargar la página).
 async function aplicarRolUsuario(){
@@ -3985,6 +4018,10 @@ async function aplicarRolUsuario(){
     const { data } = await supabaseClient.rpc("empresa_premium");
     state.empresaPremium = (data === true);
   } catch (e){ state.empresaPremium = false; }
+  state.empresaNivel = 3;
+  if (state.empresaPremium){
+    try { const { data: n, error: eN } = await supabaseClient.rpc("mi_nivel"); if (!eN && n >= 1) state.empresaNivel = n; } catch (e){}
+  }
   if (u.debe_cambiar_clave) document.getElementById("modal-cambio-clave").classList.add("show");
   return true;
 }
@@ -4648,6 +4685,10 @@ async function cargarEquipo(){
   }
 }
 function abrirModalNuevoMiembro(){
+  const maxV = NIVELES[nivelEfectivo()] ? NIVELES[nivelEfectivo()].vendedores : 0;
+  if (maxV === 0){ mostrarToast("Agregar vendedores está disponible desde el Nivel 2. Pedí el cambio desde Cuenta > Plan."); return; }
+  const activos = (state.equipo || []).filter(m => m.activo).length;
+  if (maxV !== Infinity && activos >= maxV){ mostrarToast(`Tu nivel permite hasta ${maxV} vendedores activos. Da de baja a uno o pedí el Nivel 3.`); return; }
   document.getElementById("miembro-nombre").value = "";
   document.getElementById("miembro-dni").value = "";
   mostrarErrorModal("miembro-error", "");
@@ -4794,7 +4835,11 @@ function irA(pantalla){
   actualizarNavActivo();
   document.body.classList.toggle("pantalla-institucional", pantalla === "institucional");
   if (pantalla === "historial") renderHistorial();
-  if (pantalla === "cuenta") renderCuenta();
+  if (pantalla === "cuenta"){
+    renderCuenta();
+    const _uso0 = state.usoEmpresa;
+    refrescarUsoEmpresa().then(() => { const el = document.getElementById("screen-cuenta"); if (state.usoEmpresa !== _uso0 && el && el.classList.contains("active")) renderCuenta(); });
+  }
   if (pantalla === "paywall") renderPaywall();
   if (pantalla === "clientes") renderClientes();
   if (pantalla === "cobranza") renderCobranzaCalle();
@@ -4804,9 +4849,8 @@ function irA(pantalla){
   if (pantalla === "resultado") actualizarAccionesResultadoCobranza();
   if (pantalla === "home") actualizarModoCobranzaHome();
   if (pantalla === "home" && state.user){
-    const mesActual = new Date().toISOString().slice(0,7);
-    const usadas = state.user.mes_actual === mesActual ? (state.user.consultas_usadas_mes || 0) : 0;
-    document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - usadas);
+    document.getElementById("queries-left").textContent = consultasRestantesTxt(state.user);
+    refrescarUsoEmpresa().then(() => { const q = document.getElementById("queries-left"); if (q && state.user) q.textContent = consultasRestantesTxt(state.user); });
     poblarSelectorClienteConsulta();
   }
   window.scrollTo(0,0);
@@ -5133,14 +5177,12 @@ async function solicitarPlanPremium(){
   const btn = document.getElementById("btn-solicitar-premium");
   if (btn){ btn.disabled = true; btn.textContent = "Enviando…"; }
   try {
-    const { error } = await supabaseClient.from("solicitudes_premium").insert({
-      usuario_id: state.user.id,
-      nombre: state.user.nombre,
-      email: state.user.email,
-      cuit_dni: state.user.cuit_dni
-    });
+    const selN = document.getElementById("nivel-solicitado");
+    const fila = { usuario_id: state.user.id, nombre: state.user.nombre, email: state.user.email, cuit_dni: state.user.cuit_dni, nivel_solicitado: selN ? Number(selN.value) : null };
+    let { error } = await supabaseClient.from("solicitudes_premium").insert(fila);
+    if (error && /nivel_solicitado/i.test(error.message || "")){ delete fila.nivel_solicitado; ({ error } = await supabaseClient.from("solicitudes_premium").insert(fila)); }
     if (error) throw error;
-    mostrarToast("¡Listo! Te vamos a contactar para activar el plan Premium.");
+    mostrarToast("¡Listo! Te vamos a contactar para activar el plan Premium (" + (document.getElementById("nivel-solicitado") ? "Nivel " + document.getElementById("nivel-solicitado").value : "") + ").");
     if (btn) btn.textContent = "Solicitud enviada ✓";
   } catch (e){
     console.warn("[OpenCheck] Error solicitando plan Premium:", e.message);
@@ -5408,6 +5450,7 @@ async function consultarCuit(){
     if (!numeroCheque){ mostrarToast("Para agregarlo a la cobranza cargá el número de cheque."); return; }
     if (!(parseMontoAR(document.getElementById("consulta-monto-cheque").value) > 0)){ mostrarToast("Para agregarlo a la cobranza cargá el monto del cheque."); return; }
   }
+  await refrescarUsoEmpresa();
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
   const vaABloquear = consultaBloqueada(usadasEsteMes);
@@ -5474,8 +5517,9 @@ async function consultarCuit(){
   }
 
   if (state.user){
-    state.user = await incrementarConsultasUsadas(state.user);
-    document.getElementById("queries-left").textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    const _antes = state.user; state.user = await incrementarConsultasUsadas(state.user);
+    if (typeof state.usoEmpresa === "number" && state.user !== _antes) state.usoEmpresa += 1;
+    document.getElementById("queries-left").textContent = consultasRestantesTxt(state.user);
     const clienteSelect = document.getElementById("consulta-cliente-select");
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
@@ -5510,6 +5554,7 @@ async function verEstadoCliente(clienteId){
     return;
   }
 
+  await refrescarUsoEmpresa();
   const mesActual = new Date().toISOString().slice(0,7);
   const usadasEsteMes = (state.user && state.user.mes_actual === mesActual) ? (state.user.consultas_usadas_mes || 0) : 0;
   const vaABloquear = consultaBloqueada(usadasEsteMes);
@@ -5538,9 +5583,10 @@ async function verEstadoCliente(clienteId){
   const resultado = calcularScore(datos);
 
   if (state.user){
-    state.user = await incrementarConsultasUsadas(state.user);
+    const _antes = state.user; state.user = await incrementarConsultasUsadas(state.user);
+    if (typeof state.usoEmpresa === "number" && state.user !== _antes) state.usoEmpresa += 1;
     const elQueriesLeft = document.getElementById("queries-left");
-    if (elQueriesLeft) elQueriesLeft.textContent = state.user.es_admin ? "∞" : Math.max(0, state.queriesLimit - state.user.consultas_usadas_mes);
+    if (elQueriesLeft) elQueriesLeft.textContent = consultasRestantesTxt(state.user);
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
       categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
@@ -6535,9 +6581,9 @@ function mostrarResultado(datos, resultado, numeroCheque, chequeInfo, fuente){
   if (state.ctxResultado){ Object.assign(window.ultimoContexto, state.ctxResultado); state.ctxResultado = null; }
   if (state.cuitResultado) state.cuitResultado = null;
   const _bc = document.getElementById("btn-pdf-compartir");
-  if (_bc) _bc.style.display = (puedeCompartirPdf() && esPremiumEfectivo()) ? "" : "none";
+  if (_bc) _bc.style.display = (puedeCompartirPdf() && puedeFuncion("pdf")) ? "" : "none";
   const _bp = document.getElementById("btn-pdf-consulta");
-  if (_bp) _bp.textContent = esPremiumEfectivo() ? "Descargar informe en PDF" : "Informe en PDF (función Premium)";
+  if (_bp) _bp.textContent = puedeFuncion("pdf") ? "Descargar informe en PDF" : "Informe en PDF (desde Nivel 2)";
 
   document.getElementById("stamp-holder").innerHTML = construirSello(resultado.categoria);
   document.getElementById("res-empresa").textContent = datos.empresa;
@@ -6822,7 +6868,7 @@ async function construirPdfConsulta(){
   return { doc, nombre: `OpenCheck-${cuitDigitos || "consulta"}-${cuando.getFullYear()}${pad(cuando.getMonth()+1)}${pad(cuando.getDate())}.pdf` };
 }
 async function descargarPdfConsulta(compartir){
-  if (PDF_SOLO_PREMIUM && !esPremiumEfectivo()){ mostrarToast("El informe en PDF es una función Premium."); return; }
+  if (PDF_SOLO_PREMIUM && !puedeFuncion("pdf")){ mostrarToast("El informe en PDF está disponible desde el Nivel 2 de Premium."); return; }
   const btn = document.getElementById(compartir ? "btn-pdf-compartir" : "btn-pdf-consulta");
   const textoOrig = btn ? btn.textContent : "";
   if (btn){ btn.disabled = true; btn.textContent = "Preparando PDF…"; }
@@ -7015,7 +7061,8 @@ async function descargarPlantilla(tipo){
 function impCuerpo(html){ document.getElementById("imp-cuerpo").innerHTML = html; }
 function abrirImportador(tipo){
   if (!state.user){ mostrarToast("Iniciá sesión para usar esta función."); return; }
-  if (!esPremiumEfectivo() || esUsuarioEquipo()){ mostrarToast(esUsuarioEquipo() ? "Esta función es para el titular de la cuenta." : "La importación desde Excel es una función Premium."); return; }
+  if (esUsuarioEquipo()){ mostrarToast("Esta función es para el titular de la cuenta."); return; }
+  if (!puedeFuncion("importar")){ mostrarToast(nivelEfectivo() ? "La importación desde Excel es del Nivel 3 (Total). Pedí el cambio desde Cuenta > Plan." : "La importación desde Excel es una función Premium (Nivel 3)."); return; }
   state.imp = { tipo, filas: null, cancelar: false, corriendo: false };
   const cl = tipo === "clientes";
   document.getElementById("imp-titulo").textContent = cl ? "Importar clientes desde Excel" : "Consultar varios CUIT desde Excel";
@@ -7893,11 +7940,12 @@ async function renderClientes(){
         ${cl.exposicion > 0 || cl.limite ? `<div class="hist-mid" style="${cl.superaLimite ? "color:#A63D3D; font-weight:700;" : ""}">${cl.superaLimite ? "⚠️ Superó el tope · " : ""}Exposición ${formatearPesos(cl.exposicion)}${cl.limite ? " de " + formatearPesos(cl.limite) : ""}</div>` : ""}
       </div>`).join("");
 
+  const verCobCard = nivelEfectivo() >= 2;
   cont.innerHTML = `
-    <div class="hist-row ${state.cobPendientes > 0 ? "cob-alerta" : ""}" id="cob-card-clientes" style="cursor:pointer; margin-bottom:14px;" onclick="irA('cobranzas')">
+    ${!verCobCard ? "" : `<div class="hist-row ${state.cobPendientes > 0 ? "cob-alerta" : ""}" id="cob-card-clientes" style="cursor:pointer; margin-bottom:14px;" onclick="irA('cobranzas')">
       <div class="hist-top"><span>Cobranzas y clientes nuevos</span><span class="tag" id="cob-pend-tag">${state.cobPendientes > 0 ? state.cobPendientes + " por resolver" : "Ver"}</span></div>
       <div class="hist-mid">Lo que declaran y proponen tus vendedores de calle: cobranzas y clientes nuevos.</div>
-    </div>
+    </div>`}
     <button class="btn btn-primary" style="margin-bottom:8px;" onclick="abrirModalNuevoCliente()">+ Nuevo cliente</button>
     <button class="btn btn-secondary" style="margin-bottom:14px;" onclick="abrirImportador('clientes')">Importar clientes desde Excel</button>
     ${listaHtml}`;
@@ -8356,8 +8404,8 @@ function renderCuenta(){
     <div class="plan-row"><span>Email</span><b>${u ? u.email : "—"}</b></div>
     <div class="plan-row"><span>CUIT / DNI</span><b>${u ? u.cuit_dni : "—"}</b></div>
     <div class="plan-row"><span>Tipo</span><b>${u ? (u.tipo_persona === "juridica" ? "Persona jurídica" : "Persona física") : "—"}</b></div>
-    <div class="plan-row"><span>Plan</span><b>${u ? (u.plan === "premium" ? "Premium" : "Gratis") : "—"}</b></div>
-    <div class="plan-row"><span>Consultas usadas este mes</span><b>${u ? (u.consultas_usadas_mes || 0) : 0}/${state.queriesLimit}</b></div>
+    <div class="plan-row"><span>Plan</span><b>${u ? (nivelEfectivo() ? "Premium · " + nombreNivel(nivelEfectivo()) : "Gratis") : "—"}</b></div>
+    <div class="plan-row"><span>Consultas usadas este mes${nivelEfectivo() && nivelEfectivo() < 3 ? " (toda la empresa)" : ""}</span><b>${u ? consultasUsadasMes(u) : 0}/${limiteConsultas() === Infinity ? "∞" : limiteConsultas()}</b></div>
     <div class="divider-label">Notificaciones</div>
     <p class="page-sub" style="margin-top:-4px;">Te avisamos cuando venza un cheque que consultaste, para preguntarte si se cobró.</p>
     <button class="btn btn-secondary" onclick="activarNotificacionesPush()">
@@ -8374,7 +8422,7 @@ function renderCuenta(){
       ${u.avisos_vencimiento === false ? "Avisos de vencimiento desactivados · Activar" : "Avisos de vencimiento activados ✓ · Desactivar"}
     </button>
     <div class="divider-label">Equipo</div>
-    <p class="page-sub" style="margin-top:-4px;">Dale acceso a tus vendedores de calle: entran con su DNI, consultan CUITs y cheques, y vos ves quién consultó. Podés darlos de baja en el acto.</p>
+    <p class="page-sub" style="margin-top:-4px;">Dale acceso a tus vendedores de calle: entran con su DNI, consultan CUITs y cheques, y vos ves quién consultó. Podés darlos de baja en el acto. ${nivelEfectivo() === 1 ? "<b>Disponible desde el Nivel 2.</b>" : (nivelEfectivo() === 2 ? "Tu nivel permite hasta 3 vendedores activos." : "")}</p>
     <div id="equipo-lista"><p class="page-sub">Cargando…</p></div>
     <button class="btn btn-secondary" onclick="abrirModalNuevoMiembro()">Agregar vendedor</button>
     <div class="divider-label">Resumen semanal</div>
@@ -8385,8 +8433,13 @@ function renderCuenta(){
     <div class="divider-label">Plan</div>
     <div class="paywall-card" style="margin-top:6px;">
       <h2>OpenCheck Premium</h2>
-      <p>Consultas ilimitadas, monitoreo de cartera con alertas, cuenta corriente con tope de exposición, calendario de cobranzas y resumen semanal por mail.</p>
-      <button class="btn btn-primary" id="btn-solicitar-premium" onclick="solicitarPlanPremium()">Solicitar acceso</button>
+      <p style="margin-bottom:10px;"><b>Nivel 1 · Básico:</b> 30 consultas por mes, monitoreo de cartera con alertas, cuenta corriente con tope de exposición, calendario de cobranzas y resumen semanal por mail.</p>
+      <p style="margin-bottom:10px;"><b>Nivel 2 · Profesional:</b> 50 consultas por mes en total para la empresa (titular y vendedores), todo lo del Nivel 1, más hasta 3 vendedores con cobranzas, clientes nuevos propuestos por vendedores, informe en PDF e informe guardado en el Historial.</p>
+      <p><b>Nivel 3 · Total:</b> consultas ilimitadas, vendedores ilimitados e importación y consulta masiva desde Excel.</p>
+      <select id="nivel-solicitado" style="width:100%; padding:10px; border-radius:8px; margin-bottom:10px;">
+        <option value="1">Nivel 1 · Básico</option><option value="2">Nivel 2 · Profesional</option><option value="3" selected>Nivel 3 · Total</option>
+      </select>
+      <button class="btn btn-primary" id="btn-solicitar-premium" onclick="solicitarPlanPremium()">${nivelEfectivo() ? "Pedir cambio de nivel" : "Solicitar acceso"}</button>
     </div>
     <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
     <div class="divider-label" style="margin-top:20px;">Zona de riesgo</div>
