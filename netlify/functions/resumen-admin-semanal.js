@@ -27,6 +27,32 @@ export async function correrResumenAdmin({ enviar = true } = {}){
   const hoy = fechaAR(ahora);
   const desde = fechaAR(ahora - 7 * 86400000);   // 7 días completos: [desde, hoy)
 
+  // ---- 0) Pedidos de Premium sin atender (se muestra primero) ----
+  let nPedidos = 0;
+  try {
+    const { data: ped, error } = await supabase.from("solicitudes_premium").select("usuario_id, nombre, email, cuit_dni, nivel_solicitado, creado_en")
+      .eq("atendida", false).order("creado_en", { ascending: true }).limit(50);
+    if (error) throw error;
+    nPedidos = (ped || []).length;
+    if (nPedidos){
+      const ids = [...new Set(ped.map(p => p.usuario_id).filter(Boolean))];
+      const { data: us } = ids.length ? await supabase.from("usuarios").select("id, plan, nivel").in("id", ids) : { data: [] };
+      const info = new Map((us || []).map(u => [u.id, u]));
+      const NOM = { 1: "Nivel 1 (Básico)", 2: "Nivel 2 (Profesional)", 3: "Nivel 3 (Total)" };
+      lineas.push(`PEDIDOS DE PREMIUM SIN ATENDER (${nPedidos})`);
+      for (const p of ped){
+        const u = info.get(p.usuario_id);
+        const actual = u ? (u.plan === "premium" ? `hoy Premium${u.nivel ? " nivel " + u.nivel : ""}` : "hoy Gratis") : "";
+        lineas.push(`- ${p.nombre || "(sin nombre)"} · ${p.email || ""} · pidió ${NOM[p.nivel_solicitado] || "Premium (sin nivel)"}${actual ? " · " + actual : ""} · ${fechaAR(new Date(p.creado_en).getTime())}`);
+      }
+      lineas.push("  Para activarlo: en Supabase correr  update usuarios set plan = 'premium', nivel = N where email = '...';  y después  update solicitudes_premium set atendida = true where email = '...' and atendida = false;", "");
+    } else {
+      lineas.push("PEDIDOS DE PREMIUM SIN ATENDER", "- Ninguno.", "");
+    }
+  } catch (e){
+    lineas.push("PEDIDOS DE PREMIUM SIN ATENDER", "- No se pudieron leer: " + e.message, "");
+  }
+
   // ---- 1) Vigilante de cartera ----
   lineas.push("VIGILANTE DE CARTERA (últimos 7 días completos)");
   try {
@@ -132,7 +158,7 @@ export async function correrResumenAdmin({ enviar = true } = {}){
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: REMITENTE, to: [DESTINO], subject: `OpenCheck: resumen semanal del sistema — ${estado}`, text: cuerpo })
+      body: JSON.stringify({ from: REMITENTE, to: [DESTINO], subject: `OpenCheck: resumen semanal del sistema — ${estado}${nPedidos ? ` — ${nPedidos} pedido${nPedidos === 1 ? "" : "s"} de Premium` : ""}`, text: cuerpo })
     });
     if (!r.ok) throw new Error("Resend devolvió " + r.status + ": " + await r.text());
   }
