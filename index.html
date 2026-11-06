@@ -1229,10 +1229,10 @@
 
       <div class="counter-banner">
         <div>
-          <div class="num"><span id="queries-left">10</span>/10</div>
-          <div class="lbl">consultas gratis este mes</div>
+          <div class="num"><span id="queries-left">10</span><span id="queries-de">/10</span></div>
+          <div class="lbl" id="queries-lbl">consultas gratis este mes</div>
         </div>
-        <div class="cta" onclick="irA('cuenta')">Ver planes</div>
+        <div class="cta" id="cta-ver-planes" onclick="irA('cuenta')">Ver planes</div>
       </div>
 
       <input type="file" accept="image/*" capture="environment" id="ocr-file-input" style="display:none" onchange="procesarFotoCheque(this.files[0])">
@@ -1281,7 +1281,7 @@
         <div class="field-hint">Si este cheque te lo trajo un cliente que ya tenés cargado, asignáselo de una — así queda ordenado en su historial sin tener que hacerlo después.</div>
       </div>
       <button class="btn btn-primary" id="btn-consultar" onclick="consultarCuit()">Consultar score</button>
-      <button class="btn btn-secondary" id="link-consulta-masiva" style="margin-top:10px;" onclick="abrirImportador('cuits')">📊 Consultar varios CUIT desde un Excel <span style="font-size:11px; opacity:.7;">(Premium)</span></button>
+      <button class="btn btn-secondary" id="link-consulta-masiva" style="margin-top:10px;" onclick="abrirImportador('cuits')">📊 Consultar varios CUIT desde un Excel <span style="font-size:11px; opacity:.7;">(Nivel 3)</span></button>
 
       <div class="divider-label">Otras herramientas</div>
       <div class="link-line" onclick="irA('denuncia')">
@@ -3897,7 +3897,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-06-v58-niveles-premium";
+const VERSION_APP = "2026-11-06-v59-pantallas-por-nivel";
 
 const state = {
   user: null,
@@ -3990,6 +3990,21 @@ function consultasRestantesTxt(u){
   if (!u) return "—";
   const lim = limiteConsultas(); if (u.es_admin || lim === Infinity) return "∞";
   return Math.max(0, lim - consultasUsadasMes(u));
+}
+// Cartel de consultas de Inicio y botón de consulta masiva, según rol y nivel
+function actualizarBannerConsultas(){
+  const u = state.user; const q = document.getElementById("queries-left"); if (!u || !q) return;
+  const n = nivelEfectivo(), lim = limiteConsultas(), equipo = esUsuarioEquipo();
+  const de = document.getElementById("queries-de"), lbl = document.getElementById("queries-lbl"), cta = document.getElementById("cta-ver-planes");
+  q.textContent = consultasRestantesTxt(u);
+  if (n === 0){ de.textContent = "/" + state.queriesLimit; lbl.textContent = "consultas gratis este mes"; if (cta) cta.style.display = ""; }
+  else if (lim === Infinity){ de.textContent = ""; lbl.textContent = "consultas ilimitadas · " + nombreNivel(n); if (cta) cta.style.display = "none"; }
+  else { de.textContent = "/" + lim; lbl.textContent = equipo ? "consultas de tu empresa este mes" : "consultas este mes · " + nombreNivel(n); if (cta) cta.style.display = "none"; }
+  const bm = document.getElementById("link-consulta-masiva");
+  if (bm){
+    bm.style.display = equipo ? "none" : "";
+    const tag = bm.querySelector("span"); if (tag) tag.textContent = puedeFuncion("importar") ? "" : "(Nivel 3)";
+  }
 }
 function nombreNivel(n){ return n ? `Nivel ${n} (${NIVELES[n].nombre})` : ""; }
 // Un usuario de equipo consulta mientras la empresa tenga Premium; el cupo mensual de su nivel es de toda la empresa.
@@ -4849,8 +4864,8 @@ function irA(pantalla){
   if (pantalla === "resultado") actualizarAccionesResultadoCobranza();
   if (pantalla === "home") actualizarModoCobranzaHome();
   if (pantalla === "home" && state.user){
-    document.getElementById("queries-left").textContent = consultasRestantesTxt(state.user);
-    refrescarUsoEmpresa().then(() => { const q = document.getElementById("queries-left"); if (q && state.user) q.textContent = consultasRestantesTxt(state.user); });
+    actualizarBannerConsultas();
+    refrescarUsoEmpresa().then(() => actualizarBannerConsultas());
     poblarSelectorClienteConsulta();
   }
   window.scrollTo(0,0);
@@ -5172,6 +5187,11 @@ supabaseClient.auth.onAuthStateChange((evento) => {
 });
 
 /* ---- Solicitar plan Premium ---- */
+function actualizarBtnNivel(){
+  const b = document.getElementById("btn-solicitar-premium"), sel = document.getElementById("nivel-solicitado"); if (!b || !sel) return;
+  const actual = nivelEfectivo(); const igual = actual && Number(sel.value) === actual;
+  b.disabled = igual; b.textContent = igual ? "Este es tu nivel actual" : (actual ? "Pedir cambio de nivel" : "Solicitar acceso");
+}
 async function solicitarPlanPremium(){
   if (!state.user){ mostrarToast("Iniciá sesión primero."); return; }
   const btn = document.getElementById("btn-solicitar-premium");
@@ -5519,7 +5539,7 @@ async function consultarCuit(){
   if (state.user){
     const _antes = state.user; state.user = await incrementarConsultasUsadas(state.user);
     if (typeof state.usoEmpresa === "number" && state.user !== _antes) state.usoEmpresa += 1;
-    document.getElementById("queries-left").textContent = consultasRestantesTxt(state.user);
+    actualizarBannerConsultas();
     const clienteSelect = document.getElementById("consulta-cliente-select");
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
@@ -5585,8 +5605,7 @@ async function verEstadoCliente(clienteId){
   if (state.user){
     const _antes = state.user; state.user = await incrementarConsultasUsadas(state.user);
     if (typeof state.usoEmpresa === "number" && state.user !== _antes) state.usoEmpresa += 1;
-    const elQueriesLeft = document.getElementById("queries-left");
-    if (elQueriesLeft) elQueriesLeft.textContent = consultasRestantesTxt(state.user);
+    actualizarBannerConsultas();
     await registrarConsulta({
       usuarioId: state.user.id, cuit: formatearCuit(digits), razonSocial: datos.empresa,
       categoria: resultado.categoria, puntos: resultado.puntosFinales, fuente,
@@ -7947,7 +7966,7 @@ async function renderClientes(){
       <div class="hist-mid">Lo que declaran y proponen tus vendedores de calle: cobranzas y clientes nuevos.</div>
     </div>`}
     <button class="btn btn-primary" style="margin-bottom:8px;" onclick="abrirModalNuevoCliente()">+ Nuevo cliente</button>
-    <button class="btn btn-secondary" style="margin-bottom:14px;" onclick="abrirImportador('clientes')">Importar clientes desde Excel</button>
+    ${puedeFuncion("importar") ? `<button class="btn btn-secondary" style="margin-bottom:14px;" onclick="abrirImportador('clientes')">Importar clientes desde Excel</button>` : ""}
     ${listaHtml}`;
   actualizarBadgeCobranzas();
 }
@@ -8423,8 +8442,8 @@ function renderCuenta(){
     </button>
     <div class="divider-label">Equipo</div>
     <p class="page-sub" style="margin-top:-4px;">Dale acceso a tus vendedores de calle: entran con su DNI, consultan CUITs y cheques, y vos ves quién consultó. Podés darlos de baja en el acto. ${nivelEfectivo() === 1 ? "<b>Disponible desde el Nivel 2.</b>" : (nivelEfectivo() === 2 ? "Tu nivel permite hasta 3 vendedores activos." : "")}</p>
-    <div id="equipo-lista"><p class="page-sub">Cargando…</p></div>
-    <button class="btn btn-secondary" onclick="abrirModalNuevoMiembro()">Agregar vendedor</button>
+    <div id="equipo-lista">${nivelEfectivo() >= 2 ? '<p class="page-sub">Cargando…</p>' : ""}</div>
+    ${nivelEfectivo() >= 2 ? `<button class="btn btn-secondary" onclick="abrirModalNuevoMiembro()">Agregar vendedor</button>` : ""}
     <div class="divider-label">Resumen semanal</div>
     <p class="page-sub" style="margin-top:-4px;">Los lunes a la mañana te mandamos por mail lo que conviene mirar esa semana: alertas, cobros por vencer y topes superados. Si no hay novedades, no te escribimos.</p>
     <button class="btn btn-secondary" id="btn-resumen-semanal" onclick="alternarResumenSemanal()">
@@ -8436,10 +8455,10 @@ function renderCuenta(){
       <p style="margin-bottom:10px;"><b>Nivel 1 · Básico:</b> 30 consultas por mes, monitoreo de cartera con alertas, cuenta corriente con tope de exposición, calendario de cobranzas y resumen semanal por mail.</p>
       <p style="margin-bottom:10px;"><b>Nivel 2 · Profesional:</b> 50 consultas por mes en total para la empresa (titular y vendedores), todo lo del Nivel 1, más hasta 3 vendedores con cobranzas, clientes nuevos propuestos por vendedores, informe en PDF e informe guardado en el Historial.</p>
       <p><b>Nivel 3 · Total:</b> consultas ilimitadas, vendedores ilimitados e importación y consulta masiva desde Excel.</p>
-      <select id="nivel-solicitado" style="width:100%; padding:10px; border-radius:8px; margin-bottom:10px;">
-        <option value="1">Nivel 1 · Básico</option><option value="2">Nivel 2 · Profesional</option><option value="3" selected>Nivel 3 · Total</option>
+      <select id="nivel-solicitado" onchange="actualizarBtnNivel()" style="width:100%; padding:10px; border-radius:8px; margin-bottom:10px;">
+        ${[1, 2, 3].map(k => `<option value="${k}" ${k === (nivelEfectivo() || 3) ? "selected" : ""}>${nombreNivel(k).replace("Nivel " + k + " (", "Nivel " + k + " · ").replace(")", "")}</option>`).join("")}
       </select>
-      <button class="btn btn-primary" id="btn-solicitar-premium" onclick="solicitarPlanPremium()">${nivelEfectivo() ? "Pedir cambio de nivel" : "Solicitar acceso"}</button>
+      <button class="btn btn-primary" id="btn-solicitar-premium" ${nivelEfectivo() ? "disabled" : ""} onclick="solicitarPlanPremium()">${nivelEfectivo() ? "Este es tu nivel actual" : "Solicitar acceso"}</button>
     </div>
     <button class="btn btn-secondary" style="margin-top:16px;" onclick="cerrarSesion()">Cerrar sesión</button>
     <div class="divider-label" style="margin-top:20px;">Zona de riesgo</div>
@@ -8453,7 +8472,7 @@ function renderCuenta(){
     <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:24px; line-height:1.45;">OpenCheck es un servicio privado e independiente: no es una aplicación oficial ni representa al BCRA, ARCA, INDEC ni a ningún organismo del Estado. Fuentes: <a href="https://www.bcra.gob.ar" target="_blank" rel="noopener">bcra.gob.ar</a> · <a href="https://www.arca.gob.ar" target="_blank" rel="noopener">arca.gob.ar</a> · <a href="https://www.indec.gob.ar" target="_blank" rel="noopener">indec.gob.ar</a> · <a href="https://datos.gob.ar" target="_blank" rel="noopener">datos.gob.ar</a>.</p>
     <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:8px;">Versión ${VERSION_APP}</p>
   `;
-  if (u && u.rol !== "calle" && (u.plan === "premium" || u.es_admin)) cargarEquipo();
+  if (u && u.rol !== "calle" && (u.plan === "premium" || u.es_admin) && nivelEfectivo() >= 2) cargarEquipo();
 }
 
 function renderPaywall(){
