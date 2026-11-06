@@ -38,10 +38,13 @@ export default async (req) => {
   const { data: au, error: eAu } = await admin.auth.getUser(token);
   if (eAu || !au || !au.user) return resp(401, { error: "Sesión no válida" });
 
-  const { data: dueno } = await admin.from("usuarios").select("id, nombre, plan, es_admin, rol, activo")
+  const { data: dueno } = await admin.from("usuarios").select("id, nombre, plan, es_admin, rol, activo, nivel")
     .eq("auth_user_id", au.user.id).maybeSingle();
   if (!dueno || dueno.rol !== "dueno" || dueno.activo === false) return resp(403, { error: "Solo el titular de la cuenta puede administrar el equipo." });
   if (!(dueno.plan === "premium" || dueno.es_admin)) return resp(403, { error: "El equipo es una función Premium." });
+  // Niveles: 1 = sin vendedores, 2 = hasta 3, 3 = ilimitados (sin nivel cargado = 3)
+  const nivel = dueno.es_admin ? 3 : (dueno.nivel || 3);
+  const MAX_VENDEDORES = nivel >= 3 ? Infinity : (nivel === 2 ? 3 : 0);
 
   let body = {};
   try { body = JSON.parse((await req.text()) || "{}"); } catch (e) { return resp(400, { error: "Pedido inválido" }); }
@@ -65,6 +68,11 @@ export default async (req) => {
       const dni = String(body.dni || "").replace(/\D/g, "");
       if (nombre.length < 3 || nombre.length > 80) return resp(400, { error: "Escribí el nombre y apellido." });
       if (dni.length < 6 || dni.length > 9) return resp(400, { error: "El DNI debe tener entre 6 y 9 números." });
+      if (MAX_VENDEDORES === 0) return resp(403, { error: "Agregar vendedores está disponible desde el Nivel 2. Pedí el cambio de nivel desde Cuenta > Plan." });
+      if (MAX_VENDEDORES !== Infinity){
+        const { count } = await admin.from("usuarios").select("id", { count: "exact", head: true }).eq("dueno_id", dueno.id).eq("activo", true);
+        if ((count || 0) >= MAX_VENDEDORES) return resp(403, { error: `Tu nivel permite hasta ${MAX_VENDEDORES} vendedores activos. Da de baja a uno o pedí el cambio al Nivel 3.` });
+      }
       const email = `${dni}@${DOMINIO}`;
       const pass = claveTemporal();
 
@@ -102,7 +110,12 @@ export default async (req) => {
         await admin.auth.admin.updateUserById(m.auth_user_id, { ban_duration: "876000h" });
         return resp(200, { ok: true });
       }
-      // alta
+      // alta (reactivar): también respeta el límite del nivel
+      if (MAX_VENDEDORES !== Infinity && !m.activo){
+        if (MAX_VENDEDORES === 0) return resp(403, { error: "Agregar vendedores está disponible desde el Nivel 2." });
+        const { count } = await admin.from("usuarios").select("id", { count: "exact", head: true }).eq("dueno_id", dueno.id).eq("activo", true);
+        if ((count || 0) >= MAX_VENDEDORES) return resp(403, { error: `Tu nivel permite hasta ${MAX_VENDEDORES} vendedores activos.` });
+      }
       await admin.auth.admin.updateUserById(m.auth_user_id, { ban_duration: "none" });
       await admin.from("usuarios").update({ activo: true }).eq("id", m.id);
       return resp(200, { ok: true });
