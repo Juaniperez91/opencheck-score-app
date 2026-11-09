@@ -3899,7 +3899,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-06-v60-avisos-visibles";
+const VERSION_APP = "2026-11-09-v61-cobro-play";
 
 const state = {
   user: null,
@@ -5200,6 +5200,8 @@ function actualizarBtnNivel(){
 }
 async function solicitarPlanPremium(){
   if (!state.user){ mostrarToast("Iniciá sesión primero."); return; }
+  // En la app Android, si ya hay cobro por Google Play, se suscribe desde Cuenta > Plan
+  if (playDisponible() && state.user.rol !== "calle" && await playIniciar() && playProducto()){ irA("cuenta"); return; }
   const btn = document.getElementById("btn-solicitar-premium");
   if (btn){ btn.disabled = true; btn.textContent = "Enviando…"; }
   try {
@@ -5215,6 +5217,215 @@ async function solicitarPlanPremium(){
     mostrarToast("No pudimos enviar la solicitud, probá de nuevo.");
     if (btn){ btn.disabled = false; btn.textContent = "Solicitar acceso"; }
   }
+}
+
+/* ---- Cobro por Google Play (solo en la app Android; en la web sigue el pedido manual de acceso) ---- */
+// En Play Console: suscripción "opencheck_premium" con planes base "nivel1", "nivel2" y "nivel3" (mensuales).
+const PLAY_PRODUCTO = "opencheck_premium";
+const PLAY_PLAN_BASE = { 1: "nivel1", 2: "nivel2", 3: "nivel3" };
+const playEstado = { registrado: false, listo: false, iniciando: null, error: null, susc: null, ocupado: false };
+
+function esAppNativaAndroid(){
+  try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === "android"); }
+  catch (e){ return false; }
+}
+// Hay cobro por Play solo si estamos en la app Android y el plugin de compras está instalado
+function playDisponible(){ return esAppNativaAndroid() && !!(window.CdvPurchase && window.CdvPurchase.store); }
+function playProducto(){
+  try { return window.CdvPurchase.store.get(PLAY_PRODUCTO, window.CdvPurchase.Platform.GOOGLE_PLAY) || null; } catch (e){ return null; }
+}
+
+async function playLlamarServidor(purchaseToken){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) throw new Error("Sesión vencida. Volvé a entrar.");
+  const r = await fetch(`${API_BASE}/.netlify/functions/play`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+    body: JSON.stringify({ purchaseToken })
+  });
+  const j = await r.json().catch(() => ({}));
+  return { ok: r.ok && j.ok === true, status: r.status, error: j.error || "", datos: j };
+}
+
+async function playIniciar(){
+  if (!playDisponible() || !state.user || state.user.rol === "calle") return false;
+  if (playEstado.listo) return true;
+  if (playEstado.iniciando) return playEstado.iniciando;
+  playEstado.iniciando = (async () => {
+    try {
+      const { store, Platform, ProductType, LogLevel } = window.CdvPurchase;
+      if (!playEstado.registrado){
+        store.verbosity = LogLevel.ERROR;
+        store.applicationUsername = () => (state.user ? state.user.id : undefined);   // el servidor reconoce la compra por este id
+        store.obfuscator = "disabled";                                                  // se manda tal cual (es un UUID, no un dato personal)
+        store.register([{ id: PLAY_PRODUCTO, type: ProductType.PAID_SUBSCRIPTION, platform: Platform.GOOGLE_PLAY }]);
+        store.when().approved(playAprobada);
+        store.error((e) => console.warn("[OpenCheck] Play:", e && e.message));
+        playEstado.registrado = true;
+      }
+      const errores = await store.initialize([Platform.GOOGLE_PLAY]);
+      if (errores && errores.length) throw new Error(errores[0].message || "No se pudo conectar con Google Play");
+      playEstado.listo = true; playEstado.error = null;
+      return true;
+    } catch (e){
+      playEstado.error = e.message || String(e);
+      console.warn("[OpenCheck] No se pudo iniciar Google Play:", playEstado.error);
+      return false;
+    } finally { playEstado.iniciando = null; }
+  })();
+  return playEstado.iniciando;
+}
+
+// Google aprobó una compra: el servidor la verifica con Google y activa el plan. Solo entonces se confirma.
+async function playAprobada(transaccion){
+  try {
+    const token = transaccion && transaccion.nativePurchase && transaccion.nativePurchase.purchaseToken;
+    if (!token || !state.user) return;
+    const r = await playLlamarServidor(token);
+    if (r.ok){
+      await transaccion.finish();
+      await playRefrescarCuenta();
+      mostrarToast("¡Listo! Tu plan Premium (Nivel " + r.datos.nivel + ") ya está activo.");
+    } else if (r.status !== 403){   // 403: la compra es de otra cuenta de OpenCheck en este celular, se ignora
+      console.warn("[OpenCheck] Compra sin activar:", r.status, r.error);
+      mostrarToast("Tu compra se registró en Google Play pero todavía no pudimos activarla. Esperá un momento o tocá \"Restaurar compras\".");
+    }
+  } catch (e){
+    console.warn("[OpenCheck] Error al activar la compra:", e.message);
+    mostrarToast("Tu compra se registró en Google Play pero todavía no pudimos activarla. Esperá un momento o tocá \"Restaurar compras\".");
+  } finally { playEstado.ocupado = false; }
+}
+
+async function playRefrescarCuenta(){
+  try {
+    const perfil = await obtenerPerfilUsuario();
+    if (perfil){ state.user = perfil; }
+    await refrescarUsoEmpresa();
+    if (typeof actualizarBannerConsultas === "function") actualizarBannerConsultas();
+    await playCargarSuscripcion();
+    if (document.getElementById("cuenta-content") && document.getElementById("screen-cuenta") && document.getElementById("screen-cuenta").classList.contains("active")) renderCuenta();
+  } catch (e){ console.warn("[OpenCheck] No se pudo refrescar la cuenta:", e.message); }
+}
+
+async function playCargarSuscripcion(){
+  playEstado.susc = null;
+  if (!state.user) return;
+  try {
+    const { data, error } = await supabaseClient.from("suscripciones")
+      .select("purchase_token, nivel, estado, vence, renueva_auto, plan_base")
+      .eq("usuario_id", state.user.id).in("estado", ["activa", "cancelada", "gracia", "en_espera"])
+      .order("actualizado", { ascending: false }).limit(1);
+    if (!error && data && data[0]) playEstado.susc = data[0];
+  } catch (e){}
+}
+
+const PLAY_DESC = {
+  1: "30 consultas por mes, monitoreo de cartera, cuenta corriente, calendario y resumen semanal.",
+  2: "50 consultas por mes para toda la empresa, hasta 3 vendedores, cobranzas, informe en PDF.",
+  3: "Consultas y vendedores ilimitados, importación y consulta masiva desde Excel."
+};
+function playPrecio(k){
+  const prod = playProducto(); const oferta = prod && prod.getOffer(PLAY_PRODUCTO + "@" + PLAY_PLAN_BASE[k]);
+  const fases = oferta && oferta.pricingPhases;
+  return fases && fases.length ? fases[fases.length - 1].price : "";
+}
+
+// Dibuja el plan dentro de Cuenta (cuando hay producto en Play). Si no, deja el pedido manual de acceso como está.
+async function playPintarPlanes(){
+  if (!document.getElementById("plan-card") || !state.user || state.user.rol === "calle") return;
+  const u = state.user;
+  // Premium activado a mano (piloto) o administrador: no se cobra y no se ofrece suscribirse
+  if (u.es_admin || (u.plan === "premium" && u.origen_plan !== "play")){
+    document.getElementById("plan-card").innerHTML = `<h2>OpenCheck Premium</h2><p style="margin-bottom:0;">${u.es_admin ? "Cuenta de administración." : "Tu plan " + htmlSeguro(nombreNivel(nivelEfectivo())) + " fue activado por el equipo de OpenCheck. No necesitás suscribirte."}</p>`;
+    return;
+  }
+  const ok = await playIniciar();
+  if (!ok || !playProducto()) return;   // todavía no hay producto en Play: queda el pedido manual
+  await playCargarSuscripcion();
+  const s = playEstado.susc;
+  const conAcceso = s && ["activa", "cancelada", "gracia"].includes(s.estado);
+  const actual = conAcceso ? s.nivel : 0;
+  const bloqueada = s && (s.estado === "cancelada" || s.estado === "gracia" || s.estado === "en_espera");
+  const fecha = s && s.vence ? new Date(s.vence).toLocaleDateString("es-AR") : "";
+  let aviso = "";
+  if (s && s.estado === "cancelada") aviso = `Tu suscripción no se va a renovar y sigue activa hasta el ${fecha}. Para volver a suscribirte usá "Administrar suscripción".`;
+  else if (s && s.estado === "gracia") aviso = `Hubo un problema con el cobro de tu suscripción. Actualizá tu forma de pago en "Administrar suscripción" para no perder el acceso.`;
+  else if (s && s.estado === "en_espera") aviso = `Tu suscripción está en espera por un problema con el cobro. Actualizá tu forma de pago en "Administrar suscripción".`;
+  const tarjeta = document.getElementById("plan-card"); if (!tarjeta) return;   // la pantalla pudo redibujarse mientras esperábamos a Google
+  tarjeta.innerHTML = `
+    <h2>OpenCheck Premium</h2>
+    ${aviso ? `<p style="margin-bottom:12px;"><b>${htmlSeguro(aviso)}</b></p>` : ""}
+    ${[1, 2, 3].map(k => {
+      const precio = playPrecio(k);
+      let txt = "Suscribirme", dis = false;
+      if (bloqueada){ txt = k === actual ? "Tu plan actual" : "Suscribirme"; dis = true; }
+      else if (actual === k){ txt = "Tu plan actual"; dis = true; }
+      else if (actual && k > actual) txt = "Subir a este nivel";
+      else if (actual && k < actual) txt = "Bajar a este nivel";
+      return `<div style="background:rgba(255,255,255,.12); border-radius:10px; padding:12px; margin-bottom:10px;">
+        <p style="margin:0 0 4px;"><b>Nivel ${k} · ${NIVELES[k].nombre}</b>${precio ? ` — ${htmlSeguro(precio)} por mes` : ""}</p>
+        <p style="margin:0 0 10px;">${PLAY_DESC[k]}</p>
+        ${actual && k < actual && !bloqueada ? `<p style="margin:0 0 10px; font-size:12px;">El cambio rige desde la próxima renovación.</p>` : ""}
+        <button class="btn btn-primary" ${dis ? "disabled" : ""} onclick="playComprar(${k})">${txt}</button>
+      </div>`;
+    }).join("")}
+    <button class="btn btn-secondary" style="margin-top:4px;" onclick="playAdministrar()">Administrar suscripción</button>
+    <button class="btn btn-secondary" style="margin-top:8px;" onclick="playRestaurar()">Restaurar compras</button>
+    <p style="font-size:11px; margin:14px 0 0;">El cobro se realiza a través de Google Play y se renueva automáticamente cada mes hasta que canceles la suscripción. Podés cancelarla cuando quieras desde "Administrar suscripción" (o desde Google Play > Pagos y suscripciones); seguís con el plan hasta el final del período pagado. Los precios incluyen los impuestos que correspondan.</p>`;
+}
+
+async function playComprar(nivel){
+  if (playEstado.ocupado) return;
+  try {
+    if (!(await playIniciar())){ mostrarToast("No pudimos conectar con Google Play. Probá de nuevo en un momento."); return; }
+    const prod = playProducto(); const oferta = prod && prod.getOffer(PLAY_PRODUCTO + "@" + PLAY_PLAN_BASE[nivel]);
+    if (!oferta){ mostrarToast("Ese plan todavía no está disponible."); return; }
+    await playCargarSuscripcion();
+    const s = playEstado.susc;
+    const actual = s && ["activa"].includes(s.estado) ? s.nivel : 0;
+    if (s && s.estado !== "activa"){ mostrarToast("Primero resolvé el estado de tu suscripción en \"Administrar suscripción\"."); return; }
+    const extra = {};
+    if (actual){
+      const M = window.CdvPurchase.GooglePlay.ReplacementMode;
+      extra.googlePlay = { oldPurchaseToken: s.purchase_token, replacementMode: nivel > actual ? M.CHARGE_PRORATED_PRICE : M.DEFERRED };
+    }
+    playEstado.ocupado = true;
+    const err = await oferta.order(extra);
+    if (err){
+      playEstado.ocupado = false;
+      const cancelo = window.CdvPurchase.ErrorCode && err.code === window.CdvPurchase.ErrorCode.PAYMENT_CANCELLED;
+      if (!cancelo) mostrarToast("No pudimos iniciar la compra: " + (err.message || "error de Google Play"));
+      return;
+    }
+    if (actual && nivel < actual){
+      playEstado.ocupado = false;
+      mostrarToast("Listo: tu plan va a cambiar a Nivel " + nivel + " en la próxima renovación.");
+    }
+    // Subida o compra nueva: Google avisa con "approved" y playAprobada activa el plan.
+  } catch (e){
+    playEstado.ocupado = false;
+    console.warn("[OpenCheck] Error de compra:", e.message);
+    mostrarToast("No pudimos iniciar la compra. Probá de nuevo.");
+  }
+}
+
+async function playAdministrar(){
+  try {
+    if (!(await playIniciar())) throw new Error("sin conexión con Play");
+    const err = await window.CdvPurchase.store.manageSubscriptions(window.CdvPurchase.Platform.GOOGLE_PLAY);
+    if (err) throw new Error(err.message);
+  } catch (e){ mostrarToast("No pudimos abrir Google Play. Probá desde Google Play > Pagos y suscripciones."); }
+}
+
+async function playRestaurar(){
+  try {
+    if (!(await playIniciar())) throw new Error("sin conexión con Play");
+    await window.CdvPurchase.store.restorePurchases();
+    await playCargarSuscripcion();
+    if (playEstado.susc) await playLlamarServidor(playEstado.susc.purchase_token).catch(() => null);
+    await playRefrescarCuenta();
+    mostrarToast("Compras revisadas.");
+  } catch (e){ mostrarToast("No pudimos revisar tus compras. Probá de nuevo en un momento."); }
 }
 
 /* ---- Eliminar cuenta (self-service, doble confirmación) ---- */
@@ -8456,7 +8667,7 @@ function renderCuenta(){
       ${u.resumen_semanal === false ? "Resumen semanal desactivado · Activar" : "Resumen semanal activado ✓ · Desactivar"}
     </button>` : ""}
     <div class="divider-label">Plan</div>
-    <div class="paywall-card" style="margin-top:6px;">
+    <div class="paywall-card" id="plan-card" style="margin-top:6px;">
       <h2>OpenCheck Premium</h2>
       <p style="margin-bottom:10px;"><b>Nivel 1 · Básico:</b> 30 consultas por mes, monitoreo de cartera con alertas, cuenta corriente con tope de exposición, calendario de cobranzas y resumen semanal por mail.</p>
       <p style="margin-bottom:10px;"><b>Nivel 2 · Profesional:</b> 50 consultas por mes en total para la empresa (titular y vendedores), todo lo del Nivel 1, más hasta 3 vendedores con cobranzas, clientes nuevos propuestos por vendedores, informe en PDF e informe guardado en el Historial.</p>
@@ -8479,6 +8690,7 @@ function renderCuenta(){
     <p style="text-align:center; font-size:11px; color:var(--ink-soft); margin-top:8px;">Versión ${VERSION_APP}</p>
   `;
   if (u && u.rol !== "calle" && (u.plan === "premium" || u.es_admin) && nivelEfectivo() >= 2) cargarEquipo();
+  if (u && u.rol !== "calle" && playDisponible()) playPintarPlanes();
 }
 
 function renderPaywall(){
