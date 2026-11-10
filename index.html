@@ -3899,7 +3899,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-09-v61-cobro-play";
+const VERSION_APP = "2026-11-10-v62-equipo-app";
 
 const state = {
   user: null,
@@ -4674,13 +4674,14 @@ instalarNavCobranza();
 async function llamarEquipo(accion, datos){
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) throw new Error("Sesión vencida. Volvé a entrar.");
-  const r = await fetch("/.netlify/functions/equipo", {
+  const r = await fetch(`${API_BASE}/.netlify/functions/equipo`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
     body: JSON.stringify({ accion, ...(datos || {}) })
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "Error del servidor");
+  if (accion === "listar" && !Array.isArray(j.equipo)) throw new Error("Respuesta inesperada del servidor");
   return j;
 }
 function htmlSeguro(t){ return String(t == null ? "" : t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
