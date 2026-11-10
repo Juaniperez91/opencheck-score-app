@@ -3899,7 +3899,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-10-v63-textos-precio";
+const VERSION_APP = "2026-11-10-v64-links-legales";
 
 const state = {
   user: null,
@@ -5372,7 +5372,7 @@ async function playPintarPlanes(){
     }).join("")}
     <button class="btn btn-secondary" style="margin-top:4px;" onclick="playAdministrar()">Administrar suscripción</button>
     <button class="btn btn-secondary" style="margin-top:8px;" onclick="playRestaurar()">Restaurar compras</button>
-    <p style="font-size:11px; margin:14px 0 0;">El cobro se realiza a través de Google Play y se renueva automáticamente cada mes hasta que canceles la suscripción. Podés cancelarla cuando quieras desde "Administrar suscripción" (o desde Google Play > Pagos y suscripciones); seguís con el plan hasta el final del período pagado. Los precios no incluyen impuestos ni percepciones que tu banco o billetera pueda aplicar según tu situación fiscal.</p>`;
+    <p style="font-size:11px; margin:14px 0 0;">El cobro se realiza a través de Google Play y se renueva automáticamente cada mes hasta que canceles la suscripción. Podés cancelarla cuando quieras desde "Administrar suscripción" (o desde Google Play > Pagos y suscripciones); seguís con el plan hasta el final del período pagado. Los precios no incluyen impuestos ni percepciones que tu banco o billetera pueda aplicar según tu situación fiscal. Más información en los <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>.</p>`;
 }
 
 async function playComprar(nivel){
