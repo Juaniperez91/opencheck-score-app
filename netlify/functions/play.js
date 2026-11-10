@@ -27,7 +27,14 @@ const SUPABASE_URL = "https://wwkspzyodncjxevosvtm.supabase.co";
 const PAQUETE = "com.opencheckscore.app";
 const API = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/" + PAQUETE;
 
-const resp = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
+// CORS: la app de Android (Capacitor) llama desde https://localhost, otro origen distinto de opencheck-app.netlify.app
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400"
+};
+const resp = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...CORS } });
 const b64url = (x) => Buffer.from(x).toString("base64url");
 
 // Estados de Play -> estado interno
@@ -152,6 +159,7 @@ function claveValida(recibida){
 }
 
 export default async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return resp(405, { error: "Método no permitido" });
   const sk = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!sk) return resp(500, { error: "Falta SUPABASE_SERVICE_ROLE_KEY" });
