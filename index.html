@@ -3899,7 +3899,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-10-v64-links-legales";
+const VERSION_APP = "2026-11-19-v67-cambio-nivel";
 
 const state = {
   user: null,
@@ -5362,11 +5362,12 @@ async function playPintarPlanes(){
       if (bloqueada){ txt = k === actual ? "Tu plan actual" : "Suscribirme"; dis = true; }
       else if (actual === k){ txt = "Tu plan actual"; dis = true; }
       else if (actual && k > actual) txt = "Subir a este nivel";
-      else if (actual && k < actual) txt = "Bajar a este nivel";
+      else if (actual && k < actual) txt = "Cómo bajar a este nivel";
       return `<div style="background:rgba(255,255,255,.12); border-radius:10px; padding:12px; margin-bottom:10px;">
         <p style="margin:0 0 4px;"><b>Nivel ${k} · ${NIVELES[k].nombre}</b>${precio ? ` — ${htmlSeguro(precio)} por mes` : ""}</p>
         <p style="margin:0 0 10px;">${PLAY_DESC[k]}</p>
-        ${actual && k < actual && !bloqueada ? `<p style="margin:0 0 10px; font-size:12px;">El cambio rige desde la próxima renovación.</p>` : ""}
+        ${actual && k < actual && !bloqueada ? `<p style="margin:0 0 10px; font-size:12px;">Para bajar de nivel, cancelás tu suscripción actual, seguís con tu nivel hasta el final del período pagado y después elegís este.</p>` : ""}
+        ${actual && k > actual && !bloqueada ? `<p style="margin:0 0 10px; font-size:12px;">El cambio rige de inmediato. Google Play te muestra el importe antes de confirmar.</p>` : ""}
         <button class="btn btn-primary" ${dis ? "disabled" : ""} onclick="playComprar(${k})">${txt}</button>
       </div>`;
     }).join("")}
@@ -5385,22 +5386,33 @@ async function playComprar(nivel){
     const s = playEstado.susc;
     const actual = s && ["activa"].includes(s.estado) ? s.nivel : 0;
     if (s && s.estado !== "activa"){ mostrarToast("Primero resolvé el estado de tu suscripción en \"Administrar suscripción\"."); return; }
-    const extra = {};
+    // Si hay una suscripción activa, probamos modos de reemplazo en orden: si Google rechaza uno
+    // (DEVELOPER_ERROR), seguimos con el siguiente. Solo la subida de nivel usa varios modos.
+    // Los 3 niveles son planes base de UNA misma suscripción: Google solo acepta CHARGE_FULL_PRICE y
+    // WITHOUT_PRORATION para cambiar entre ellos (el diferido, el prorrateo, etc. dan DEVELOPER_ERROR).
+    // Subir: precio completo ahora; si Google no lo acepta, sin prorrateo. Bajar: se guía al usuario (ver playBajar).
+    if (actual && nivel < actual){ playBajar(nivel); return; }
+    let modos = [null];
     if (actual){
       const M = window.CdvPurchase.GooglePlay.ReplacementMode;
-      extra.googlePlay = { oldPurchaseToken: s.purchase_token, replacementMode: nivel > actual ? M.CHARGE_PRORATED_PRICE : M.DEFERRED };
+      modos = [M.CHARGE_FULL_PRICE, M.WITHOUT_PRORATION].filter((m, i, a) => m && a.indexOf(m) === i);
     }
     playEstado.ocupado = true;
-    const err = await oferta.order(extra);
+    let err = null; const fallos = [];
+    for (const modo of modos){
+      const extra = {};
+      if (actual) extra.googlePlay = { oldPurchaseToken: s.purchase_token, replacementMode: modo };
+      err = await oferta.order(extra);
+      if (!err) break;
+      const cancelo = window.CdvPurchase.ErrorCode && err.code === window.CdvPurchase.ErrorCode.PAYMENT_CANCELLED;
+      if (cancelo) break;
+      fallos.push(String(modo));
+    }
     if (err){
       playEstado.ocupado = false;
       const cancelo = window.CdvPurchase.ErrorCode && err.code === window.CdvPurchase.ErrorCode.PAYMENT_CANCELLED;
-      if (!cancelo) mostrarToast("No pudimos iniciar la compra: " + (err.message || "error de Google Play"));
+      if (!cancelo) mostrarToast("No pudimos iniciar la compra: " + (err.message || "error de Google Play") + " [código " + (err.code || "?") + (actual ? " · cambio " + actual + "→" + nivel + " · token " + (s && s.purchase_token ? "sí" : "NO") + " · modos probados: " + fallos.join(", ") : " · compra nueva") + "]");
       return;
-    }
-    if (actual && nivel < actual){
-      playEstado.ocupado = false;
-      mostrarToast("Listo: tu plan va a cambiar a Nivel " + nivel + " en la próxima renovación.");
     }
     // Subida o compra nueva: Google avisa con "approved" y playAprobada activa el plan.
   } catch (e){
@@ -5408,6 +5420,11 @@ async function playComprar(nivel){
     console.warn("[OpenCheck] Error de compra:", e.message);
     mostrarToast("No pudimos iniciar la compra. Probá de nuevo.");
   }
+}
+
+function playBajar(nivel){
+  const ok = confirm("Para bajar al Nivel " + nivel + ": cancelá tu suscripción actual desde \"Administrar suscripción\". Vas a conservar tu nivel actual hasta el final del período que ya pagaste, y entonces podés elegir el Nivel " + nivel + " desde esta pantalla.\n\n¿Querés abrir \"Administrar suscripción\" ahora?");
+  if (ok) playAdministrar();
 }
 
 async function playAdministrar(){
