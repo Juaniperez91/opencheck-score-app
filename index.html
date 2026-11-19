@@ -3899,7 +3899,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-19-v67-cambio-nivel";
+const VERSION_APP = "2026-11-19-v68-aviso-web";
 
 const state = {
   user: null,
@@ -8690,6 +8690,7 @@ function renderCuenta(){
       <p style="margin-bottom:10px;"><b>Nivel 1 · Básico:</b> 30 consultas por mes, monitoreo de cartera con alertas, cuenta corriente con tope de exposición, calendario de cobranzas y resumen semanal por mail.</p>
       <p style="margin-bottom:10px;"><b>Nivel 2 · Profesional:</b> 50 consultas por mes en total para la empresa (titular y vendedores), todo lo del Nivel 1, más hasta 3 vendedores con cobranzas, clientes nuevos propuestos por vendedores, informe en PDF e informe guardado en el Historial.</p>
       <p><b>Nivel 3 · Total:</b> consultas ilimitadas, vendedores ilimitados e importación y consulta masiva desde Excel.</p>
+      ${(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ? "" : `<p style="margin:12px 0; padding:10px; border-radius:8px; background:rgba(255,255,255,.12); font-size:13px;"><b>Premium se contrata desde la app de Android.</b> Descargá OpenCheck en Google Play, iniciá sesión con tu cuenta y elegí tu nivel: el cobro lo hace Google Play y tu plan se activa en el momento.</p>`}
       <select id="nivel-solicitado" onchange="actualizarBtnNivel()" style="width:100%; padding:10px; border-radius:8px; margin-bottom:10px;">
         ${[1, 2, 3].map(k => `<option value="${k}" ${k === (nivelEfectivo() || 3) ? "selected" : ""}>${nombreNivel(k).replace("Nivel " + k + " (", "Nivel " + k + " · ").replace(")", "")}</option>`).join("")}
       </select>
