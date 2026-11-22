@@ -1566,6 +1566,21 @@
   </div>
 
   <!-- ===================== EQUIPO (usuarios de calle) ===================== -->
+  <div class="modal-overlay" id="modal-tc-nuevo">
+    <div class="modal-caja">
+      <h3>Actualizamos los Términos y la Política de Privacidad</h3>
+      <p>Para seguir usando OpenCheck tenés que aceptar la versión 1.1. Lo principal que cambia: incorporamos las condiciones de la suscripción Premium (cobro por Google Play, renovación, cancelación y reembolsos), aclaramos que la información no es en tiempo real y que el puntaje es orientativo, y describimos el uso de la cámara y de las notificaciones.</p>
+      <div style="display:flex; gap:10px; align-items:flex-start; margin:4px 0 14px;">
+        <input type="checkbox" id="tc-nuevo-acepto" style="width:18px; height:18px; flex:none; margin:2px 0 0;" onchange="document.getElementById('btn-tc-nuevo').disabled = !this.checked;">
+        <div style="font-size:12.5px; line-height:1.45; color:var(--ink-soft);">Leí y acepto los <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="https://opencheck.pro/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a> (versión 1.1).</div>
+      </div>
+      <div class="modal-botones">
+        <button class="btn btn-primary" id="btn-tc-nuevo" disabled onclick="confirmarTCNuevo()">Acepto y continúo</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-tc-nuevo').classList.remove('show'); cerrarSesion();">Salir</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-cambio-clave">
     <div class="modal-caja">
       <h3>Elegí tu contraseña</h3>
@@ -1933,11 +1948,36 @@ async function crearPerfilUsuario({ authUserId, nombre, email, cuitDni, tipoPers
   return data;
 }
 
+const TC_VERSION = "v1.1";   // versión vigente de Términos y Privacidad (opencheck.pro/privacidad.html)
 async function registrarAceptacionTC(usuarioId){
   const { error } = await supabaseClient
     .from("aceptaciones_tc")
-    .insert({ usuario_id: usuarioId, version_tc: "v1.0" });
+    .insert({ usuario_id: usuarioId, version_tc: TC_VERSION });
   if (error) console.warn("[OpenCheck Score] No se pudo registrar aceptación de T&C:", error.message);
+  return !error;
+}
+// Si el usuario no aceptó la versión vigente, se le pide al entrar. Nunca bloquea si la consulta falla.
+async function verificarAceptacionTC(){
+  try {
+    if (!state.user || state.user.debe_cambiar_clave) return;   // el equipo nuevo acepta en el cambio de clave
+    const k = "oc_tc_" + TC_VERSION + "_" + state.user.id;
+    try { if (localStorage.getItem(k) === "1") return; } catch (e){}
+    const { data, error } = await supabaseClient.from("aceptaciones_tc").select("version_tc").eq("usuario_id", state.user.id).eq("version_tc", TC_VERSION).limit(1);
+    if (error) return;
+    if (data && data.length){ try { localStorage.setItem(k, "1"); } catch (e){} return; }
+    document.getElementById("tc-nuevo-acepto").checked = false;
+    document.getElementById("btn-tc-nuevo").disabled = true;
+    document.getElementById("modal-tc-nuevo").classList.add("show");
+  } catch (e){ console.warn("[OpenCheck] No se pudo verificar la aceptación de Términos:", e.message); }
+}
+async function confirmarTCNuevo(){
+  const btn = document.getElementById("btn-tc-nuevo");
+  btn.disabled = true;
+  const ok = await registrarAceptacionTC(state.user.id);
+  if (!ok){ btn.disabled = false; mostrarToast("No pudimos guardar tu aceptación. Probá de nuevo."); return; }
+  try { localStorage.setItem("oc_tc_" + TC_VERSION + "_" + state.user.id, "1"); } catch (e){}
+  document.getElementById("modal-tc-nuevo").classList.remove("show");
+  mostrarToast("Gracias. Quedó registrada tu aceptación.");
 }
 
 async function registrarConsulta({ usuarioId, cuit, razonSocial, categoria, puntos, fuente, numeroCheque, bancoCheque, chequeDenunciado, fechaVencimiento, clienteId, montoCheque, analisis }){
@@ -3899,7 +3939,7 @@ function describirEfectoEnPuntaje(puntos){
 // Se actualiza a mano cada vez que se sube un cambio — sirve para
 // confirmar de un vistazo, desde la pantalla Cuenta, si la app instalada
 // en un dispositivo tiene el código más reciente o quedó desactualizada.
-const VERSION_APP = "2026-11-19-v68-aviso-web";
+const VERSION_APP = "2026-11-22-v69-terminos-v11";
 
 const state = {
   user: null,
@@ -4971,7 +5011,7 @@ tcCheckbox.addEventListener("change", () => {
   const meta = document.getElementById("tc-meta");
   if (tcCheckbox.checked){
     meta.style.display = "block";
-    meta.textContent = "Términos v1.0 aceptados · " + new Date().toLocaleString("es-AR");
+    meta.textContent = "Términos " + TC_VERSION + " aceptados · " + new Date().toLocaleString("es-AR");
   } else {
     meta.style.display = "none";
   }
@@ -5132,6 +5172,7 @@ async function iniciarSesion(){
     irA("home");
     verificarConfirmacionesPendientes();
     actualizarBadgeAlertas();
+    verificarAceptacionTC();
   } catch (e){
     mostrarToast("No pudimos iniciar sesión: " + e.message);
   } finally {
@@ -5411,7 +5452,7 @@ async function playComprar(nivel){
     if (err){
       playEstado.ocupado = false;
       const cancelo = window.CdvPurchase.ErrorCode && err.code === window.CdvPurchase.ErrorCode.PAYMENT_CANCELLED;
-      if (!cancelo) mostrarToast("No pudimos iniciar la compra: " + (err.message || "error de Google Play") + " [código " + (err.code || "?") + (actual ? " · cambio " + actual + "→" + nivel + " · token " + (s && s.purchase_token ? "sí" : "NO") + " · modos probados: " + fallos.join(", ") : " · compra nueva") + "]");
+      if (!cancelo) { console.warn("[OpenCheck] Compra no iniciada:", err.code, err.message, actual ? "cambio " + actual + "->" + nivel : "compra nueva", fallos.join(",")); mostrarToast("No pudimos iniciar la compra: " + (err.message || "error de Google Play") + ". Probá de nuevo."); }
       return;
     }
     // Subida o compra nueva: Google avisa con "approved" y playAprobada activa el plan.
@@ -5530,6 +5571,7 @@ async function cargarSesionExistente(){
     }
     verificarConfirmacionesPendientes();
     actualizarBadgeAlertas();
+    verificarAceptacionTC();
   }
 }
 // Botón "Mostrar/Ocultar" propio en todos los campos de contraseña (siempre visible, aunque ya haya texto).
